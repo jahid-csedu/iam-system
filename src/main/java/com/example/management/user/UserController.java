@@ -1,0 +1,79 @@
+package com.example.management.user;
+
+import com.example.management.constant.ErrorMessage;
+import com.example.management.constant.JwtConstant;
+import com.example.management.constant.TokenType;
+import com.example.management.dto.JwtRefreshTokenDto;
+import com.example.management.dto.JwtResponse;
+import com.example.management.dto.UserLoginDto;
+import com.example.management.dto.UserRegistrationDto;
+import com.example.management.exception.JwtException;
+import com.example.management.exception.UserAlreadyExistsException;
+import com.example.management.security.jwt.JwtTokenUtil;
+import com.example.management.security.user.UserDetailsServiceImpl;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.validation.Valid;
+
+@RestController
+@RequestMapping("/user")
+public class UserController {
+
+
+    private final UserService userService;
+    private final AuthenticationManager authenticationManager;
+    private final UserDetailsServiceImpl userDetailsService;
+    private final JwtTokenUtil jwtTokenUtil;
+
+    public UserController(UserService userService, AuthenticationManager authenticationManager, UserDetailsServiceImpl userDetailsService, JwtTokenUtil jwtTokenUtil) {
+        this.userService = userService;
+        this.authenticationManager = authenticationManager;
+        this.userDetailsService = userDetailsService;
+        this.jwtTokenUtil = jwtTokenUtil;
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<UserRegistrationDto> userRegistration(@Valid @RequestBody UserRegistrationDto userDto) throws UserAlreadyExistsException {
+        User registeresUser = userService.registerUser(userDto);
+        userDto.setPassword(null);
+        userDto.setMatchingPassword(null);
+        if(registeresUser.getId() != null) {
+            return new ResponseEntity<>(userDto, HttpStatus.OK);
+        }
+        return new ResponseEntity<>(userDto, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @PostMapping("/authenticate")
+    public ResponseEntity<JwtResponse> createAuthenticationToken(@Valid @RequestBody UserLoginDto userLoginDto) {
+        authenticate(userLoginDto.getUsername(), userLoginDto.getPassword());
+        var userDetails = userDetailsService.loadUserByUsername(userLoginDto.getUsername());
+        String accessToken = jwtTokenUtil.generateToken(userDetails, TokenType.ACCESS_TOKEN);
+        String refreshToken = jwtTokenUtil.generateToken(userDetails, TokenType.REFRESH_TOKEN);
+        return new ResponseEntity<>(new JwtResponse(userLoginDto.getUsername(), refreshToken, accessToken), HttpStatus.OK);
+    }
+
+    @PostMapping("/token/refresh")
+    public ResponseEntity<JwtResponse> refreshToken(@RequestBody(required = true) JwtRefreshTokenDto refreshTokenDto) {
+        String username = refreshTokenDto.getUsername();
+        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+        String token = refreshTokenDto.getRefreshToken();
+        if(jwtTokenUtil.validateRefreshToken(token, userDetails)) {
+            String accessToken = jwtTokenUtil.generateToken(userDetails, TokenType.ACCESS_TOKEN);
+            String refreshToken = jwtTokenUtil.generateToken(userDetails, TokenType.REFRESH_TOKEN);
+            return new ResponseEntity<>(new JwtResponse(refreshTokenDto.getUsername(), refreshToken, accessToken), HttpStatus.OK);
+        }
+        throw new JwtException(ErrorMessage.INVALID_TOKEN);
+    }
+
+    private void authenticate(String username, String password) {
+        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
+    }
+}
