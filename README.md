@@ -11,7 +11,6 @@ HTTP Method: _POST_
 {
     "username": "test_user",
     "password": "password",
-    "matchingPassword": "password", 
     "fullName": "Test User",
     "email": "test@mail.com"
 }
@@ -22,7 +21,6 @@ HTTP Method: _POST_
 {
     "username": "test_user",
     "password": null,
-    "matchingPassword": null,
     "fullName": "Test User",
     "email": "test@mail.com"
 }
