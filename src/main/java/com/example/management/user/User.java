@@ -3,7 +3,7 @@ package com.example.management.user;
 import com.example.management.role.Role;
 import lombok.*;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import java.util.HashSet;
 import java.util.Set;
 

@@ -1,16 +1,15 @@
 package com.example.management.user;
 
 import com.example.management.constant.ErrorMessage;
-import com.example.management.constant.JwtConstant;
 import com.example.management.constant.TokenType;
 import com.example.management.dto.JwtRefreshTokenDto;
 import com.example.management.dto.JwtResponse;
 import com.example.management.dto.UserLoginDto;
 import com.example.management.dto.UserRegistrationDto;
 import com.example.management.exception.JwtException;
-import com.example.management.exception.UserAlreadyExistsException;
 import com.example.management.security.jwt.JwtTokenUtil;
 import com.example.management.security.user.UserDetailsServiceImpl;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +20,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import javax.validation.Valid;
 
 @RestController
 @RequestMapping("/user")
@@ -36,7 +33,7 @@ public class UserController {
     private final JwtTokenUtil jwtTokenUtil;
 
     @PostMapping("/register")
-    public ResponseEntity<UserRegistrationDto> userRegistration(@Valid @RequestBody UserRegistrationDto userDto) throws UserAlreadyExistsException {
+    public ResponseEntity<UserRegistrationDto> userRegistration(@Valid @RequestBody UserRegistrationDto userDto) {
         User registeresUser = userService.registerUser(userDto);
         userDto.setPassword(null);
         userDto.setMatchingPassword(null);
@@ -56,7 +53,7 @@ public class UserController {
     }
 
     @PostMapping("/token/refresh")
-    public ResponseEntity<JwtResponse> refreshToken(@RequestBody(required = true) JwtRefreshTokenDto refreshTokenDto) {
+    public ResponseEntity<JwtResponse> refreshToken(@Valid @RequestBody JwtRefreshTokenDto refreshTokenDto) {
         String username = refreshTokenDto.getUsername();
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
         String token = refreshTokenDto.getRefreshToken();

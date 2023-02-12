@@ -3,10 +3,12 @@ package com.example.management.dto;
 import com.example.management.constant.ErrorMessage;
 import com.example.management.util.validators.email.ValidEmail;
 import com.example.management.util.validators.password.PasswordMatches;
-import lombok.*;
-
-import javax.validation.constraints.Min;
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.validator.constraints.Length;
 
 @Getter
 @Setter
@@ -19,7 +21,7 @@ public class UserRegistrationDto {
     private String username;
 
     @NotNull(message = ErrorMessage.PASSWORD_REQUIRED)
-    @Min(value = 6, message = ErrorMessage.PASSWORD_MIN_LENGHT)
+    @Length(min = 6, max = 15, message = ErrorMessage.PASSWORD_LENGTH)
     private String password;
     private String matchingPassword;
     private String fullName;

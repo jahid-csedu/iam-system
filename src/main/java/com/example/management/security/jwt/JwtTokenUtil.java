@@ -4,12 +4,13 @@ import com.example.management.constant.JwtConstant;
 import com.example.management.constant.TokenType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import org.springframework.beans.factory.annotation.Value;
+import io.jsonwebtoken.security.Keys;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -49,11 +50,11 @@ public class JwtTokenUtil implements Serializable {
 
     //for retrieveing any information from token we will need the secret key
     private Claims getAllClaimsFromToken(String token) {
-        return Jwts.parser().setSigningKey(JwtConstant.SECRET_KEY).parseClaimsJws(token).getBody();
+        return Jwts.parserBuilder().setSigningKey(getSecretKey(JwtConstant.ACCESS_TOKEN_SECRET_KEY)).build().parseClaimsJws(token).getBody();
     }
 
     private Claims getAllClaimsFromRefreshToken(String token) {
-        return Jwts.parser().setSigningKey(JwtConstant.REFRESH_TOKEN_SECRET).parseClaimsJws(token).getBody();
+        return Jwts.parserBuilder().setSigningKey(getSecretKey(JwtConstant.REFRESH_TOKEN_SECRET)).build().parseClaimsJws(token).getBody();
     }
 
     //check if the token has expired
@@ -72,7 +73,7 @@ public class JwtTokenUtil implements Serializable {
         Map<String, Object> claims = new HashMap<>();
         if(tokenType.equals(TokenType.ACCESS_TOKEN)){
             claims.put("authorities", userDetails.getAuthorities());
-            return doGenerateToken(claims, userDetails.getUsername(), JwtConstant.JWT_ACCESS_TOKEN_VALIDITY, JwtConstant.SECRET_KEY);
+            return doGenerateToken(claims, userDetails.getUsername(), JwtConstant.JWT_ACCESS_TOKEN_VALIDITY, JwtConstant.ACCESS_TOKEN_SECRET_KEY);
         }
         else if(tokenType.equals(TokenType.REFRESH_TOKEN)) {
             return doGenerateToken(claims, userDetails.getUsername(), JwtConstant.JWT_REFRESH_TOKEN_VALIDITY, JwtConstant.REFRESH_TOKEN_SECRET);
@@ -92,7 +93,7 @@ public class JwtTokenUtil implements Serializable {
                 .setSubject(subject)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + expiryTime * 1000))
-                .signWith(SignatureAlgorithm.HS512, secret)
+                .signWith(getSecretKey(secret))
                 .compact();
     }
 
@@ -107,5 +108,9 @@ public class JwtTokenUtil implements Serializable {
         final String username = getUsernameFromRefreshToken(token);
 
         return (username.equals(userDetails.getUsername()) && !isRefreshTokenExpired(token));
+    }
+
+    private SecretKey getSecretKey(String secret) {
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 }
