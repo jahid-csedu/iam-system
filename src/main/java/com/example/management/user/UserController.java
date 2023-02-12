@@ -36,7 +36,6 @@ public class UserController {
     public ResponseEntity<UserRegistrationDto> userRegistration(@Valid @RequestBody UserRegistrationDto userDto) {
         User registeresUser = userService.registerUser(userDto);
         userDto.setPassword(null);
-        userDto.setMatchingPassword(null);
         if(registeresUser.getId() != null) {
             return new ResponseEntity<>(userDto, HttpStatus.OK);
         }
