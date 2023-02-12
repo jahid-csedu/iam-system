@@ -1,18 +1,16 @@
 package com.example.management.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.LocalDateTime;
-
-@ControllerAdvice
+@RestControllerAdvice
 @Slf4j
 public class GlobalHandler {
     @ExceptionHandler(UserAlreadyExistsException.class)
@@ -24,8 +22,8 @@ public class GlobalHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
     public ResponseEntity<ExceptionResponse> validationExceptionHandler(MethodArgumentNotValidException exception) {
-        ExceptionResponse response = new ExceptionResponse (HttpStatus.UNPROCESSABLE_ENTITY.value(), "Validation Error");
-        for(FieldError fieldError: exception.getBindingResult().getFieldErrors()) {
+        ExceptionResponse response = new ExceptionResponse(HttpStatus.UNPROCESSABLE_ENTITY.value(), "Validation Fails");
+        for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
             response.addValidationError(fieldError.getField(), fieldError.getDefaultMessage());
         }
         return ResponseEntity.unprocessableEntity().body(response);

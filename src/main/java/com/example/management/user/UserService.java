@@ -28,7 +28,7 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public User registerUser(UserRegistrationDto userDto) throws UserAlreadyExistsException{
+    public User registerUser(UserRegistrationDto userDto){
         if(userExists(userDto.getUsername())){
             log.error("Username already exists: {}", userDto.getUsername());
             throw new UserAlreadyExistsException("Username not available");
