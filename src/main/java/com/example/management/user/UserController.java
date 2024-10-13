@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import static com.example.management.constant.TokenType.*;
+
 @RestController
 @RequestMapping("/user")
 @RequiredArgsConstructor
@@ -46,8 +48,8 @@ public class UserController {
     public ResponseEntity<JwtResponse> createAuthenticationToken(@Valid @RequestBody UserLoginDto userLoginDto) {
         authenticate(userLoginDto.getUsername(), userLoginDto.getPassword());
         var userDetails = userDetailsService.loadUserByUsername(userLoginDto.getUsername());
-        String accessToken = jwtTokenUtil.generateToken(userDetails, TokenType.ACCESS_TOKEN);
-        String refreshToken = jwtTokenUtil.generateToken(userDetails, TokenType.REFRESH_TOKEN);
+        String accessToken = jwtTokenUtil.generateToken(userDetails, ACCESS_TOKEN);
+        String refreshToken = jwtTokenUtil.generateToken(userDetails, REFRESH_TOKEN);
         return new ResponseEntity<>(new JwtResponse(userLoginDto.getUsername(), refreshToken, accessToken), HttpStatus.OK);
     }
 
@@ -56,9 +58,9 @@ public class UserController {
         String username = refreshTokenDto.getUsername();
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
         String token = refreshTokenDto.getRefreshToken();
-        if(jwtTokenUtil.validateRefreshToken(token, userDetails)) {
-            String accessToken = jwtTokenUtil.generateToken(userDetails, TokenType.ACCESS_TOKEN);
-            String refreshToken = jwtTokenUtil.generateToken(userDetails, TokenType.REFRESH_TOKEN);
+        if(jwtTokenUtil.validateToken(token, userDetails, REFRESH_TOKEN)) {
+            String accessToken = jwtTokenUtil.generateToken(userDetails, ACCESS_TOKEN);
+            String refreshToken = jwtTokenUtil.generateToken(userDetails, REFRESH_TOKEN);
             return new ResponseEntity<>(new JwtResponse(refreshTokenDto.getUsername(), refreshToken, accessToken), HttpStatus.OK);
         }
         throw new JwtException(ErrorMessage.INVALID_TOKEN);

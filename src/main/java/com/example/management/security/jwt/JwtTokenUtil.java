@@ -20,103 +20,78 @@ import static com.example.management.constant.JwtConstant.JWT_ACCESS_TOKEN_VALID
 import static com.example.management.constant.JwtConstant.JWT_REFRESH_TOKEN_VALIDITY;
 import static com.example.management.constant.JwtConstant.REFRESH_TOKEN_SECRET;
 import static com.example.management.constant.TokenType.ACCESS_TOKEN;
-import static com.example.management.constant.TokenType.REFRESH_TOKEN;
 
 @Component
 public class JwtTokenUtil implements Serializable {
 
-    //retrieve username from jwt token
-    public String getUsernameFromToken(String token) {
-        return getClaimFromToken(token, Claims::getSubject);
+    // Retrieve username from jwt token
+    public String getUsernameFromToken(String token, TokenType tokenType) {
+        return getClaimFromToken(token, Claims::getSubject, tokenType);
     }
 
-    public String getUsernameFromRefreshToken(String token) {
-        return getClaimFromRefreshToken(token, Claims::getSubject);
+    // Retrieve expiration date from jwt token
+    public Date getExpirationDateFromToken(String token, TokenType tokenType) {
+        return getClaimFromToken(token, Claims::getExpiration, tokenType);
     }
 
-    //retrieve expiration date from jwt token
-    public Date getExpirationDateFromToken(String token) {
-        return getClaimFromToken(token, Claims::getExpiration);
-    }
-
-
-    public Date getExpirationDateFromRefreshToken(String token) {
-        return getClaimFromRefreshToken(token, Claims::getExpiration);
-    }
-
-    public <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = getAllClaimsFromToken(token);
+    public <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver, TokenType tokenType) {
+        final Claims claims = getAllClaimsFromToken(token, tokenType);
         return claimsResolver.apply(claims);
     }
 
-    public <T> T getClaimFromRefreshToken(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = getAllClaimsFromRefreshToken(token);
-        return claimsResolver.apply(claims);
+    // For retrieving any information from token we will need the secret key
+    private Claims getAllClaimsFromToken(String token, TokenType tokenType) {
+        return Jwts.parserBuilder()
+                .setSigningKey(getSecretKey(tokenType))
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
     }
 
-    //for retrieveing any information from token we will need the secret key
-    private Claims getAllClaimsFromToken(String token) {
-        return Jwts.parserBuilder().setSigningKey(getSecretKey(ACCESS_TOKEN_SECRET_KEY)).build().parseClaimsJws(token).getBody();
-    }
-
-    private Claims getAllClaimsFromRefreshToken(String token) {
-        return Jwts.parserBuilder().setSigningKey(getSecretKey(REFRESH_TOKEN_SECRET)).build().parseClaimsJws(token).getBody();
-    }
-
-    //check if the token has expired
-    private Boolean isTokenExpired(String token) {
-        final Date expiration = getExpirationDateFromToken(token);
+    // Check if the token has expired
+    private Boolean isTokenExpired(String token, TokenType tokenType) {
+        final Date expiration = getExpirationDateFromToken(token, tokenType);
         return expiration.before(new Date());
     }
 
-    private Boolean isRefreshTokenExpired(String token) {
-        final Date expiration = getExpirationDateFromRefreshToken(token);
-        return expiration.before(new Date());
-    }
-
-    //generate token for user
+    // Generate token for user
     public String generateToken(UserDetails userDetails, TokenType tokenType) {
         Map<String, Object> claims = new HashMap<>();
-        if(tokenType.equals(ACCESS_TOKEN)){
+        if (tokenType.equals(ACCESS_TOKEN)) {
             claims.put("authorities", userDetails.getAuthorities());
-            return doGenerateToken(claims, userDetails.getUsername(), JWT_ACCESS_TOKEN_VALIDITY, ACCESS_TOKEN_SECRET_KEY);
+            return doGenerateToken(claims, userDetails.getUsername(), tokenType);
         }
-        else if(tokenType.equals(REFRESH_TOKEN)) {
-            return doGenerateToken(claims, userDetails.getUsername(), JWT_REFRESH_TOKEN_VALIDITY, REFRESH_TOKEN_SECRET);
-        }
-        return null;
+        return doGenerateToken(claims, userDetails.getUsername(), tokenType);
     }
 
-    //while creating the token -
-    //1. Define  claims of the token, like Issuer, Expiration, Subject, and the ID
-    //2. Sign the JWT using the HS512 algorithm and secret key.
-    //3. According to JWS Compact Serialization(https://tools.ietf.org/html/draft-ietf-jose-json-web-signature-41#section-3.1)
-    //   compaction of the JWT to a URL-safe string
-    private String doGenerateToken(Map<String, Object> claims, String subject, long expiryTime, String secret) {
+    // While creating the token -
+    // 1. Define  claims of the token, like Issuer, Expiration, Subject, and the ID
+    // 2. Sign the JWT using the HS512 algorithm and secret key.
+    // 3. According to JWS Compact Serialization(https://tools.ietf.org/html/draft-ietf-jose-json-web-signature-41#section-3.1)
+    // Compaction of the JWT to a URL-safe string
+    private String doGenerateToken(Map<String, Object> claims, String subject, TokenType tokenType) {
+        long expiryTime = tokenType.equals(ACCESS_TOKEN) ? JWT_ACCESS_TOKEN_VALIDITY : JWT_REFRESH_TOKEN_VALIDITY;
 
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(subject)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + expiryTime * 1000))
-                .signWith(getSecretKey(secret))
+                .signWith(getSecretKey(tokenType))
                 .compact();
     }
 
-    //validate token
-    public Boolean validateToken(String token, UserDetails userDetails) {
-        final String username = getUsernameFromToken(token);
+    // Validate token
+    public boolean validateToken(String token, UserDetails userDetails, TokenType tokenType) {
+        final String username = getUsernameFromToken(token, tokenType);
 
-        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token, tokenType));
     }
 
-    public Boolean validateRefreshToken(String token, UserDetails userDetails) {
-        final String username = getUsernameFromRefreshToken(token);
-
-        return (username.equals(userDetails.getUsername()) && !isRefreshTokenExpired(token));
-    }
-
-    private SecretKey getSecretKey(String secret) {
-        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    private SecretKey getSecretKey(TokenType tokenType) {
+        if (tokenType.equals(ACCESS_TOKEN)) {
+            return Keys.hmacShaKeyFor(ACCESS_TOKEN_SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+        }
+        return Keys.hmacShaKeyFor(REFRESH_TOKEN_SECRET.getBytes(StandardCharsets.UTF_8));
     }
 }
