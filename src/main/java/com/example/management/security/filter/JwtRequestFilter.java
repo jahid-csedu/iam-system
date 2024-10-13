@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
@@ -32,20 +33,20 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         final String authorizationHeader = request.getHeader(JwtConstant.REQUEST_HEADER);
         String username = null;
         String jwtToken = null;
-        if(authorizationHeader != null && authorizationHeader.startsWith(JwtConstant.BEARER)) {
+        if (authorizationHeader != null && authorizationHeader.startsWith(JwtConstant.BEARER)) {
             jwtToken = authorizationHeader.replace(JwtConstant.BEARER, "");
             try {
                 username = tokenUtil.getUsernameFromToken(jwtToken);
             } catch (Exception e) {
                 throw new JwtException(ErrorMessage.INVALID_TOKEN);
             }
-        }else {
+        } else {
             log.error("Token doesn't start with Bearer ");
         }
 
-        if(username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+        if (Objects.nonNull(username) && Objects.nonNull(SecurityContextHolder.getContext().getAuthentication())) {
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
-            if(tokenUtil.validateToken(jwtToken, userDetails)) {
+            if (tokenUtil.validateToken(jwtToken, userDetails)) {
                 UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,

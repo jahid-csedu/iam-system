@@ -1,6 +1,5 @@
 package com.example.management.security.jwt;
 
-import com.example.management.constant.JwtConstant;
 import com.example.management.constant.TokenType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -15,6 +14,13 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
+
+import static com.example.management.constant.JwtConstant.ACCESS_TOKEN_SECRET_KEY;
+import static com.example.management.constant.JwtConstant.JWT_ACCESS_TOKEN_VALIDITY;
+import static com.example.management.constant.JwtConstant.JWT_REFRESH_TOKEN_VALIDITY;
+import static com.example.management.constant.JwtConstant.REFRESH_TOKEN_SECRET;
+import static com.example.management.constant.TokenType.ACCESS_TOKEN;
+import static com.example.management.constant.TokenType.REFRESH_TOKEN;
 
 @Component
 public class JwtTokenUtil implements Serializable {
@@ -50,11 +56,11 @@ public class JwtTokenUtil implements Serializable {
 
     //for retrieveing any information from token we will need the secret key
     private Claims getAllClaimsFromToken(String token) {
-        return Jwts.parserBuilder().setSigningKey(getSecretKey(JwtConstant.ACCESS_TOKEN_SECRET_KEY)).build().parseClaimsJws(token).getBody();
+        return Jwts.parserBuilder().setSigningKey(getSecretKey(ACCESS_TOKEN_SECRET_KEY)).build().parseClaimsJws(token).getBody();
     }
 
     private Claims getAllClaimsFromRefreshToken(String token) {
-        return Jwts.parserBuilder().setSigningKey(getSecretKey(JwtConstant.REFRESH_TOKEN_SECRET)).build().parseClaimsJws(token).getBody();
+        return Jwts.parserBuilder().setSigningKey(getSecretKey(REFRESH_TOKEN_SECRET)).build().parseClaimsJws(token).getBody();
     }
 
     //check if the token has expired
@@ -71,12 +77,12 @@ public class JwtTokenUtil implements Serializable {
     //generate token for user
     public String generateToken(UserDetails userDetails, TokenType tokenType) {
         Map<String, Object> claims = new HashMap<>();
-        if(tokenType.equals(TokenType.ACCESS_TOKEN)){
+        if(tokenType.equals(ACCESS_TOKEN)){
             claims.put("authorities", userDetails.getAuthorities());
-            return doGenerateToken(claims, userDetails.getUsername(), JwtConstant.JWT_ACCESS_TOKEN_VALIDITY, JwtConstant.ACCESS_TOKEN_SECRET_KEY);
+            return doGenerateToken(claims, userDetails.getUsername(), JWT_ACCESS_TOKEN_VALIDITY, ACCESS_TOKEN_SECRET_KEY);
         }
-        else if(tokenType.equals(TokenType.REFRESH_TOKEN)) {
-            return doGenerateToken(claims, userDetails.getUsername(), JwtConstant.JWT_REFRESH_TOKEN_VALIDITY, JwtConstant.REFRESH_TOKEN_SECRET);
+        else if(tokenType.equals(REFRESH_TOKEN)) {
+            return doGenerateToken(claims, userDetails.getUsername(), JWT_REFRESH_TOKEN_VALIDITY, REFRESH_TOKEN_SECRET);
         }
         return null;
     }
