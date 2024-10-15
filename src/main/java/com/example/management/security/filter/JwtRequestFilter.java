@@ -2,7 +2,6 @@ package com.example.management.security.filter;
 
 import com.example.management.constant.ErrorMessage;
 import com.example.management.constant.JwtConstant;
-import com.example.management.constant.TokenType;
 import com.example.management.exception.JwtException;
 import com.example.management.security.jwt.JwtTokenUtil;
 import com.example.management.security.user.UserDetailsServiceImpl;
@@ -23,7 +22,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Objects;
 
-import static com.example.management.constant.TokenType.*;
+import static com.example.management.constant.TokenType.ACCESS_TOKEN;
 
 @Component
 @RequiredArgsConstructor
