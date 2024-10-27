@@ -23,7 +23,7 @@ public class AuthorizationConfig {
     private final JwtRequestFilter jwtRequestFilter;
 
     private static final String[] WHILE_LISTED_APIS = {
-            "/user/**"
+            "/api/user/**"
     };
 
     @Bean

@@ -9,6 +9,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.validator.constraints.Length;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -25,4 +28,6 @@ public class UserRegistrationDto {
 
     @ValidEmail(message = ErrorMessage.INVALID_EMAIL)
     private String email;
+
+    private Set<Long> roleIds = new HashSet<>();
 }

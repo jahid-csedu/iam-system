@@ -1,7 +1,6 @@
 package com.example.management.user;
 
 import com.example.management.constant.ErrorMessage;
-import com.example.management.constant.TokenType;
 import com.example.management.dto.JwtRefreshTokenDto;
 import com.example.management.dto.JwtResponse;
 import com.example.management.dto.UserLoginDto;
@@ -21,10 +20,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import static com.example.management.constant.TokenType.*;
+import static com.example.management.constant.TokenType.ACCESS_TOKEN;
+import static com.example.management.constant.TokenType.REFRESH_TOKEN;
 
 @RestController
-@RequestMapping("/user")
+@RequestMapping("/api/user")
 @RequiredArgsConstructor
 public class UserController {
 
@@ -38,10 +38,16 @@ public class UserController {
     public ResponseEntity<UserRegistrationDto> userRegistration(@Valid @RequestBody UserRegistrationDto userDto) {
         User registeresUser = userService.registerUser(userDto);
         userDto.setPassword(null);
-        if(registeresUser.getId() != null) {
+        if (registeresUser.getId() != null) {
             return new ResponseEntity<>(userDto, HttpStatus.OK);
         }
         return new ResponseEntity<>(userDto, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @PostMapping("/roles")
+    public ResponseEntity<Void> attachRoles(@RequestBody UserRoleAttachmentDto userRoleAttachmentDto) {
+        userService.attachRoles(userRoleAttachmentDto);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/authenticate")
@@ -58,7 +64,7 @@ public class UserController {
         String username = refreshTokenDto.getUsername();
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
         String token = refreshTokenDto.getRefreshToken();
-        if(jwtTokenUtil.validateToken(token, userDetails, REFRESH_TOKEN)) {
+        if (jwtTokenUtil.validateToken(token, userDetails, REFRESH_TOKEN)) {
             String accessToken = jwtTokenUtil.generateToken(userDetails, ACCESS_TOKEN);
             String refreshToken = jwtTokenUtil.generateToken(userDetails, REFRESH_TOKEN);
             return new ResponseEntity<>(new JwtResponse(refreshTokenDto.getUsername(), refreshToken, accessToken), HttpStatus.OK);
