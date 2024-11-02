@@ -1,4 +1,4 @@
-package com.example.management.user;
+package com.example.management.user.model.entity;
 
 import com.example.management.role.Role;
 import jakarta.persistence.Column;

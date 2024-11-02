@@ -1,6 +1,6 @@
 package com.example.management.security.user;
 
-import com.example.management.user.User;
+import com.example.management.user.model.entity.User;
 import com.example.management.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;

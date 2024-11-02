@@ -1,6 +1,7 @@
 package com.example.management.user;
 
-import com.example.management.dto.UserRegistrationDto;
+import com.example.management.user.model.dto.UserRegistrationDto;
+import com.example.management.user.model.entity.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 

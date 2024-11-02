@@ -1,4 +1,4 @@
-package com.example.management.dto;
+package com.example.management.user.model.dto;
 
 import com.example.management.constant.ErrorMessage;
 import com.example.management.util.validators.email.ValidEmail;

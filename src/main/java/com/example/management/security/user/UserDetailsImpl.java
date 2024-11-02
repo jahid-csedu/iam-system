@@ -1,7 +1,7 @@
 package com.example.management.security.user;
 
 import com.example.management.role.Role;
-import com.example.management.user.User;
+import com.example.management.user.model.entity.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,12 +20,11 @@ public class UserDetailsImpl implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        Set<SimpleGrantedAuthority> authorities = user.getRoles().stream()
+        return user.getRoles().stream()
                 .map(Role::getPermissions)
                 .flatMap(Set::stream)
                 .map(permission -> new SimpleGrantedAuthority(permission.getName()))
                 .collect(Collectors.toSet());
-        return authorities;
     }
 
     @Override
