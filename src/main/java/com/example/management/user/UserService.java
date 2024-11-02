@@ -10,6 +10,7 @@ import com.example.management.user.util.UserValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.mapstruct.factory.Mappers;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -30,18 +31,12 @@ public class UserService {
         userDto.setPassword(passwordEncoder.encode(userDto.getPassword()));
         User user = userMapper.toEntity(userDto);
 
-        Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userDto.getRoleIds());
-        userRoleAttachmentUtil.assignRolesToUser(user, roles);
-
         log.info("Adding new User: {}", user.getUsername());
         return userRepository.save(user);
     }
 
+    @PreAuthorize("hasAuthority('WRITE_PRIVILEGES')")
     public void attachRoles(UserRoleAttachmentDto userRoleAttachmentDto) {
-        if (userRoleAttachmentDto.getRoleIds().isEmpty()) {
-            return;
-        }
-
         User user = findUserByUsername(userRoleAttachmentDto.getUsername());
         Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userRoleAttachmentDto.getRoleIds());
 

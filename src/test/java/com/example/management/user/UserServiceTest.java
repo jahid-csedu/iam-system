@@ -5,6 +5,7 @@ import com.example.management.exception.UserAlreadyExistsException;
 import com.example.management.permission.Permission;
 import com.example.management.role.Role;
 import com.example.management.user.model.dto.UserRegistrationDto;
+import com.example.management.user.model.dto.UserRoleAttachmentDto;
 import com.example.management.user.model.entity.User;
 import com.example.management.user.util.UserRoleAttachmentUtil;
 import com.example.management.user.util.UserValidator;
@@ -16,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -76,7 +78,6 @@ class UserServiceTest {
     void registerUser_successfulRegistration() {
         // Arrange
         when(passwordEncoder.encode(anyString())).thenReturn("encoded_password");
-        when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         // Act
@@ -87,8 +88,6 @@ class UserServiceTest {
         verify(userValidator).validateUsernameAvailable(anyString());
         verify(userValidator).validateEmailAvailable(anyString());
         verify(passwordEncoder).encode(anyString());
-        verify(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
-        verify(userRoleAttachmentUtil).assignRolesToUser(any(User.class), anySet());
         verify(userRepository).save(any(User.class));
     }
 
@@ -114,16 +113,46 @@ class UserServiceTest {
     }
 
     @Test
-    void registerUser_roleAssignmentFailure() {
+    void attachRoles_successfulAttachment() {
         // Arrange
-        when(passwordEncoder.encode(anyString())).thenReturn("encoded_password");
-        when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenThrow(new DataNotFoundException("Some roles not found"));
+        UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
+        userRoleAttachmentDto.setUsername("testUser");
+        Set<Long> roleIds = Set.of(1L);
+        userRoleAttachmentDto.setRoleIds(roleIds);
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+        when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
+        when(userRepository.save(any(User.class))).thenReturn(user);
 
         // Act & Assert
-        assertThrows(RuntimeException.class, () -> userService.registerUser(userDto));
-        verify(userValidator).validateUsernameAvailable(anyString());
-        verify(userValidator).validateEmailAvailable(anyString());
-        verify(passwordEncoder).encode(anyString());
+        userService.attachRoles(userRoleAttachmentDto);
         verify(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
+        verify(userRepository).save(any(User.class));
+    }
+
+    @Test
+    void attachRoles_whenUserNotFound_AttachmentFailure() {
+        // Arrange
+        UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
+        userRoleAttachmentDto.setUsername("testUser");
+        Set<Long> roleIds = Set.of(1L);
+        userRoleAttachmentDto.setRoleIds(roleIds);
+        doThrow(new DataNotFoundException("User not found")).when(userRepository).findByUsername(anyString());
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> userService.attachRoles(userRoleAttachmentDto));
+    }
+
+    @Test
+    void attachRoles_whenRoleNotFound_AttachmentFailure() {
+        // Arrange
+        UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
+        userRoleAttachmentDto.setUsername("testUser");
+        Set<Long> roleIds = Set.of(1L);
+        userRoleAttachmentDto.setRoleIds(roleIds);
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+        doThrow(new DataNotFoundException("Some roles not found")).when(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> userService.attachRoles(userRoleAttachmentDto));
     }
 }

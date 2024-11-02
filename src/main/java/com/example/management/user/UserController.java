@@ -47,7 +47,7 @@ public class UserController {
     }
 
     @PostMapping("/roles")
-    public ResponseEntity<Void> attachRoles(@RequestBody UserRoleAttachmentDto userRoleAttachmentDto) {
+    public ResponseEntity<Void> attachRoles(@RequestBody @Valid UserRoleAttachmentDto userRoleAttachmentDto) {
         userService.attachRoles(userRoleAttachmentDto);
         return ResponseEntity.noContent().build();
     }

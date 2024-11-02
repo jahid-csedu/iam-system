@@ -1,5 +1,6 @@
 package com.example.management.role;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Set;
 
 @RestController
 @RequestMapping("/api/roles")
@@ -51,9 +51,9 @@ public class RoleController {
         return ResponseEntity.ok(roleService.getRoleByName(name));
     }
 
-    @PostMapping("/{roleId}/permissions")
-    public ResponseEntity<Void> attachPermissions(@PathVariable Long roleId, @RequestBody Set<Long> permissionIds) {
-        roleService.attachPermissions(roleId, permissionIds);
+    @PostMapping("/permissions")
+    public ResponseEntity<Void> attachPermissions(@RequestBody @Valid RolePermissionDto rolePermissionDto) {
+        roleService.attachPermissions(rolePermissionDto);
         return ResponseEntity.noContent().build();
     }
 }

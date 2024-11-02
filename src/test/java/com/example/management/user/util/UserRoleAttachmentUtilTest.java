@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
@@ -46,7 +47,7 @@ class UserRoleAttachmentUtilTest {
         // Assert
         assertTrue(roles.contains(role1));
         assertTrue(roles.contains(role2));
-        assertTrue(roles.size() == roleIds.size());
+        assertEquals(roles.size(), roleIds.size());
         verify(roleRepository, times(1)).findAllById(roleIds);
     }
 

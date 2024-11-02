@@ -5,7 +5,9 @@ import com.example.management.security.filter.JwtRequestFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
@@ -16,6 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class AuthorizationConfig {
 
@@ -26,6 +29,11 @@ public class AuthorizationConfig {
             "/api/user/**"
     };
 
+    private static final String[] PERMITTED_GET_APIS = {
+            "/api/roles/**",
+            "/api/permissions/**"
+    };
+
     @Bean
     protected SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationManager authenticationManager) throws Exception {
         http
@@ -33,6 +41,7 @@ public class AuthorizationConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(request ->
                         request.requestMatchers(WHILE_LISTED_APIS).permitAll()
+                                .requestMatchers(HttpMethod.GET, PERMITTED_GET_APIS).permitAll()
                                 .anyRequest().authenticated()
                 )
                 .authenticationManager(authenticationManager)
