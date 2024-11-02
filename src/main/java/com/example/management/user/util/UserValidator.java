@@ -12,14 +12,14 @@ import org.springframework.stereotype.Component;
 public class UserValidator {
     private final UserRepository userRepository;
 
-    public void validateEmail(String email) {
+    public void validateEmailAvailable(String email) {
         if(email != null && emailExists(email)) {
             log.error("Email already exists: {}", email);
             throw new UserAlreadyExistsException("Email not available");
         }
     }
 
-    public void validateUsername(String username) {
+    public void validateUsernameAvailable(String username) {
         if(userExists(username)){
             log.error("Username already exists: {}", username);
             throw new UserAlreadyExistsException("Username not available");

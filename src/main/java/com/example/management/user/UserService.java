@@ -55,7 +55,7 @@ public class UserService {
     }
 
     private void validateRequest(UserRegistrationDto userDto) {
-        userValidator.validateUsername(userDto.getUsername());
-        userValidator.validateEmail(userDto.getEmail());
+        userValidator.validateUsernameAvailable(userDto.getUsername());
+        userValidator.validateEmailAvailable(userDto.getEmail());
     }
 }
