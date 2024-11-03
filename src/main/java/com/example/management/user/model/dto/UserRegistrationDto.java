@@ -28,6 +28,7 @@ public class UserRegistrationDto {
 
     @ValidEmail(message = ErrorMessage.INVALID_EMAIL)
     private String email;
+    private boolean rootUser;
 
     private Set<Long> roleIds = new HashSet<>();
 }

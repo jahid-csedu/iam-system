@@ -3,12 +3,12 @@ package com.example.management.user;
 import com.example.management.constant.ErrorMessage;
 import com.example.management.dto.JwtRefreshTokenDto;
 import com.example.management.dto.JwtResponse;
-import com.example.management.user.model.dto.UserLoginDto;
-import com.example.management.user.model.dto.UserRegistrationDto;
-import com.example.management.user.model.dto.UserRoleAttachmentDto;
 import com.example.management.exception.JwtException;
 import com.example.management.security.jwt.JwtTokenUtil;
 import com.example.management.security.user.UserDetailsServiceImpl;
+import com.example.management.user.model.dto.UserLoginDto;
+import com.example.management.user.model.dto.UserRegistrationDto;
+import com.example.management.user.model.dto.UserRoleAttachmentDto;
 import com.example.management.user.model.entity.User;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -54,11 +54,9 @@ public class UserController {
 
     @PostMapping("/authenticate")
     public ResponseEntity<JwtResponse> createAuthenticationToken(@Valid @RequestBody UserLoginDto userLoginDto) {
-        authenticate(userLoginDto.getUsername(), userLoginDto.getPassword());
+        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(userLoginDto.getUsername(), userLoginDto.getPassword()));
         var userDetails = userDetailsService.loadUserByUsername(userLoginDto.getUsername());
-        String accessToken = jwtTokenUtil.generateToken(userDetails, ACCESS_TOKEN);
-        String refreshToken = jwtTokenUtil.generateToken(userDetails, REFRESH_TOKEN);
-        return new ResponseEntity<>(new JwtResponse(userLoginDto.getUsername(), refreshToken, accessToken), HttpStatus.OK);
+        return new ResponseEntity<>(getTokens(userDetails, userLoginDto.getUsername()), HttpStatus.OK);
     }
 
     @PostMapping("/token/refresh")
@@ -67,14 +65,14 @@ public class UserController {
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
         String token = refreshTokenDto.getRefreshToken();
         if (jwtTokenUtil.validateToken(token, userDetails, REFRESH_TOKEN)) {
-            String accessToken = jwtTokenUtil.generateToken(userDetails, ACCESS_TOKEN);
-            String refreshToken = jwtTokenUtil.generateToken(userDetails, REFRESH_TOKEN);
-            return new ResponseEntity<>(new JwtResponse(refreshTokenDto.getUsername(), refreshToken, accessToken), HttpStatus.OK);
+            return new ResponseEntity<>(getTokens(userDetails, refreshTokenDto.getUsername()), HttpStatus.OK);
         }
         throw new JwtException(ErrorMessage.INVALID_TOKEN);
     }
 
-    private void authenticate(String username, String password) {
-        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
+    private JwtResponse getTokens(UserDetails userDetails, String username) {
+        String accessToken = jwtTokenUtil.generateToken(userDetails, ACCESS_TOKEN);
+        String refreshToken = jwtTokenUtil.generateToken(userDetails, REFRESH_TOKEN);
+        return new JwtResponse(username, refreshToken, accessToken);
     }
 }

@@ -18,12 +18,16 @@ public class UserDetailsImpl implements UserDetails {
         this.user = user;
     }
 
+    public boolean isRootUser() {
+        return user.isRootUser();
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return user.getRoles().stream()
                 .map(Role::getPermissions)
                 .flatMap(Set::stream)
-                .map(permission -> new SimpleGrantedAuthority(permission.getName()))
+                .map(permission -> new SimpleGrantedAuthority(permission.getServiceName() + ":" + permission.getAction()))
                 .collect(Collectors.toSet());
     }
 

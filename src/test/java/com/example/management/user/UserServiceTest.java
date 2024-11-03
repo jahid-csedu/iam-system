@@ -60,10 +60,20 @@ class UserServiceTest {
         userDto.setEmail("test@example.com");
         userDto.setRoleIds(Set.of(1L));
 
+        Permission p1 = new Permission();
+        p1.setId(1L);
+        p1.setServiceName("TEST");
+        p1.setAction("READ");
+
+        Permission p2 = new Permission();
+        p2.setId(2L);
+        p2.setServiceName("TEST");
+        p2.setAction("WRITE");
+
         Role role = new Role();
         role.setId(1L);
         role.setName("ROLE_ADMIN");
-        role.setPermissions(Set.of(new Permission(1L, "READ", ""), new Permission(2L, "WRITE", "")));
+        role.setPermissions(Set.of(p1, p2));
 
         roles = Set.of(role);
 

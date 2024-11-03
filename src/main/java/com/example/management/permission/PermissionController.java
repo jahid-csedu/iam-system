@@ -45,9 +45,9 @@ public class PermissionController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/name/{name}")
-    public ResponseEntity<PermissionDto> getPermissionByName(@PathVariable String name) {
-        PermissionDto permission = permissionService.getPermissionByName(name);
+    @GetMapping("/name/{serviceName}")
+    public ResponseEntity<PermissionDto> getPermissionByServiceName(@PathVariable String serviceName) {
+        PermissionDto permission = permissionService.getPermissionByServiceName(serviceName);
         return ResponseEntity.ok(permission);
     }
 }

@@ -46,16 +46,25 @@ class RoleServiceTest {
 
     @BeforeEach
     void setUp() {
-        roleDto = new RoleDto(1L, "ROLE_USER", null, null);
+        roleDto = new RoleDto();
+        roleDto.setId(1L);
+        roleDto.setName("ROLE_USER");
         role = new Role();
         role.setId(1L);
         role.setName("ROLE_USER");
 
+        Permission p1 = new Permission();
+        p1.setId(1L);
+        p1.setServiceName("TEST");
+        p1.setAction("READ");
+
+        Permission p2 = new Permission();
+        p2.setId(2L);
+        p2.setServiceName("TEST");
+        p2.setAction("WRITE");
+
         permissionIds = new HashSet<>(Arrays.asList(1L, 2L));
-        permissions = Arrays.asList(
-                new Permission(1L, "READ_PRIVILEGES", null),
-                new Permission(2L, "WRITE_PRIVILEGES", null)
-        );
+        permissions = Arrays.asList(p1, p2);
     }
 
     @Test
@@ -65,7 +74,7 @@ class RoleServiceTest {
         RoleDto result = roleService.createRole(roleDto);
 
         assertNotNull(result);
-        assertEquals(roleDto.name(), result.name());
+        assertEquals(roleDto.getName(), result.getName());
         verify(roleRepository, times(1)).save(any(Role.class));
     }
 
@@ -77,7 +86,7 @@ class RoleServiceTest {
         RoleDto result = roleService.updateRole(1L, roleDto);
 
         assertNotNull(result);
-        assertEquals(roleDto.name(), result.name());
+        assertEquals(roleDto.getName(), result.getName());
         verify(roleRepository, times(1)).save(any(Role.class));
     }
 
@@ -97,7 +106,7 @@ class RoleServiceTest {
         RoleDto result = roleService.getRole(1L);
 
         assertNotNull(result);
-        assertEquals(roleDto.name(), result.name());
+        assertEquals(roleDto.getName(), result.getName());
     }
 
     @Test
@@ -107,7 +116,7 @@ class RoleServiceTest {
         RoleDto result = roleService.getRoleByName("ROLE_USER");
 
         assertNotNull(result);
-        assertEquals(roleDto.name(), result.name());
+        assertEquals(roleDto.getName(), result.getName());
     }
 
     @Test

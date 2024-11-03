@@ -1,5 +1,6 @@
 package com.example.management.role;
 
+import com.example.management.constant.ErrorMessage;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -12,9 +13,9 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RolePermissionDto{
-    @NotNull
+    @NotNull(message = ErrorMessage.ROLE_ID_REQUIRED)
     private Long roleId;
-    @NotNull
-    @NotEmpty
+    @NotNull(message = ErrorMessage.PERMISSION_ID_REQUIRED)
+    @NotEmpty(message = ErrorMessage.PERMISSION_ID_NOT_EMPTY)
     private Set<Long> permissionIds;
 }

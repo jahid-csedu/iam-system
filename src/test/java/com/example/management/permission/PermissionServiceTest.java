@@ -37,9 +37,12 @@ class PermissionServiceTest {
     void setUp() {
         permission = new Permission();
         permission.setId(1L);
-        permission.setName("READ_PRIVILEGES");
-
-        permissionDto = new PermissionDto(1L, "READ_PRIVILEGES", null);
+        permission.setAction("READ");
+        permission.setServiceName("TEST_SERVICE");
+        permissionDto = new PermissionDto();
+        permissionDto.setId(1L);
+        permissionDto.setAction("READ");
+        permissionDto.setServiceName("TEST_SERVICE");
     }
 
     @Test
@@ -49,7 +52,8 @@ class PermissionServiceTest {
         PermissionDto result = permissionService.savePermission(permissionDto);
 
         assertNotNull(result);
-        assertEquals(permissionDto.name(), result.name());
+        assertEquals(permissionDto.getServiceName(), result.getServiceName());
+        assertEquals(permissionDto.getAction(), result.getAction());
         verify(permissionRepository, times(1)).save(any(Permission.class));
     }
 
@@ -60,7 +64,8 @@ class PermissionServiceTest {
         PermissionDto result = permissionService.getPermissionById(1L);
 
         assertNotNull(result);
-        assertEquals(permissionDto.name(), result.name());
+        assertEquals(permissionDto.getServiceName(), result.getServiceName());
+        assertEquals(permissionDto.getAction(), result.getAction());
     }
 
     @Test
@@ -78,7 +83,8 @@ class PermissionServiceTest {
         PermissionDto result = permissionService.updatePermission(1L, permissionDto);
 
         assertNotNull(result);
-        assertEquals(permissionDto.name(), result.name());
+        assertEquals(permissionDto.getServiceName(), result.getServiceName());
+        assertEquals(permissionDto.getAction(), result.getAction());
         verify(permissionRepository, times(1)).save(any(Permission.class));
     }
 
@@ -99,20 +105,21 @@ class PermissionServiceTest {
     }
 
     @Test
-    void getPermissionByName_returnsPermission() {
-        when(permissionRepository.findByName("READ_PRIVILEGES")).thenReturn(Optional.of(permission));
+    void getPermissionByName_returnsPermissionService() {
+        when(permissionRepository.findByServiceName("TEST_SERVICE")).thenReturn(Optional.of(permission));
 
-        PermissionDto result = permissionService.getPermissionByName("READ_PRIVILEGES");
+        PermissionDto result = permissionService.getPermissionByServiceName("TEST_SERVICE");
 
         assertNotNull(result);
-        assertEquals(permissionDto.name(), result.name());
+        assertEquals(permissionDto.getServiceName(), result.getServiceName());
+        assertEquals(permissionDto.getAction(), result.getAction());
     }
 
     @Test
-    void getPermissionByName_throwsExceptionWhenNotFound() {
-        when(permissionRepository.findByName("READ_PRIVILEGES")).thenReturn(Optional.empty());
+    void getPermissionByServiceName_throwsExceptionWhenNotFound() {
+        when(permissionRepository.findByServiceName("TEST_SERVICE")).thenReturn(Optional.empty());
 
-        assertThrows(DataNotFoundException.class, () -> permissionService.getPermissionByName("READ_PRIVILEGES"));
+        assertThrows(DataNotFoundException.class, () -> permissionService.getPermissionByServiceName("TEST_SERVICE"));
     }
 
     @Test

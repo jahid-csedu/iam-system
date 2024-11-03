@@ -15,8 +15,11 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -38,12 +41,14 @@ public class User implements Serializable {
     private String fullName;
     @Column(unique = true)
     private String email;
+    @Column(name = "is_root_user")
+    private boolean rootUser;
     @Column(name = "active")
-    private boolean isActive;
+    private boolean active;
     @Column(name = "password_expired")
-    private boolean isPasswordExpired;
+    private boolean passwordExpired;
     @Column(name = "user_locked")
-    private boolean isUserLocked;
+    private boolean userLocked;
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
@@ -51,6 +56,10 @@ public class User implements Serializable {
             inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id")
     )
     private Set<Role> roles = new HashSet<>();
+    @CreationTimestamp
+    private Instant createdAt;
+    @UpdateTimestamp
+    private Instant updatedAt;
 
     @Override
     public boolean equals(Object o) {

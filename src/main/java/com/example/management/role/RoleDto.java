@@ -1,19 +1,17 @@
 package com.example.management.role;
 
+import com.example.management.constant.ErrorMessage;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
 import java.util.Collections;
 import java.util.Set;
 
-public record RoleDto(
-        Long id,
-        String name,
-        String description,
-        Set<Long> permissionIds
-) {
-    public RoleDto {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("Role name cannot be null or empty");
-        }
-
-        permissionIds = permissionIds != null ? permissionIds : Collections.emptySet();
-    }
+@Data
+public class RoleDto {
+    private Long id;
+    @NotNull(message = ErrorMessage.ROLE_NAME_REQUIRED)
+    private String name;
+    private String description;
+    private Set<Long> permissionIds = Collections.emptySet();
 }

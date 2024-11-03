@@ -1,9 +1,15 @@
 package com.example.management.permission;
 
-public record PermissionDto(Long id, String name, String description) {
-    public PermissionDto {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("Permission name cannot be null or empty");
-        }
-    }
+import com.example.management.constant.ErrorMessage;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
+@Data
+public class PermissionDto {
+    private Long id;
+    @NotNull(message = ErrorMessage.SERVICE_NAME_REQUIRED)
+    private String serviceName;
+    @NotNull(message = ErrorMessage.ACTION_NAME_REQUIRED)
+    private String action;
+    private String description;
 }
