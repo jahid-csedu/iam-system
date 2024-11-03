@@ -23,7 +23,6 @@ public class RoleService {
     @PreAuthorize("hasAuthority('WRITE_PRIVILEGES')")
     public RoleDto createRole(RoleDto roleDto) {
         Role role = roleMapper.toEntity(roleDto);
-        attachPermissionToRole(role, roleDto.permissionIds());
         return roleMapper.toDto(roleRepository.save(role));
     }
 
@@ -64,6 +63,7 @@ public class RoleService {
                 .orElseThrow(() -> new DataNotFoundException(ROLE_NOT_FOUND));
 
         attachPermissionToRole(role, rolePermissionDto.getPermissionIds());
+        roleRepository.save(role);
     }
 
     private void attachPermissionToRole(Role role, Set<Long> permissionIds) {
@@ -73,6 +73,5 @@ public class RoleService {
         }
 
         role.setPermissions(new HashSet<>(permissions));
-        roleRepository.save(role);
     }
 }
