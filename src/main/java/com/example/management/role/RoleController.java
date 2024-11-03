@@ -51,9 +51,15 @@ public class RoleController {
         return ResponseEntity.ok(roleService.getRoleByName(name));
     }
 
-    @PostMapping("/permissions")
-    public ResponseEntity<Void> attachPermissions(@RequestBody @Valid RolePermissionDto rolePermissionDto) {
-        roleService.attachPermissions(rolePermissionDto);
+    @PutMapping("/permissions")
+    public ResponseEntity<Void> assignPermissions(@RequestBody @Valid RolePermissionDto rolePermissionDto) {
+        roleService.assignPermissions(rolePermissionDto);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/permissions")
+    public ResponseEntity<Void> removePermissions(@RequestBody @Valid RolePermissionDto rolePermissionDto) {
+        roleService.removePermissions(rolePermissionDto);
         return ResponseEntity.noContent().build();
     }
 }

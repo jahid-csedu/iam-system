@@ -10,7 +10,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -25,10 +24,6 @@ public class AuthorizationConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtRequestFilter jwtRequestFilter;
 
-    private static final String[] WHILE_LISTED_APIS = {
-            "/api/user/**"
-    };
-
     private static final String[] PERMITTED_GET_APIS = {
             "/api/roles/**",
             "/api/permissions/**"
@@ -40,7 +35,8 @@ public class AuthorizationConfig {
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(request ->
-                        request.requestMatchers(WHILE_LISTED_APIS).permitAll()
+                        request.requestMatchers(HttpMethod.DELETE, "/api/users/**").authenticated()
+                                .requestMatchers( "/api/users/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, PERMITTED_GET_APIS).permitAll()
                                 .anyRequest().authenticated()
                 )
@@ -52,10 +48,5 @@ public class AuthorizationConfig {
 
         return http.build();
 
-    }
-
-    @Bean
-    public WebSecurityCustomizer webSecurityCustomizer() {
-        return web -> web.ignoring().requestMatchers(WHILE_LISTED_APIS);
     }
 }

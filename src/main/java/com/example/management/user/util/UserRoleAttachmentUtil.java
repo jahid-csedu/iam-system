@@ -27,6 +27,10 @@ public class UserRoleAttachmentUtil {
     }
 
     public void assignRolesToUser(User user, Set<Role> roles) {
-        user.setRoles(roles);
+        user.getRoles().addAll(roles);
+    }
+
+    public void removeRolesFromUser(User user, Set<Role> roles) {
+        user.getRoles().removeAll(roles);
     }
 }

@@ -5,7 +5,6 @@ import com.example.management.permission.Permission;
 import com.example.management.permission.PermissionRepository;
 import lombok.RequiredArgsConstructor;
 import org.mapstruct.factory.Mappers;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
@@ -55,20 +54,42 @@ public class RoleService {
         return roleMapper.toDto(roles);
     }
 
-    public void attachPermissions(RolePermissionDto rolePermissionDto) {
-        Role role = roleRepository.findById(rolePermissionDto.getRoleId())
-                .orElseThrow(() -> new DataNotFoundException(ROLE_NOT_FOUND));
+    public void assignPermissions(RolePermissionDto rolePermissionDto) {
+        Role role = findRoleById(rolePermissionDto);
 
         attachPermissionToRole(role, rolePermissionDto.getPermissionIds());
         roleRepository.save(role);
     }
 
+    public void removePermissions(RolePermissionDto rolePermissionDto) {
+        Role role = findRoleById(rolePermissionDto);
+
+        dettachPermissionFromRole(role, rolePermissionDto.getPermissionIds());
+        roleRepository.save(role);
+    }
+
+    private Role findRoleById(RolePermissionDto rolePermissionDto) {
+        return roleRepository.findById(rolePermissionDto.getRoleId())
+                .orElseThrow(() -> new DataNotFoundException(ROLE_NOT_FOUND));
+    }
+
     private void attachPermissionToRole(Role role, Set<Long> permissionIds) {
+        List<Permission> permissions = getPermissions(permissionIds);
+
+        role.getPermissions().addAll(new HashSet<>(permissions));
+    }
+
+    private void dettachPermissionFromRole(Role role, Set<Long> permissionIds) {
+        List<Permission> permissions = getPermissions(permissionIds);
+
+        role.getPermissions().removeAll(new HashSet<>(permissions));
+    }
+
+    private List<Permission> getPermissions(Set<Long> permissionIds) {
         List<Permission> permissions = permissionRepository.findAllById(permissionIds);
         if (permissions.size() != permissionIds.size()) {
             throw new DataNotFoundException("Some permissions not found");
         }
-
-        role.setPermissions(new HashSet<>(permissions));
+        return permissions;
     }
 }

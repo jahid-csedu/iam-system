@@ -130,24 +130,46 @@ class RoleServiceTest {
     }
 
     @Test
-    void attachPermissions_attachesPermissionsToRole() {
+    void assignPermissions_attachesPermissionsToRole() {
         when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
         when(permissionRepository.findAllById(permissionIds)).thenReturn(permissions);
 
         RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
-        roleService.attachPermissions(rolePermissionDto);
+        roleService.assignPermissions(rolePermissionDto);
 
         verify(permissionRepository, times(1)).findAllById(anySet());
         verify(roleRepository, times(1)).save(any(Role.class));
     }
 
     @Test
-    void attachPermissions_throwsExceptionWhenPermissionsNotFound() {
+    void assignPermissions_throwsExceptionWhenPermissionsNotFound() {
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
+        when(permissionRepository.findAllById(permissionIds)).thenReturn(Collections.singletonList(permissions.getFirst()));
+
+        RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
+
+        assertThrows(DataNotFoundException.class, () -> roleService.assignPermissions(rolePermissionDto));
+    }
+
+    @Test
+    void removePermissions_removesPermissionsFromRole() {
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
+        when(permissionRepository.findAllById(permissionIds)).thenReturn(permissions);
+
+        RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
+        roleService.removePermissions(rolePermissionDto);
+
+        verify(permissionRepository, times(1)).findAllById(anySet());
+        verify(roleRepository, times(1)).save(any(Role.class));
+    }
+
+    @Test
+    void removePermissions_throwsExceptionWhenPermissionsNotFound() {
         when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
         when(permissionRepository.findAllById(permissionIds)).thenReturn(Collections.singletonList(permissions.get(0)));
 
         RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
 
-        assertThrows(DataNotFoundException.class, () -> roleService.attachPermissions(rolePermissionDto));
+        assertThrows(DataNotFoundException.class, () -> roleService.removePermissions(rolePermissionDto));
     }
 }

@@ -4,6 +4,7 @@ import com.example.management.exception.DataNotFoundException;
 import com.example.management.exception.UserAlreadyExistsException;
 import com.example.management.permission.Permission;
 import com.example.management.role.Role;
+import com.example.management.user.model.dto.UserDto;
 import com.example.management.user.model.dto.UserRegistrationDto;
 import com.example.management.user.model.dto.UserRoleAttachmentDto;
 import com.example.management.user.model.entity.User;
@@ -17,12 +18,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.anySet;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doNothing;
@@ -48,17 +52,18 @@ class UserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    private UserRegistrationDto userDto;
+    private UserRegistrationDto userRegistrationDto;
     private User user;
+    private UserDto userDto;
     private Set<Role> roles;
 
     @BeforeEach
     public void setUp() {
-        userDto = new UserRegistrationDto();
-        userDto.setUsername("testUser");
-        userDto.setPassword("password");
-        userDto.setEmail("test@example.com");
-        userDto.setRoleIds(Set.of(1L));
+        userRegistrationDto = new UserRegistrationDto();
+        userRegistrationDto.setUsername("testUser");
+        userRegistrationDto.setPassword("password");
+        userRegistrationDto.setEmail("test@example.com");
+        userRegistrationDto.setRoleIds(Set.of(1L));
 
         Permission p1 = new Permission();
         p1.setId(1L);
@@ -78,10 +83,16 @@ class UserServiceTest {
         roles = Set.of(role);
 
         user = new User();
+        user.setId(1L);
         user.setUsername("testUser");
         user.setPassword("encoded_password");
         user.setEmail("test@example.com");
         user.setRoles(roles);
+
+        userDto = new UserDto();
+        userDto.setId(1L);
+        userDto.setUsername("testUser");
+        userDto.setEmail("test@example.com");
     }
 
     @Test
@@ -91,7 +102,7 @@ class UserServiceTest {
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         // Act
-        User registeredUser = userService.registerUser(userDto);
+        User registeredUser = userService.registerUser(userRegistrationDto);
 
         // Assert
         assertNotNull(registeredUser);
@@ -107,7 +118,7 @@ class UserServiceTest {
         doThrow(new UserAlreadyExistsException("Username not available")).when(userValidator).validateUsernameAvailable(anyString());
 
         // Act & Assert
-        assertThrows(RuntimeException.class, () -> userService.registerUser(userDto));
+        assertThrows(RuntimeException.class, () -> userService.registerUser(userRegistrationDto));
         verify(userValidator).validateUsernameAvailable(anyString());
     }
 
@@ -118,12 +129,12 @@ class UserServiceTest {
         doThrow(new UserAlreadyExistsException("Email not available")).when(userValidator).validateEmailAvailable(anyString());
 
         // Act & Assert
-        assertThrows(RuntimeException.class, () -> userService.registerUser(userDto));
+        assertThrows(RuntimeException.class, () -> userService.registerUser(userRegistrationDto));
         verify(userValidator).validateUsernameAvailable(anyString());
     }
 
     @Test
-    void attachRoles_successfulAttachment() {
+    void assignRoles_successfulAttachment() {
         // Arrange
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
@@ -134,13 +145,13 @@ class UserServiceTest {
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         // Act & Assert
-        userService.attachRoles(userRoleAttachmentDto);
+        userService.assignRoles(userRoleAttachmentDto);
         verify(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
         verify(userRepository).save(any(User.class));
     }
 
     @Test
-    void attachRoles_whenUserNotFound_AttachmentFailure() {
+    void assignRoles_whenUserNotFound_AttachmentFailure() {
         // Arrange
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
@@ -149,11 +160,11 @@ class UserServiceTest {
         doThrow(new DataNotFoundException("User not found")).when(userRepository).findByUsername(anyString());
 
         // Act & Assert
-        assertThrows(RuntimeException.class, () -> userService.attachRoles(userRoleAttachmentDto));
+        assertThrows(RuntimeException.class, () -> userService.assignRoles(userRoleAttachmentDto));
     }
 
     @Test
-    void attachRoles_whenRoleNotFound_AttachmentFailure() {
+    void assignRoles_whenRoleNotFound_AttachmentFailure() {
         // Arrange
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
@@ -163,6 +174,106 @@ class UserServiceTest {
         doThrow(new DataNotFoundException("Some roles not found")).when(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
 
         // Act & Assert
-        assertThrows(RuntimeException.class, () -> userService.attachRoles(userRoleAttachmentDto));
+        assertThrows(RuntimeException.class, () -> userService.assignRoles(userRoleAttachmentDto));
+    }
+
+    @Test
+    void removeRoles_successfulRemoval() {
+        UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
+        userRoleAttachmentDto.setUsername("testUser");
+        userRoleAttachmentDto.setRoleIds(Set.of(1L));
+
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
+        when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
+
+        userService.removeRoles(userRoleAttachmentDto);
+
+        verify(userRoleAttachmentUtil).removeRolesFromUser(user, roles);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void findAllUsers_successfulRetrieval() {
+        List<User> users = List.of(user);
+        List<UserDto> userDtos = List.of(userDto);
+        when(userRepository.findAll()).thenReturn(users);
+
+        List<UserDto> result = userService.findAllUsers();
+
+        assertEquals(userDtos, result);
+        verify(userRepository).findAll();
+    }
+
+    @Test
+    void findUserById_userFound() {
+        when(userRepository.findById(anyLong())).thenReturn(Optional.of(user));
+
+        UserDto result = userService.findUserById(1L);
+
+        assertEquals(userDto, result);
+        verify(userRepository).findById(1L);
+    }
+
+    @Test
+    void findUserById_userNotFound() {
+        when(userRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        assertThrows(DataNotFoundException.class, () -> userService.findUserById(1L));
+        verify(userRepository).findById(1L);
+    }
+
+    @Test
+    void findUserByUsername_userFound() {
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
+
+        UserDto result = userService.findUserByUsername("testUser");
+
+        assertEquals(userDto, result);
+        verify(userRepository).findByUsername("testUser");
+    }
+
+    @Test
+    void findUserByUsername_userNotFound() {
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
+
+        assertThrows(DataNotFoundException.class, () -> userService.findUserByUsername("testUser"));
+        verify(userRepository).findByUsername("testUser");
+    }
+
+    @Test
+    void findUserByEmail_userFound() {
+        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(user));
+
+        UserDto result = userService.findUserByEmail("test@example.com");
+
+        assertEquals(userDto, result);
+        verify(userRepository).findByEmail("test@example.com");
+    }
+
+    @Test
+    void findUserByEmail_userNotFound() {
+        when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+
+        assertThrows(DataNotFoundException.class, () -> userService.findUserByEmail("test@example.com"));
+        verify(userRepository).findByEmail("test@example.com");
+    }
+
+    @Test
+    void deleteUser_successfulDeletion() {
+        when(userRepository.findById(anyLong())).thenReturn(Optional.of(user));
+        doNothing().when(userRepository).deleteById(anyLong());
+
+        userService.deleteUser(1L);
+
+        verify(userRepository).findById(1L);
+        verify(userRepository).deleteById(1L);
+    }
+
+    @Test
+    void deleteUser_userNotFound() {
+        when(userRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        assertThrows(DataNotFoundException.class, () -> userService.deleteUser(1L));
+        verify(userRepository).findById(1L);
     }
 }
