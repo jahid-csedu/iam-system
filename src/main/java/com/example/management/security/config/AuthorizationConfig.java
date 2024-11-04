@@ -25,8 +25,14 @@ public class AuthorizationConfig {
     private final JwtRequestFilter jwtRequestFilter;
 
     private static final String[] PERMITTED_GET_APIS = {
+            "/api/users/**",
             "/api/roles/**",
             "/api/permissions/**"
+    };
+
+    private static final String[] PERMITTED_PUBLIC_APIS = {
+            "/api/users/register/**",
+            "/api/auth/**"
     };
 
     @Bean
@@ -35,8 +41,7 @@ public class AuthorizationConfig {
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(request ->
-                        request.requestMatchers(HttpMethod.DELETE, "/api/users/**").authenticated()
-                                .requestMatchers( "/api/users/**").permitAll()
+                        request.requestMatchers(PERMITTED_PUBLIC_APIS).permitAll()
                                 .requestMatchers(HttpMethod.GET, PERMITTED_GET_APIS).permitAll()
                                 .anyRequest().authenticated()
                 )

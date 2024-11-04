@@ -93,6 +93,7 @@ class UserServiceTest {
         userDto.setId(1L);
         userDto.setUsername("testUser");
         userDto.setEmail("test@example.com");
+        userDto.setRoleIds(Set.of(1L));
     }
 
     @Test
