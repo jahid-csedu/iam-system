@@ -4,7 +4,7 @@ A user-management-system with the following functionalities:
 
 ## Register a User
 
-Endpoint: `/user/register`  
+Endpoint: `/api/user/register`  
 HTTP Method: _POST_
 #### Example Request Body:
 ```aidl,
@@ -30,7 +30,7 @@ Users can register to the system by making a POST request to this endpoint with 
 
 ## Authenticate a User
 
-Endpoint: `/user/authenticate`  
+Endpoint: `/api/auth/authenticate`  
 HTTP Method: _POST_  
 #### Example Request Body: 
 ```aidl,
@@ -53,7 +53,7 @@ Registered users can authenticate themselves to the system by providing their `u
 
 ## Refresh Token
 
-Endpoint: `/user/token/refresh`  
+Endpoint: `/api/auth/token/refresh`  
 HTTP Method: _POST_
 #### Example Request Body:
 ```aidl,
