@@ -51,6 +51,12 @@ public class GlobalHandler {
         return buildExceptionResponse(exception, HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(BAD_REQUEST)
+    public ResponseEntity<ExceptionResponse> illegalArgumentExceptionHandler(IllegalArgumentException exception) {
+        return buildExceptionResponse(exception, BAD_REQUEST);
+    }
+
     @ExceptionHandler(AuthorizationDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ExceptionResponse> authorizationDeniedExceptionHandler(AuthorizationDeniedException exception) {

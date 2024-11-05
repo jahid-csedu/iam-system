@@ -2,6 +2,8 @@ package com.example.iamsystem.permission;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -29,7 +31,8 @@ public class Permission implements Serializable {
     private Long id;
     @Column(name = "service_name")
     private String serviceName;
-    private String action;
+    @Enumerated(value = EnumType.STRING)
+    private PermissionAction action;
     private String description;
     @CreationTimestamp
     private Instant createdAt;

@@ -16,7 +16,8 @@ public class PermissionService {
     private static final PermissionMapper permissionMapper = Mappers.getMapper(PermissionMapper.class);
 
     public PermissionDto savePermission(PermissionDto permissionDto) {
-        Permission permission = permissionRepository.save(permissionMapper.toEntity(permissionDto));
+        Permission entity = permissionMapper.toEntity(permissionDto);
+        Permission permission = permissionRepository.save(entity);
         return permissionMapper.toDto(permission);
     }
 

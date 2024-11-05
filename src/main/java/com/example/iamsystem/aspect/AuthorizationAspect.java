@@ -21,7 +21,7 @@ public class AuthorizationAspect {
     private final UserService authorizationService;
 
     @Before("@annotation(requirePermission)")
-    public void checkPermission(JoinPoint joinPoint, RequirePermission requirePermission) throws Throwable {
+    public void checkPermission(JoinPoint joinPoint, RequirePermission requirePermission) {
         AtomicReference<Boolean> access = new AtomicReference<>(false);
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         userDetails.getAuthorities().forEach(authority -> {

@@ -1,5 +1,7 @@
 package com.example.iamsystem.util.authorization;
 
+import com.example.iamsystem.permission.PermissionAction;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -9,5 +11,5 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RequirePermission {
     String serviceName();
-    String action();
+    PermissionAction action();
 }
