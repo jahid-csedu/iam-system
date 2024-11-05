@@ -37,7 +37,7 @@ class PermissionServiceTest {
     void setUp() {
         permission = new Permission();
         permission.setId(1L);
-        permission.setAction("READ");
+        permission.setAction(PermissionAction.READ);
         permission.setServiceName("TEST_SERVICE");
         permissionDto = new PermissionDto();
         permissionDto.setId(1L);
@@ -47,6 +47,7 @@ class PermissionServiceTest {
 
     @Test
     void savePermission_savesAndReturnsPermission() {
+        when(permissionRepository.findAllByServiceName("TEST_SERVICE")).thenReturn(Collections.emptyList());
         when(permissionRepository.save(any(Permission.class))).thenReturn(permission);
 
         PermissionDto result = permissionService.savePermission(permissionDto);
@@ -55,6 +56,13 @@ class PermissionServiceTest {
         assertEquals(permissionDto.getServiceName(), result.getServiceName());
         assertEquals(permissionDto.getAction(), result.getAction());
         verify(permissionRepository, times(1)).save(any(Permission.class));
+    }
+
+    @Test
+    void savePermission_throwsExceptionWhenPermissionExists() {
+        when(permissionRepository.findAllByServiceName("TEST_SERVICE")).thenReturn(Collections.singletonList(permission));
+
+        assertThrows(IllegalArgumentException.class, () -> permissionService.savePermission(permissionDto));
     }
 
     @Test
@@ -106,20 +114,13 @@ class PermissionServiceTest {
 
     @Test
     void getPermissionByName_returnsPermissionService() {
-        when(permissionRepository.findByServiceName("TEST_SERVICE")).thenReturn(Optional.of(permission));
+        when(permissionRepository.findAllByServiceName("TEST_SERVICE")).thenReturn(List.of(permission));
 
-        PermissionDto result = permissionService.getPermissionByServiceName("TEST_SERVICE");
+        List<PermissionDto> result = permissionService.getPermissionByServiceName("TEST_SERVICE");
 
         assertNotNull(result);
-        assertEquals(permissionDto.getServiceName(), result.getServiceName());
-        assertEquals(permissionDto.getAction(), result.getAction());
-    }
-
-    @Test
-    void getPermissionByServiceName_throwsExceptionWhenNotFound() {
-        when(permissionRepository.findByServiceName("TEST_SERVICE")).thenReturn(Optional.empty());
-
-        assertThrows(DataNotFoundException.class, () -> permissionService.getPermissionByServiceName("TEST_SERVICE"));
+        assertEquals(permissionDto.getServiceName(), result.getFirst().getServiceName());
+        assertEquals(permissionDto.getAction(), result.getFirst().getAction());
     }
 
     @Test

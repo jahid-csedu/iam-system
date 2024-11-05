@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+import static com.example.iamsystem.constant.ErrorMessage.PERMISSION_EXISTS;
 import static com.example.iamsystem.constant.ErrorMessage.PERMISSION_NOT_FOUND;
 
 @Service
@@ -16,9 +17,18 @@ public class PermissionService {
     private static final PermissionMapper permissionMapper = Mappers.getMapper(PermissionMapper.class);
 
     public PermissionDto savePermission(PermissionDto permissionDto) {
+        validateDuplicatePermission(permissionDto);
         Permission entity = permissionMapper.toEntity(permissionDto);
         Permission permission = permissionRepository.save(entity);
         return permissionMapper.toDto(permission);
+    }
+
+    private void validateDuplicatePermission(PermissionDto permissionDto) {
+        getPermissionByServiceName(permissionDto.getServiceName()).forEach(permission -> {
+            if (permission.getAction().equals(permissionDto.getAction())) {
+                throw new IllegalArgumentException(PERMISSION_EXISTS);
+            }
+        });
     }
 
     public PermissionDto getPermissionById(Long id) {
@@ -38,10 +48,8 @@ public class PermissionService {
         permissionRepository.deleteById(id);
     }
 
-    public PermissionDto getPermissionByServiceName(String name) {
-        return permissionRepository.findByServiceName(name)
-                .map(permissionMapper::toDto)
-                .orElseThrow(() -> new DataNotFoundException(PERMISSION_NOT_FOUND));
+    public List<PermissionDto> getPermissionByServiceName(String name) {
+        return permissionMapper.toDto(permissionRepository.findAllByServiceName(name));
     }
 
     public List<PermissionDto> getAllPermissions() {

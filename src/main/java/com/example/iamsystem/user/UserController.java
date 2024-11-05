@@ -4,6 +4,7 @@ import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.model.entity.User;
+import com.example.iamsystem.util.authorization.RequirePermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import static com.example.iamsystem.permission.PermissionAction.DELETE;
+import static com.example.iamsystem.permission.PermissionAction.UPDATE;
+
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
@@ -28,7 +32,7 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ResponseEntity<UserRegistrationDto> userRegistration(@Valid @RequestBody UserRegistrationDto userDto) {
+    public ResponseEntity<UserRegistrationDto> userRegistration(@RequestBody @Valid UserRegistrationDto userDto) {
         User registeresUser = userService.registerUser(userDto);
         userDto.setPassword(null);
         if (registeresUser.getId() != null) {
@@ -38,12 +42,14 @@ public class UserController {
     }
 
     @PutMapping("/roles")
+    @RequirePermission(serviceName = "IAM", action = UPDATE)
     public ResponseEntity<Void> assignRoles(@RequestBody @Valid UserRoleAttachmentDto userRoleAttachmentDto) {
         userService.assignRoles(userRoleAttachmentDto);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/roles")
+    @RequirePermission(serviceName = "IAM", action = DELETE)
     public ResponseEntity<Void> removeRoles(@RequestBody @Valid UserRoleAttachmentDto userRoleAttachmentDto) {
         userService.removeRoles(userRoleAttachmentDto);
         return ResponseEntity.noContent().build();
@@ -70,6 +76,7 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
+    @RequirePermission(serviceName = "IAM", action = DELETE)
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();

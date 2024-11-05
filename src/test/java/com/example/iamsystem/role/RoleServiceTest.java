@@ -2,6 +2,7 @@ package com.example.iamsystem.role;
 
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.permission.Permission;
+import com.example.iamsystem.permission.PermissionAction;
 import com.example.iamsystem.permission.PermissionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,12 +57,12 @@ class RoleServiceTest {
         Permission p1 = new Permission();
         p1.setId(1L);
         p1.setServiceName("TEST");
-        p1.setAction("READ");
+        p1.setAction(PermissionAction.READ);
 
         Permission p2 = new Permission();
         p2.setId(2L);
         p2.setServiceName("TEST");
-        p2.setAction("WRITE");
+        p2.setAction(PermissionAction.WRITE);
 
         permissionIds = new HashSet<>(Arrays.asList(1L, 2L));
         permissions = Arrays.asList(p1, p2);

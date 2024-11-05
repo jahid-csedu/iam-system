@@ -3,6 +3,7 @@ package com.example.iamsystem.user;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.UserAlreadyExistsException;
 import com.example.iamsystem.permission.Permission;
+import com.example.iamsystem.permission.PermissionAction;
 import com.example.iamsystem.role.Role;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
@@ -68,12 +69,12 @@ class UserServiceTest {
         Permission p1 = new Permission();
         p1.setId(1L);
         p1.setServiceName("TEST");
-        p1.setAction("READ");
+        p1.setAction(PermissionAction.READ);
 
         Permission p2 = new Permission();
         p2.setId(2L);
         p2.setServiceName("TEST");
-        p2.setAction("WRITE");
+        p2.setAction(PermissionAction.WRITE);
 
         Role role = new Role();
         role.setId(1L);

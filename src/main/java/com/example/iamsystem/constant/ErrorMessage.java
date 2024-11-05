@@ -13,6 +13,7 @@ public class ErrorMessage {
     public static final String REFRESH_TOKEN_REQUIRED = "Refresh token is required";
     public static final String ROLE_NOT_FOUND = "Role not found";
     public static final String PERMISSION_NOT_FOUND = "Permission not found";
+    public static final String PERMISSION_EXISTS = "Permission already exists";
     public static final String SERVICE_NAME_REQUIRED = "Service name cannot be null or blank";
     public static final String ACTION_NAME_REQUIRED = "Action cannot be null or blank";
     public static final String PERMISSION_ID_REQUIRED = "Permission list cannot be null";

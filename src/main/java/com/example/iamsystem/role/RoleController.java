@@ -1,5 +1,6 @@
 package com.example.iamsystem.role;
 
+import com.example.iamsystem.util.authorization.RequirePermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import static com.example.iamsystem.permission.PermissionAction.DELETE;
+import static com.example.iamsystem.permission.PermissionAction.UPDATE;
+import static com.example.iamsystem.permission.PermissionAction.WRITE;
+
 @RestController
 @RequestMapping("/api/roles")
 @RequiredArgsConstructor
@@ -26,7 +31,8 @@ public class RoleController {
     }
 
     @PostMapping
-    public ResponseEntity<RoleDto> createRole(@RequestBody RoleDto roleDto) {
+    @RequirePermission(serviceName = "IAM", action = WRITE)
+    public ResponseEntity<RoleDto> createRole(@RequestBody @Valid RoleDto roleDto) {
         return ResponseEntity.ok(roleService.createRole(roleDto));
     }
 
@@ -36,11 +42,13 @@ public class RoleController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<RoleDto> updateRole(@PathVariable Long id, @RequestBody RoleDto roleDto) {
+    @RequirePermission(serviceName = "IAM", action = UPDATE)
+    public ResponseEntity<RoleDto> updateRole(@PathVariable Long id, @RequestBody @Valid RoleDto roleDto) {
         return ResponseEntity.ok(roleService.updateRole(id, roleDto));
     }
 
     @DeleteMapping("/{id}")
+    @RequirePermission(serviceName = "IAM", action = DELETE)
     public ResponseEntity<Void> deleteRoleById(@PathVariable Long id) {
         roleService.deleteRole(id);
         return ResponseEntity.noContent().build();
@@ -52,12 +60,14 @@ public class RoleController {
     }
 
     @PutMapping("/permissions")
+    @RequirePermission(serviceName = "IAM", action = UPDATE)
     public ResponseEntity<Void> assignPermissions(@RequestBody @Valid RolePermissionDto rolePermissionDto) {
         roleService.assignPermissions(rolePermissionDto);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/permissions")
+    @RequirePermission(serviceName = "IAM", action = DELETE)
     public ResponseEntity<Void> removePermissions(@RequestBody @Valid RolePermissionDto rolePermissionDto) {
         roleService.removePermissions(rolePermissionDto);
         return ResponseEntity.noContent().build();
