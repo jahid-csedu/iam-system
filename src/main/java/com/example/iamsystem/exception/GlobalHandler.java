@@ -45,6 +45,12 @@ public class GlobalHandler {
         return buildExceptionResponse(exception, HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(NoAccessException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ResponseEntity<ExceptionResponse> noAccessExceptionHandler(NoAccessException exception) {
+        return buildExceptionResponse(exception, HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler(AuthorizationDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ExceptionResponse> authorizationDeniedExceptionHandler(AuthorizationDeniedException exception) {
