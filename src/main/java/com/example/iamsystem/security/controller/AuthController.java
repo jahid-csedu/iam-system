@@ -4,6 +4,7 @@ import com.example.iamsystem.constant.ErrorMessage;
 import com.example.iamsystem.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.dto.JwtResponse;
 import com.example.iamsystem.exception.JwtException;
+import com.example.iamsystem.permission.PermissionAction;
 import com.example.iamsystem.security.dto.CheckAccessDto;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
 import com.example.iamsystem.security.user.UserDetailsServiceImpl;
@@ -19,8 +20,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.example.iamsystem.constant.TokenType.ACCESS_TOKEN;
 import static com.example.iamsystem.constant.TokenType.REFRESH_TOKEN;
@@ -55,14 +54,13 @@ public class AuthController {
 
     @PostMapping("/check-access")
     public ResponseEntity<Boolean> checkAccess(@Valid @RequestBody CheckAccessDto checkAccessDto) {
-        AtomicReference<Boolean> access = new AtomicReference<>(false);
         UserDetails userDetails = userDetailsService.loadUserByUsername(checkAccessDto.getUsername());
-        userDetails.getAuthorities().forEach(authority -> {
-            if (authority.getAuthority().equals(checkAccessDto.getServiceName() + ":" + checkAccessDto.getAction())) {
-                access.set(true);
-            }
-        });
-        return ResponseEntity.ok(access.get());
+        return ResponseEntity.ok(hasPermission(userDetails, checkAccessDto.getServiceName(), PermissionAction.valueOf(checkAccessDto.getAction())));
+    }
+
+    private static boolean hasPermission(UserDetails userDetails, String serviceName, PermissionAction action) {
+        return userDetails.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals(serviceName + ":" + action));
     }
 
     private JwtResponse getTokens(UserDetails userDetails, String username) {

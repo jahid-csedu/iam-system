@@ -1,7 +1,6 @@
 package com.example.iamsystem.user;
 
 import com.example.iamsystem.exception.DataNotFoundException;
-import com.example.iamsystem.permission.PermissionAction;
 import com.example.iamsystem.role.Role;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
@@ -12,7 +11,6 @@ import com.example.iamsystem.user.util.UserValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.mapstruct.factory.Mappers;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -81,11 +79,6 @@ public class UserService {
     public void deleteUser(Long id) {
         this.findUserById(id);
         userRepository.deleteById(id);
-    }
-
-    public boolean hasPermission(UserDetails userDetails, String serviceName, PermissionAction action) {
-        return userDetails.getAuthorities().stream()
-                .anyMatch(authority -> authority.getAuthority().equals(serviceName + ":" + action));
     }
 
     private void validateRequest(UserRegistrationDto userDto) {

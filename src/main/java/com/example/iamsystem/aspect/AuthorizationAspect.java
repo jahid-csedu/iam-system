@@ -2,7 +2,6 @@ package com.example.iamsystem.aspect;
 
 import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.permission.PermissionAction;
-import com.example.iamsystem.user.UserService;
 import com.example.iamsystem.util.authorization.RequirePermission;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.JoinPoint;
@@ -17,14 +16,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AuthorizationAspect {
 
-    private final UserService userService;
-
     @Before("@annotation(requirePermission)")
     public void checkPermission(JoinPoint joinPoint, RequirePermission requirePermission) {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
-        if (!userService.hasPermission(userDetails, requirePermission.serviceName(), requirePermission.action())) {
+        if (!hasPermission(userDetails, requirePermission.serviceName(), requirePermission.action())) {
             throw new NoAccessException("User does not have permission to perform this action");
         }
+    }
+
+    private static boolean hasPermission(UserDetails userDetails, String serviceName, PermissionAction action) {
+        return userDetails.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals(serviceName + ":" + action));
     }
 }
