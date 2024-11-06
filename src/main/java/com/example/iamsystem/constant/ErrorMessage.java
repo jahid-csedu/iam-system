@@ -21,4 +21,5 @@ public class ErrorMessage {
     public static final String ROLE_ID_REQUIRED = "Role list cannot be null";
     public static final String ROLE_ID_NOT_EMPTY = "Role list cannot be empty";
     public static final String ROLE_NAME_REQUIRED = "Role name cannot be null or blank";
+    public static final String TOKEN_REQUIRED = "Token cannot be null or blank";
 }

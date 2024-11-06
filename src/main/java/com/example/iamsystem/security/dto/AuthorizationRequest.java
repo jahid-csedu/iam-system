@@ -6,9 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
-public class CheckAccessDto {
-    @NotNull(message = ErrorMessage.USERNAME_REQUIRED)
-    private String username;
+public class AuthorizationRequest {
     @NotNull(message = ErrorMessage.SERVICE_NAME_REQUIRED)
     private String serviceName;
     @NotNull(message = ErrorMessage.ACTION_NAME_REQUIRED)

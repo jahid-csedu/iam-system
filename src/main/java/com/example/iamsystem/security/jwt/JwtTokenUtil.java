@@ -2,6 +2,7 @@ package com.example.iamsystem.security.jwt;
 
 import com.example.iamsystem.constant.TokenType;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -86,6 +87,15 @@ public class JwtTokenUtil implements Serializable {
         final String username = getUsernameFromToken(token, tokenType);
 
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token, tokenType));
+    }
+
+    public boolean validateToken(String token, TokenType tokenType) {
+        try {
+            getAllClaimsFromToken(token, tokenType);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private SecretKey getSecretKey(TokenType tokenType) {

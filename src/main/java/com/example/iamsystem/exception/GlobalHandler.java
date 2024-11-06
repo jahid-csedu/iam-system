@@ -1,5 +1,7 @@
 package com.example.iamsystem.exception;
 
+import com.example.iamsystem.constant.ErrorMessage;
+import io.jsonwebtoken.security.SignatureException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
+import static org.springframework.http.HttpStatus.PRECONDITION_FAILED;
 import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 
 @RestControllerAdvice
@@ -61,6 +64,20 @@ public class GlobalHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ExceptionResponse> authorizationDeniedExceptionHandler(AuthorizationDeniedException exception) {
         return buildExceptionResponse(exception, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(SignatureException.class)
+    @ResponseStatus(HttpStatus.PRECONDITION_FAILED)
+    public ResponseEntity<ExceptionResponse> signatureExceptionHandler(SignatureException exception) {
+        ExceptionResponse response = new ExceptionResponse(PRECONDITION_FAILED.value(), ErrorMessage.INVALID_TOKEN);
+        return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(response);
+    }
+
+    @ExceptionHandler(JwtException.class)
+    @ResponseStatus(HttpStatus.PRECONDITION_FAILED)
+    public ResponseEntity<ExceptionResponse> jwtExceptionHandler(JwtException exception) {
+        ExceptionResponse response = new ExceptionResponse(PRECONDITION_FAILED.value(), ErrorMessage.INVALID_TOKEN);
+        return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(response);
     }
 
     @ExceptionHandler(Exception.class)

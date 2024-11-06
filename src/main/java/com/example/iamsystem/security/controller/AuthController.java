@@ -5,7 +5,10 @@ import com.example.iamsystem.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.dto.JwtResponse;
 import com.example.iamsystem.exception.JwtException;
 import com.example.iamsystem.permission.PermissionAction;
-import com.example.iamsystem.security.dto.CheckAccessDto;
+import com.example.iamsystem.security.dto.AuthorizationRequest;
+import com.example.iamsystem.security.dto.AuthorizationResponse;
+import com.example.iamsystem.security.dto.TokenValidationRequest;
+import com.example.iamsystem.security.dto.TokenValidationResponse;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
 import com.example.iamsystem.security.user.UserDetailsServiceImpl;
 import com.example.iamsystem.user.model.dto.UserLoginDto;
@@ -15,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -52,10 +56,17 @@ public class AuthController {
         throw new JwtException(ErrorMessage.INVALID_TOKEN);
     }
 
-    @PostMapping("/check-access")
-    public ResponseEntity<Boolean> checkAccess(@Valid @RequestBody CheckAccessDto checkAccessDto) {
-        UserDetails userDetails = userDetailsService.loadUserByUsername(checkAccessDto.getUsername());
-        return ResponseEntity.ok(hasPermission(userDetails, checkAccessDto.getServiceName(), PermissionAction.valueOf(checkAccessDto.getAction())));
+    @PostMapping("/token/validate")
+    public ResponseEntity<TokenValidationResponse> validateToken(@Valid @RequestBody TokenValidationRequest request) {
+        boolean valid = jwtTokenUtil.validateToken(request.getToken(), ACCESS_TOKEN);
+        return ResponseEntity.ok(new TokenValidationResponse(valid));
+    }
+
+    @PostMapping("/authorize")
+    public ResponseEntity<AuthorizationResponse> authorize(@Valid @RequestBody AuthorizationRequest authorizationRequest) {
+        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        boolean permission = hasPermission(userDetails, authorizationRequest.getServiceName(), PermissionAction.valueOf(authorizationRequest.getAction()));
+        return ResponseEntity.ok(new AuthorizationResponse(permission));
     }
 
     private static boolean hasPermission(UserDetails userDetails, String serviceName, PermissionAction action) {

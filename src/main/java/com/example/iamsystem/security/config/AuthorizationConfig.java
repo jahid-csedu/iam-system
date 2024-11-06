@@ -35,13 +35,19 @@ public class AuthorizationConfig {
             "/api/auth/**"
     };
 
+
+    private static final String[] SPECIAL_PRIVATE_APIS = {
+            "/api/auth/authorize"
+    };
+
     @Bean
     protected SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationManager authenticationManager) throws Exception {
         http
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(request ->
-                        request.requestMatchers(PERMITTED_PUBLIC_APIS).permitAll()
+                        request.requestMatchers(SPECIAL_PRIVATE_APIS).authenticated()
+                                .requestMatchers(PERMITTED_PUBLIC_APIS).permitAll()
                                 .requestMatchers(HttpMethod.GET, PERMITTED_GET_APIS).permitAll()
                                 .anyRequest().authenticated()
                 )
