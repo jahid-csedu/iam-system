@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -59,6 +60,9 @@ public class User implements Serializable {
     )
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<Role> roles = new HashSet<>();
+    @ManyToOne
+    @JoinColumn(name = "created_by")
+    private User createdBy;
     @CreationTimestamp
     private Instant createdAt;
     @UpdateTimestamp

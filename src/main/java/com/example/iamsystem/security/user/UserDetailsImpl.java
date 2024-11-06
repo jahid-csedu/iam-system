@@ -18,6 +18,10 @@ public class UserDetailsImpl implements UserDetails {
         this.user = user;
     }
 
+    public User getUser() {
+        return this.user;
+    }
+
     public boolean isRootUser() {
         return user.isRootUser();
     }

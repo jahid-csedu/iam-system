@@ -1,10 +1,12 @@
 package com.example.iamsystem.user;
 
 import com.example.iamsystem.exception.DataNotFoundException;
+import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.exception.UserAlreadyExistsException;
 import com.example.iamsystem.permission.Permission;
 import com.example.iamsystem.permission.PermissionAction;
 import com.example.iamsystem.role.Role;
+import com.example.iamsystem.security.user.UserDetailsImpl;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
@@ -17,6 +19,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -32,6 +37,7 @@ import static org.mockito.Mockito.anySet;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,8 +59,18 @@ class UserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private SecurityContext securityContext;
+
+    @Mock
+    private Authentication authentication;
+
+    @Mock
+    private UserDetailsImpl userDetails;
+
     private UserRegistrationDto userRegistrationDto;
     private User user;
+    private User childUser;
     private UserDto userDto;
     private Set<Role> roles;
 
@@ -68,12 +84,12 @@ class UserServiceTest {
 
         Permission p1 = new Permission();
         p1.setId(1L);
-        p1.setServiceName("TEST");
+        p1.setServiceName("IAM");
         p1.setAction(PermissionAction.READ);
 
         Permission p2 = new Permission();
         p2.setId(2L);
-        p2.setServiceName("TEST");
+        p2.setServiceName("IAM");
         p2.setAction(PermissionAction.WRITE);
 
         Role role = new Role();
@@ -90,6 +106,9 @@ class UserServiceTest {
         user.setEmail("test@example.com");
         user.setRoles(roles);
 
+        childUser = new User();
+        childUser.setId(2L);
+
         userDto = new UserDto();
         userDto.setId(1L);
         userDto.setUsername("testUser");
@@ -98,8 +117,10 @@ class UserServiceTest {
     }
 
     @Test
-    void registerUser_successfulRegistration() {
+    void registerRootUser_successfulRegistration() {
         // Arrange
+        userRegistrationDto.setRootUser(true);
+        mockSecurityContext(null);
         when(passwordEncoder.encode(anyString())).thenReturn("encoded_password");
         when(userRepository.save(any(User.class))).thenReturn(user);
 
@@ -108,6 +129,27 @@ class UserServiceTest {
 
         // Assert
         assertNotNull(registeredUser);
+        verify(userValidator).validateUsernameAvailable(anyString());
+        verify(userValidator).validateEmailAvailable(anyString());
+        verify(passwordEncoder).encode(anyString());
+        verify(userRepository).save(any(User.class));
+    }
+
+    @Test
+    void registerNonRootUser_successfulRegistration() {
+        // Arrange
+        userRegistrationDto.setRootUser(false);
+        mockSecurityContext(user);
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded_password");
+        user.setCreatedBy(user);
+        when(userRepository.save(any(User.class))).thenReturn(user);
+
+        // Act
+        User registeredUser = userService.registerUser(userRegistrationDto);
+
+        // Assert
+        assertNotNull(registeredUser);
+        assertEquals(user.getId(), registeredUser.getCreatedBy().getId());
         verify(userValidator).validateUsernameAvailable(anyString());
         verify(userValidator).validateEmailAvailable(anyString());
         verify(passwordEncoder).encode(anyString());
@@ -133,6 +175,54 @@ class UserServiceTest {
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.registerUser(userRegistrationDto));
         verify(userValidator).validateUsernameAvailable(anyString());
+    }
+
+    @Test
+    void registerUser_whenNonLoggedInUserCreateNonRootUser_thenValidationFailure() {
+        // Arrange
+        userRegistrationDto.setRootUser(false);
+        mockSecurityContext(null); // user not logged in
+        doNothing().when(userValidator).validateUsernameAvailable(anyString());
+        doNothing().when(userValidator).validateEmailAvailable(anyString());
+
+        // Act & Assert
+        assertThrows(NoAccessException.class, () -> userService.registerUser(userRegistrationDto));
+    }
+
+    @Test
+    void registerUser_whenLoggedInUserCreateRootUser_thenValidationFailure() {
+        // Arrange
+        userRegistrationDto.setRootUser(true);
+        mockSecurityContext(user); // user logged in
+        doNothing().when(userValidator).validateUsernameAvailable(anyString());
+        doNothing().when(userValidator).validateEmailAvailable(anyString());
+
+        // Act & Assert
+        assertThrows(NoAccessException.class, () -> userService.registerUser(userRegistrationDto));
+    }
+
+    @Test
+    void registerUser_whenLoggedInUserCreateNonRootUserButNotUserCreatePermission_thenValidationFailure() {
+        // Arrange
+        userRegistrationDto.setRootUser(false);
+        Permission permission = new Permission();
+        permission.setId(1L);
+        permission.setServiceName("IAM");
+        permission.setAction(PermissionAction.READ);
+
+        Role role = new Role();
+        role.setId(1L);
+        role.setName("ROLE_USER");
+        role.setPermissions(Set.of(permission));
+
+        user.setRoles(Set.of(role));
+
+        mockSecurityContext(user); // user logged in
+        doNothing().when(userValidator).validateUsernameAvailable(anyString());
+        doNothing().when(userValidator).validateEmailAvailable(anyString());
+
+        // Act & Assert
+        assertThrows(NoAccessException.class, () -> userService.registerUser(userRegistrationDto));
     }
 
     @Test
@@ -261,21 +351,63 @@ class UserServiceTest {
     }
 
     @Test
-    void deleteUser_successfulDeletion() {
+    void deleteRootUser_validDelete() {
+        mockSecurityContext(user);
+        user.setRootUser(true);
         when(userRepository.findById(anyLong())).thenReturn(Optional.of(user));
-        doNothing().when(userRepository).deleteById(anyLong());
 
         userService.deleteUser(1L);
 
-        verify(userRepository).findById(1L);
-        verify(userRepository).deleteById(1L);
+        verify(userRepository, times(1)).deleteById(1L);
     }
 
     @Test
-    void deleteUser_userNotFound() {
+    void deleteNonRootUser_validDelete() {
+        mockSecurityContext(user);
+        user.setRootUser(false);
+        childUser.setCreatedBy(user);
+        when(userRepository.findById(anyLong())).thenReturn(Optional.of(childUser));
+
+        userService.deleteUser(2L);
+
+        verify(userRepository, times(1)).deleteById(2L);
+    }
+
+    @Test
+    void deleteUser_whenUserNotFound_thenThrowsException() {
         when(userRepository.findById(anyLong())).thenReturn(Optional.empty());
 
-        assertThrows(DataNotFoundException.class, () -> userService.deleteUser(1L));
+        assertThrows(DataNotFoundException.class, () -> userService.deleteUser(2L));
+
+        verify(userRepository, times(1)).findById(2L);
+        verify(userRepository, times(0)).deleteById(2L);
+    }
+
+    @Test
+    void deleteUser_whenRootUserAndTryDeleteByAnotherUser_thenThrowsException() {
+        childUser.setRootUser(true);
+        mockSecurityContext(user);
+        when(userRepository.findById(anyLong())).thenReturn(Optional.of(childUser));
+
+        assertThrows(NoAccessException.class, () -> userService.deleteUser(2L));
+        verify(userRepository).findById(2L);
+        verify(userRepository, times(0)).deleteById(2L);
+    }
+
+    @Test
+    void deleteUser_whenNonRootUserAndNotInTheSameTree_thenThrowsException() {
+        mockSecurityContext(user);
+        when(userRepository.findById(anyLong())).thenReturn(Optional.of(childUser));
+
+        assertThrows(NoAccessException.class, () -> userService.deleteUser(1L));
         verify(userRepository).findById(1L);
+        verify(userRepository, times(0)).deleteById(1L);
+    }
+
+    private void mockSecurityContext(User user) {
+        SecurityContextHolder.setContext(securityContext);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+        when(userDetails.getUser()).thenReturn(user);
     }
 }

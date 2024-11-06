@@ -22,4 +22,7 @@ public class ErrorMessage {
     public static final String ROLE_ID_NOT_EMPTY = "Role list cannot be empty";
     public static final String ROLE_NAME_REQUIRED = "Role name cannot be null or blank";
     public static final String TOKEN_REQUIRED = "Token cannot be null or blank";
+    public static final String USER_DELETE_NO_PERMISSION = "No permission to delete this user";
+    public static final String CREATE_ROOT_USER_NO_PERMISSION = "IAM user can't create root user";
+    public static final String CREATE_IAM_USER_NO_PERMISSION = "Non user can't create IAM user";
 }
