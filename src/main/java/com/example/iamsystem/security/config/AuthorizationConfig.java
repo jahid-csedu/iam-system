@@ -25,7 +25,6 @@ public class AuthorizationConfig {
     private final JwtRequestFilter jwtRequestFilter;
 
     private static final String[] PERMITTED_GET_APIS = {
-            "/api/users/**",
             "/api/roles/**",
             "/api/permissions/**"
     };

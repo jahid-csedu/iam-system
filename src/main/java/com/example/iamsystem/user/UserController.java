@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 import static com.example.iamsystem.permission.PermissionAction.DELETE;
+import static com.example.iamsystem.permission.PermissionAction.READ;
 import static com.example.iamsystem.permission.PermissionAction.UPDATE;
 
 @RestController
@@ -56,21 +57,25 @@ public class UserController {
     }
 
     @GetMapping
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<List<UserDto>> getAllUsers() {
         return ResponseEntity.ok(userService.findAllUsers());
     }
 
     @GetMapping("/{id}")
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<UserDto> getUserById(@PathVariable Long id) {
         return ResponseEntity.ok(userService.findUserById(id));
     }
 
     @GetMapping("/by-username")
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<UserDto> getUserByUsername(@RequestParam String username) {
         return ResponseEntity.ok(userService.findUserByUsername(username));
     }
 
     @GetMapping("/by-email")
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<UserDto> getUserByEmail(@RequestParam String email) {
         return ResponseEntity.ok(userService.findUserByEmail(email));
     }

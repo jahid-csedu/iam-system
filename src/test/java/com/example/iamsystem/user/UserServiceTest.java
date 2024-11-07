@@ -286,6 +286,7 @@ class UserServiceTest {
 
     @Test
     void findAllUsers_successfulRetrieval() {
+        mockSecurityContext(user);
         List<User> users = List.of(user);
         List<UserDto> userDtos = List.of(userDto);
         when(userRepository.findAll()).thenReturn(users);
@@ -297,7 +298,21 @@ class UserServiceTest {
     }
 
     @Test
+    void findAllUsers_ReturnsOnlyDescendantUsers() {
+        mockSecurityContext(user);
+        List<User> users = List.of(user, childUser);
+        List<UserDto> userDtos = List.of(userDto);
+        when(userRepository.findAll()).thenReturn(users);
+
+        List<UserDto> result = userService.findAllUsers();
+
+        assertEquals(userDtos, result);
+        verify(userRepository).findAll();
+    }
+
+    @Test
     void findUserById_userFound() {
+        mockSecurityContext(user);
         when(userRepository.findById(anyLong())).thenReturn(Optional.of(user));
 
         UserDto result = userService.findUserById(1L);
@@ -315,7 +330,17 @@ class UserServiceTest {
     }
 
     @Test
+    void findUserById_whenUserIsNotADescendant_thenReturnNotFound() {
+        mockSecurityContext(childUser);
+        when(userRepository.findById(anyLong())).thenReturn(Optional.of(user));
+
+        assertThrows(DataNotFoundException.class, () -> userService.findUserById(1L));
+        verify(userRepository).findById(1L);
+    }
+
+    @Test
     void findUserByUsername_userFound() {
+        mockSecurityContext(user);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
 
         UserDto result = userService.findUserByUsername("testUser");
@@ -333,7 +358,17 @@ class UserServiceTest {
     }
 
     @Test
+    void findUserByUsername_whenUserIsNotADescendant_thenReturnNotFound() {
+        mockSecurityContext(childUser);
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
+
+        assertThrows(DataNotFoundException.class, () -> userService.findUserByUsername("testUser"));
+        verify(userRepository).findByUsername("testUser");
+    }
+
+    @Test
     void findUserByEmail_userFound() {
+        mockSecurityContext(user);
         when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(user));
 
         UserDto result = userService.findUserByEmail("test@example.com");
@@ -345,6 +380,15 @@ class UserServiceTest {
     @Test
     void findUserByEmail_userNotFound() {
         when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+
+        assertThrows(DataNotFoundException.class, () -> userService.findUserByEmail("test@example.com"));
+        verify(userRepository).findByEmail("test@example.com");
+    }
+
+    @Test
+    void findUserByEmail_whenUserIsNotADescendant_thenReturnNotFound() {
+        mockSecurityContext(childUser);
+        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(user));
 
         assertThrows(DataNotFoundException.class, () -> userService.findUserByEmail("test@example.com"));
         verify(userRepository).findByEmail("test@example.com");

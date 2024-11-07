@@ -71,24 +71,34 @@ public class UserService {
     }
 
     public List<UserDto> findAllUsers() {
-        return userMapper.toDtoList(userRepository.findAll());
+        List<User> users = userRepository.findAll();
+
+        User currentUser = getCurrentUser();
+        List<User> filteredUsers = users.stream()
+                .filter(user -> isUserInTree(currentUser, user))
+                .toList();
+
+        return userMapper.toDtoList(filteredUsers);
     }
 
     public UserDto findUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+        validateUserFetchPermission(user);
         return userMapper.toDto(user);
     }
 
     public UserDto findUserByUsername(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+        validateUserFetchPermission(user);
         return userMapper.toDto(user);
     }
 
     public UserDto findUserByEmail(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+        validateUserFetchPermission(user);
         return userMapper.toDto(user);
     }
 
@@ -119,6 +129,13 @@ public class UserService {
 
         if(!hasCreateUserPermission) { // user doesn't have user creation permission
             throw new NoAccessException(CREATE_IAM_USER_NO_PERMISSION);
+        }
+    }
+
+    private void validateUserFetchPermission(User user) {
+        User currentUser = getCurrentUser();
+        if(!isUserInTree(currentUser, user)) {
+            throw new DataNotFoundException(USER_NOT_FOUND);
         }
     }
 
