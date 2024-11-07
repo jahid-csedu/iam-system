@@ -25,4 +25,5 @@ public class ErrorMessage {
     public static final String USER_DELETE_NO_PERMISSION = "No permission to delete this user";
     public static final String CREATE_ROOT_USER_NO_PERMISSION = "IAM user can't create root user";
     public static final String CREATE_IAM_USER_NO_PERMISSION = "Non user can't create IAM user";
+    public static final String UPDATE_USER_NO_PERMISSION = "Do not have permission to update this user";
 }

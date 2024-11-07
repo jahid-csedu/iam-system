@@ -27,6 +27,7 @@ import java.util.Set;
 
 import static com.example.iamsystem.constant.ErrorMessage.CREATE_IAM_USER_NO_PERMISSION;
 import static com.example.iamsystem.constant.ErrorMessage.CREATE_ROOT_USER_NO_PERMISSION;
+import static com.example.iamsystem.constant.ErrorMessage.UPDATE_USER_NO_PERMISSION;
 import static com.example.iamsystem.constant.ErrorMessage.USER_DELETE_NO_PERMISSION;
 import static com.example.iamsystem.constant.ErrorMessage.USER_NOT_FOUND;
 
@@ -40,13 +41,14 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private static final UserMapper userMapper = Mappers.getMapper(UserMapper.class);
     private static final String USER_CREATE_PERMISSION = "IAM:WRITE";
+    private static final String USER_UPDATE_PERMISSION = "IAM:UPDATE";
 
     public User registerUser(UserRegistrationDto userDto) {
         validateRequest(userDto);
         validateUserCreationPermission(userDto.isRootUser());
         userDto.setPassword(passwordEncoder.encode(userDto.getPassword()));
         User user = userMapper.toEntity(userDto);
-        if(!userDto.isRootUser()) {
+        if (!userDto.isRootUser()) {
             user.setCreatedBy(getCurrentUser());
         }
 
@@ -56,6 +58,7 @@ public class UserService {
 
     public void assignRoles(UserRoleAttachmentDto userRoleAttachmentDto) {
         User user = getUserByUsername(userRoleAttachmentDto.getUsername());
+        validateUserUpdatePermission(user);
         Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userRoleAttachmentDto.getRoleIds());
 
         userRoleAttachmentUtil.assignRolesToUser(user, roles);
@@ -64,6 +67,7 @@ public class UserService {
 
     public void removeRoles(UserRoleAttachmentDto userRoleAttachmentDto) {
         User user = getUserByUsername(userRoleAttachmentDto.getUsername());
+        validateUserUpdatePermission(user);
         Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userRoleAttachmentDto.getRoleIds());
 
         userRoleAttachmentUtil.removeRolesFromUser(user, roles);
@@ -118,7 +122,7 @@ public class UserService {
         }
     }
 
-    private static void validateNonRootUserCreationPermission(User currentUser) {
+    private void validateNonRootUserCreationPermission(User currentUser) {
         if (Objects.isNull(currentUser)) { // user not logged in
             throw new NoAccessException(CREATE_IAM_USER_NO_PERMISSION);
         }
@@ -127,19 +131,35 @@ public class UserService {
                 .flatMap(role -> role.getPermissions().stream())
                 .anyMatch(permission -> String.format("%s:%s", permission.getServiceName(), permission.getAction()).equals(USER_CREATE_PERMISSION));
 
-        if(!hasCreateUserPermission) { // user doesn't have user creation permission
+        if (!hasCreateUserPermission) { // user doesn't have user creation permission
             throw new NoAccessException(CREATE_IAM_USER_NO_PERMISSION);
+        }
+    }
+
+    private void validateUserUpdatePermission(User user) {
+        User currentUser = getCurrentUser();
+        assert currentUser != null;
+
+        if (!isUserInTree(currentUser, user)) {
+            throw new NoAccessException(UPDATE_USER_NO_PERMISSION);
+        }
+        boolean hasCreateUserPermission = currentUser.getRoles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .anyMatch(permission -> String.format("%s:%s", permission.getServiceName(), permission.getAction()).equals(USER_UPDATE_PERMISSION));
+
+        if (!hasCreateUserPermission) { // user doesn't have user creation permission
+            throw new NoAccessException(UPDATE_USER_NO_PERMISSION);
         }
     }
 
     private void validateUserFetchPermission(User user) {
         User currentUser = getCurrentUser();
-        if(!isUserInTree(currentUser, user)) {
+        if (!isUserInTree(currentUser, user)) {
             throw new DataNotFoundException(USER_NOT_FOUND);
         }
     }
 
-    private static void validateRootUserCreationPermission(User currentUser) {
+    private void validateRootUserCreationPermission(User currentUser) {
         if (Objects.nonNull(currentUser)) {
             throw new NoAccessException(CREATE_ROOT_USER_NO_PERMISSION);
         }

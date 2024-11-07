@@ -228,6 +228,16 @@ class UserServiceTest {
     @Test
     void assignRoles_successfulAttachment() {
         // Arrange
+        Permission permission = new Permission();
+        permission.setId(2L);
+        permission.setServiceName("IAM");
+        permission.setAction(PermissionAction.UPDATE);
+        Role role = new Role();
+        role.setId(1L);
+        role.setName("ROLE_ADMIN");
+        role.setPermissions(Set.of(permission));
+        user.setRoles(Set.of(role));
+        mockSecurityContext(user);
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
         Set<Long> roleIds = Set.of(1L);
@@ -240,6 +250,43 @@ class UserServiceTest {
         userService.assignRoles(userRoleAttachmentDto);
         verify(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
         verify(userRepository).save(any(User.class));
+    }
+
+    @Test
+    void assignRoles_whenDoNotHaveUpdatePermission_thenThrowsException() {
+        // Arrange
+        Permission permission = new Permission();
+        permission.setId(2L);
+        permission.setServiceName("IAM");
+        permission.setAction(PermissionAction.READ);
+        Role role = new Role();
+        role.setId(1L);
+        role.setName("ROLE_ADMIN");
+        role.setPermissions(Set.of(permission));
+        user.setRoles(Set.of(role));
+        mockSecurityContext(user);
+        UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
+        userRoleAttachmentDto.setUsername("testUser");
+        Set<Long> roleIds = Set.of(1L);
+        userRoleAttachmentDto.setRoleIds(roleIds);
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> userService.assignRoles(userRoleAttachmentDto));
+    }
+
+    @Test
+    void assignRoles_whenTargetUserIsNotInSameTree_thenThrowsException() {
+        // Arrange
+        mockSecurityContext(childUser);
+        UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
+        userRoleAttachmentDto.setUsername("testUser");
+        Set<Long> roleIds = Set.of(1L);
+        userRoleAttachmentDto.setRoleIds(roleIds);
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> userService.assignRoles(userRoleAttachmentDto));
     }
 
     @Test
@@ -258,6 +305,17 @@ class UserServiceTest {
     @Test
     void assignRoles_whenRoleNotFound_AttachmentFailure() {
         // Arrange
+        Permission permission = new Permission();
+        permission.setId(2L);
+        permission.setServiceName("IAM");
+        permission.setAction(PermissionAction.UPDATE);
+        Role role = new Role();
+        role.setId(1L);
+        role.setName("ROLE_ADMIN");
+        role.setPermissions(Set.of(permission));
+        user.setRoles(Set.of(role));
+        mockSecurityContext(user);
+
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
         Set<Long> roleIds = Set.of(1L);
@@ -271,6 +329,17 @@ class UserServiceTest {
 
     @Test
     void removeRoles_successfulRemoval() {
+        Permission permission = new Permission();
+        permission.setId(2L);
+        permission.setServiceName("IAM");
+        permission.setAction(PermissionAction.UPDATE);
+        Role role = new Role();
+        role.setId(1L);
+        role.setName("ROLE_ADMIN");
+        role.setPermissions(Set.of(permission));
+        user.setRoles(Set.of(role));
+        mockSecurityContext(user);
+
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
         userRoleAttachmentDto.setRoleIds(Set.of(1L));
@@ -282,6 +351,45 @@ class UserServiceTest {
 
         verify(userRoleAttachmentUtil).removeRolesFromUser(user, roles);
         verify(userRepository).save(user);
+    }
+
+    @Test
+    void removeRoles_whenDoNotHaveUpdatePermission_thenThrowsException() {
+        // Arrange
+        Permission permission = new Permission();
+        permission.setId(2L);
+        permission.setServiceName("IAM");
+        permission.setAction(PermissionAction.READ);
+        Role role = new Role();
+        role.setId(1L);
+        role.setName("ROLE_ADMIN");
+        role.setPermissions(Set.of(permission));
+        user.setRoles(Set.of(role));
+        mockSecurityContext(user);
+        UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
+        userRoleAttachmentDto.setUsername("testUser");
+        Set<Long> roleIds = Set.of(1L);
+        userRoleAttachmentDto.setRoleIds(roleIds);
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> userService.removeRoles(userRoleAttachmentDto));
+    }
+
+
+
+    @Test
+    void removeRoles_whenTargetUserIsNotInSameTree_thenThrowsException() {
+        // Arrange
+        mockSecurityContext(childUser);
+        UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
+        userRoleAttachmentDto.setUsername("testUser");
+        Set<Long> roleIds = Set.of(1L);
+        userRoleAttachmentDto.setRoleIds(roleIds);
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> userService.removeRoles(userRoleAttachmentDto));
     }
 
     @Test
