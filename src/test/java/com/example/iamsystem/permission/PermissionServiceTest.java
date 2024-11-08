@@ -1,6 +1,9 @@
 package com.example.iamsystem.permission;
 
 import com.example.iamsystem.exception.DataNotFoundException;
+import com.example.iamsystem.exception.NoAccessException;
+import com.example.iamsystem.role.Role;
+import com.example.iamsystem.user.model.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,10 +14,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
@@ -33,6 +39,9 @@ class PermissionServiceTest {
     private Permission permission;
     private PermissionDto permissionDto;
 
+    private User user;
+    private Role role;
+
     @BeforeEach
     void setUp() {
         permission = new Permission();
@@ -43,6 +52,14 @@ class PermissionServiceTest {
         permissionDto.setId(1L);
         permissionDto.setAction("READ");
         permissionDto.setServiceName("TEST_SERVICE");
+
+        user = new User();
+        user.setUsername("test");
+
+        role = new Role();
+        role.setPermissions(Set.of(permission));
+
+        user.setRoles(Set.of(role));
     }
 
     @Test
@@ -131,5 +148,15 @@ class PermissionServiceTest {
 
         assertNotNull(result);
         assertEquals(1, result.size());
+    }
+
+    @Test
+    void testHasPermission_whenUserHasProvidedPermission_thenReturnTrue() {
+        assertTrue(permissionService.hasPermission(user, "TEST_SERVICE:READ"));
+    }
+
+    @Test
+    void testHasPermission_whenUserDoesNotHaveProvidedPermission_thenReturnFalse() {
+        assertFalse(permissionService.hasPermission(user, "TEST_SERVICE:WRITE"));
     }
 }

@@ -2,6 +2,7 @@ package com.example.iamsystem.user;
 
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.NoAccessException;
+import com.example.iamsystem.permission.PermissionService;
 import com.example.iamsystem.role.Role;
 import com.example.iamsystem.security.user.UserDetailsImpl;
 import com.example.iamsystem.user.model.dto.UserDto;
@@ -21,10 +22,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.example.iamsystem.constant.ErrorMessage.CREATE_IAM_USER_NO_PERMISSION;
-import static com.example.iamsystem.constant.ErrorMessage.CREATE_ROOT_USER_NO_PERMISSION;
-import static com.example.iamsystem.constant.ErrorMessage.UPDATE_USER_NO_PERMISSION;
-import static com.example.iamsystem.constant.ErrorMessage.USER_DELETE_NO_PERMISSION;
+import static com.example.iamsystem.constant.ErrorMessage.NO_PERMISSION;
 import static com.example.iamsystem.constant.ErrorMessage.USER_NOT_FOUND;
 
 @Service
@@ -35,6 +33,7 @@ public class UserService {
     private final UserRoleAttachmentUtil userRoleAttachmentUtil;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PermissionService permissionService;
     private static final UserMapper userMapper = Mappers.getMapper(UserMapper.class);
     private static final String USER_CREATE_PERMISSION = "IAM:WRITE";
     private static final String USER_UPDATE_PERMISSION = "IAM:UPDATE";
@@ -105,46 +104,38 @@ public class UserService {
     public void deleteUser(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
-        validateIfHasDeletePermission(user);
+        validateUserDeletionPermission(user);
         userRepository.deleteById(id);
     }
 
     private void validateUserCreationPermission(boolean isRootUser) {
         User currentUser = getCurrentUser();
         if (isRootUser) {
-            validateRootUserCreationPermission(currentUser);
+            if (Objects.nonNull(currentUser)) {
+                throw new NoAccessException(NO_PERMISSION);
+            }
         } else {
-            validateNonRootUserCreationPermission(currentUser);
-        }
-    }
-
-    private void validateNonRootUserCreationPermission(User currentUser) {
-        if (Objects.isNull(currentUser)) { // user not logged in
-            throw new NoAccessException(CREATE_IAM_USER_NO_PERMISSION);
-        }
-
-        boolean hasCreateUserPermission = currentUser.getRoles().stream()
-                .flatMap(role -> role.getPermissions().stream())
-                .anyMatch(permission -> String.format("%s:%s", permission.getServiceName(), permission.getAction()).equals(USER_CREATE_PERMISSION));
-
-        if (!hasCreateUserPermission) { // user doesn't have user creation permission
-            throw new NoAccessException(CREATE_IAM_USER_NO_PERMISSION);
+            validateUserPermission(currentUser, USER_CREATE_PERMISSION);
         }
     }
 
     private void validateUserUpdatePermission(User user) {
         User currentUser = getCurrentUser();
-        assert currentUser != null;
 
         if (!isUserInTree(currentUser, user)) {
-            throw new NoAccessException(UPDATE_USER_NO_PERMISSION);
+            throw new NoAccessException(NO_PERMISSION);
         }
-        boolean hasCreateUserPermission = currentUser.getRoles().stream()
-                .flatMap(role -> role.getPermissions().stream())
-                .anyMatch(permission -> String.format("%s:%s", permission.getServiceName(), permission.getAction()).equals(USER_UPDATE_PERMISSION));
 
-        if (!hasCreateUserPermission) { // user doesn't have user creation permission
-            throw new NoAccessException(UPDATE_USER_NO_PERMISSION);
+        validateUserPermission(currentUser, USER_UPDATE_PERMISSION);
+    }
+
+    private void validateUserPermission(User user, String requiredPermission) {
+        if(Objects.isNull(user)) {
+            throw new NoAccessException(NO_PERMISSION);
+        }
+        boolean hasPermission = permissionService.hasPermission(user, requiredPermission);
+        if (!hasPermission) {
+            throw new NoAccessException(NO_PERMISSION);
         }
     }
 
@@ -155,21 +146,15 @@ public class UserService {
         }
     }
 
-    private void validateRootUserCreationPermission(User currentUser) {
-        if (Objects.nonNull(currentUser)) {
-            throw new NoAccessException(CREATE_ROOT_USER_NO_PERMISSION);
-        }
-    }
-
-    private void validateIfHasDeletePermission(User userToDelete) {
+    private void validateUserDeletionPermission(User userToDelete) {
         User currentUser = getCurrentUser();
         if (userToDelete.isRootUser()) {
             if (!userToDelete.equals(currentUser)) { // Root user can be deleted by self only
-                throw new NoAccessException(USER_DELETE_NO_PERMISSION);
+                throw new NoAccessException(NO_PERMISSION);
             }
         } else {
             if (!isUserInTree(currentUser, userToDelete)) {
-                throw new NoAccessException(USER_DELETE_NO_PERMISSION);
+                throw new NoAccessException(NO_PERMISSION);
             }
         }
     }

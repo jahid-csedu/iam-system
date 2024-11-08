@@ -5,6 +5,7 @@ import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.exception.UserAlreadyExistsException;
 import com.example.iamsystem.permission.Permission;
 import com.example.iamsystem.permission.PermissionAction;
+import com.example.iamsystem.permission.PermissionService;
 import com.example.iamsystem.role.Role;
 import com.example.iamsystem.security.user.UserDetailsImpl;
 import com.example.iamsystem.user.model.dto.UserDto;
@@ -58,6 +59,9 @@ class UserServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private PermissionService permissionService;
 
     @Mock
     private SecurityContext securityContext;
@@ -142,6 +146,7 @@ class UserServiceTest {
         mockSecurityContext(user);
         when(passwordEncoder.encode(anyString())).thenReturn("encoded_password");
         user.setCreatedBy(user);
+        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(true);
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         // Act
@@ -205,19 +210,9 @@ class UserServiceTest {
     void registerUser_whenLoggedInUserCreateNonRootUserButNotUserCreatePermission_thenValidationFailure() {
         // Arrange
         userRegistrationDto.setRootUser(false);
-        Permission permission = new Permission();
-        permission.setId(1L);
-        permission.setServiceName("IAM");
-        permission.setAction(PermissionAction.READ);
-
-        Role role = new Role();
-        role.setId(1L);
-        role.setName("ROLE_USER");
-        role.setPermissions(Set.of(permission));
-
-        user.setRoles(Set.of(role));
 
         mockSecurityContext(user); // user logged in
+        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(false);
         doNothing().when(userValidator).validateUsernameAvailable(anyString());
         doNothing().when(userValidator).validateEmailAvailable(anyString());
 
@@ -228,20 +223,12 @@ class UserServiceTest {
     @Test
     void assignRoles_successfulAttachment() {
         // Arrange
-        Permission permission = new Permission();
-        permission.setId(2L);
-        permission.setServiceName("IAM");
-        permission.setAction(PermissionAction.UPDATE);
-        Role role = new Role();
-        role.setId(1L);
-        role.setName("ROLE_ADMIN");
-        role.setPermissions(Set.of(permission));
-        user.setRoles(Set.of(role));
         mockSecurityContext(user);
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
         Set<Long> roleIds = Set.of(1L);
         userRoleAttachmentDto.setRoleIds(roleIds);
+        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(true);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
         when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
         when(userRepository.save(any(User.class))).thenReturn(user);
@@ -305,21 +292,13 @@ class UserServiceTest {
     @Test
     void assignRoles_whenRoleNotFound_AttachmentFailure() {
         // Arrange
-        Permission permission = new Permission();
-        permission.setId(2L);
-        permission.setServiceName("IAM");
-        permission.setAction(PermissionAction.UPDATE);
-        Role role = new Role();
-        role.setId(1L);
-        role.setName("ROLE_ADMIN");
-        role.setPermissions(Set.of(permission));
-        user.setRoles(Set.of(role));
         mockSecurityContext(user);
 
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
         Set<Long> roleIds = Set.of(1L);
         userRoleAttachmentDto.setRoleIds(roleIds);
+        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(true);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
         doThrow(new DataNotFoundException("Some roles not found")).when(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
 
@@ -329,21 +308,13 @@ class UserServiceTest {
 
     @Test
     void removeRoles_successfulRemoval() {
-        Permission permission = new Permission();
-        permission.setId(2L);
-        permission.setServiceName("IAM");
-        permission.setAction(PermissionAction.UPDATE);
-        Role role = new Role();
-        role.setId(1L);
-        role.setName("ROLE_ADMIN");
-        role.setPermissions(Set.of(permission));
-        user.setRoles(Set.of(role));
         mockSecurityContext(user);
 
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
         userRoleAttachmentDto.setRoleIds(Set.of(1L));
 
+        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(true);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
         when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
 

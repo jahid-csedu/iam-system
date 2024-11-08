@@ -1,6 +1,7 @@
 package com.example.iamsystem.permission;
 
 import com.example.iamsystem.exception.DataNotFoundException;
+import com.example.iamsystem.user.model.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.mapstruct.factory.Mappers;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import static com.example.iamsystem.constant.ErrorMessage.PERMISSION_NOT_FOUND;
 public class PermissionService {
     private final PermissionRepository permissionRepository;
     private static final PermissionMapper permissionMapper = Mappers.getMapper(PermissionMapper.class);
+    private static final String PERMISSION_TEMPLATE = "%s:%s";
 
     public PermissionDto savePermission(PermissionDto permissionDto) {
         validateDuplicatePermission(permissionDto);
@@ -54,5 +56,12 @@ public class PermissionService {
 
     public List<PermissionDto> getAllPermissions() {
         return permissionMapper.toDto(permissionRepository.findAll());
+    }
+
+    public boolean hasPermission(User user, String requiredPermission) {
+        return user.getRoles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .map(permission -> String.format(PERMISSION_TEMPLATE, permission.getServiceName(), permission.getAction()))
+                .anyMatch(requiredPermission::equals);
     }
 }
