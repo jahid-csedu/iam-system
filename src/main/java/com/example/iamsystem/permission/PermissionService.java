@@ -59,6 +59,7 @@ public class PermissionService {
     }
 
     public boolean hasPermission(User user, String requiredPermission) {
+        if(user.isRootUser()) return true;
         return user.getRoles().stream()
                 .flatMap(role -> role.getPermissions().stream())
                 .map(permission -> String.format(PERMISSION_TEMPLATE, permission.getServiceName(), permission.getAction()))
