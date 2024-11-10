@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 import static com.example.iamsystem.permission.PermissionAction.DELETE;
+import static com.example.iamsystem.permission.PermissionAction.READ;
 import static com.example.iamsystem.permission.PermissionAction.UPDATE;
 import static com.example.iamsystem.permission.PermissionAction.WRITE;
 
@@ -26,6 +27,7 @@ public class PermissionController {
     private final PermissionService permissionService;
 
     @GetMapping
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<List<PermissionDto>> getAllPermissions() {
         return ResponseEntity.ok(permissionService.getAllPermissions());
     }
@@ -38,6 +40,7 @@ public class PermissionController {
     }
 
     @GetMapping("/{id}")
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<PermissionDto> getPermissionById(@PathVariable Long id) {
         return ResponseEntity.ok(permissionService.getPermissionById(id));
     }
@@ -56,6 +59,7 @@ public class PermissionController {
     }
 
     @GetMapping("/name/{serviceName}")
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<List<PermissionDto>> getPermissionByServiceName(@PathVariable String serviceName) {
         return ResponseEntity.ok(permissionService.getPermissionByServiceName(serviceName));
     }

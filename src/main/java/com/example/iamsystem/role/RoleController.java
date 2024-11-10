@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 import static com.example.iamsystem.permission.PermissionAction.DELETE;
+import static com.example.iamsystem.permission.PermissionAction.READ;
 import static com.example.iamsystem.permission.PermissionAction.UPDATE;
 import static com.example.iamsystem.permission.PermissionAction.WRITE;
 
@@ -26,6 +27,7 @@ public class RoleController {
     private final RoleService roleService;
 
     @GetMapping
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<List<RoleDto>> getAllRoles() {
         return ResponseEntity.ok(roleService.getRoles());
     }
@@ -37,6 +39,7 @@ public class RoleController {
     }
 
     @GetMapping("/{id}")
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<RoleDto> getRoleById(@PathVariable Long id) {
         return ResponseEntity.ok(roleService.getRole(id));
     }
@@ -55,6 +58,7 @@ public class RoleController {
     }
 
     @GetMapping("/name/{name}")
+    @RequirePermission(serviceName = "IAM", action = READ)
     public ResponseEntity<RoleDto> getRoleByName(@PathVariable String name) {
         return ResponseEntity.ok(roleService.getRoleByName(name));
     }
