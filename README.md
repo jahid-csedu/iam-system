@@ -1,92 +1,214 @@
-# User Management System
 
-A user-management-system with the following functionalities:
+# **IAM System**
 
-## Register a User
+## **Overview**
+The Identity and Access Management (IAM) Service provides centralized authentication and authorization for multiple microservices. It supports hierarchical user management, dynamic role-based access control, and token-based authentication using JWT.
 
-Endpoint: `/api/user/register`  
-HTTP Method: _POST_
-#### Example Request Body:
-```aidl,
-{
-    "username": "test_user",
-    "password": "password",
-    "fullName": "Test User",
-    "email": "test@mail.com"
-}
+---
+
+## **Features**
+- **Authentication**:
+    - Authenticate with username and password.
+    - Token generation and validation using JWT.
+- **Authorization**:
+    - Permissions dynamically assigned based on roles and services.
+    - Support for service-action-based permission checks.
+- **User Management**:
+    - Hierarchical user tree with root and non-root users.
+    - Non-root users can only be created by authorized users.
+    - Recursive user tree queries for descendant-based access control.
+- **Microservice Integration**:
+    - Centralized authorization for external microservices via REST API.
+- **Security**:
+    - Secure password storage using BCrypt.
+    - Enforced authorization checks via the `/api/auth/authorize` endpoint.
+
+---
+
+## **Tech Stack**
+- **Programming Language**: Java (JDK 17)
+- **Frameworks**:
+    - Spring Boot
+    - Spring Security
+- **Build Tool**: Maven
+- **Database**: MySQL
+- **JWT Library**: Integrated for token-based authentication.
+
+## **Endpoints**
+
+### **Authentication**
+1. **Authentication**
+    - **URL**: `/api/auth/authenticate`
+    - **Method**: `POST`
+    - **Request**:
+      ```json
+      {
+        "username": "user",
+        "password": "securepassword"
+      }
+      ```
+    - **Response**:
+      ```json
+      {
+         "username": "user",
+         "access_token": "JWT_TOKEN",
+         "refresh_token": "REFRESH_TOKEN"
+      }
+      ```
+
+2. **Validate Token**
+    - **URL**: `/api/auth/token/validate`
+    - **Method**: `POST`
+    - **Request**:
+      ```json
+      {
+        "token": "JWT_TOKEN"
+      }
+      ```
+    - **Response**:
+      ```json
+      {
+        "valid": true,
+        "message": "Valid"
+      }
+      ```
+
+3. **Authorize**
+    - **URL**: `/api/auth/authorize`
+    - **Method**: `POST`
+    - **Header**: `Authorization` (Bearer token)
+    - **Request**:
+      ```json
+      {
+        "username": "user",
+        "serviceName": "service-name",
+        "action": "READ"
+      }
+      ```
+    - **Response**:
+      ```json
+      {
+        "authorized": true,
+        "message": "Access granted"
+      }
+      ```
+
+4. **Token Refresh**
+    - **URL**: `/api/auth/token/refresh`
+    - **Method**: `POST`
+    - **Request**:
+      ```json
+      {
+         "username": "root2",
+         "refresh_token": "REFRESH_TOKEN"
+      }
+      ```
+    - **Response**:
+      ```json
+      {
+         "username": "user",
+         "access_token": "JWT_TOKEN",
+         "refresh_token": "REFRESH_TOKEN"
+      }
+      ```
+
+---
+
+### **User Management**
+1. **Create User**
+    - **URL**: `/api/users/register`
+    - **Method**: `POST`
+    - **Permissions Required**: `IAM:WRITE`
+    - **Request**:
+      ```json
+      {
+         "username": "root",
+         "password": "password",
+         "fullName": "Root User",
+         "email": "root@mail.com",
+         "rootUser": true
+      }
+      ```
+    - **Response**:
+      ```json
+      {
+         "username": "root",
+         "password": null,
+         "fullName": "Root User",
+         "email": "root@mail.com",
+         "rootUser": true,
+         "roleIds": []
+      }
+      ```
+
+2. **Find All Descendants**
+    - **URL**: `/api/users`
+    - **Method**: `GET`
+    - **Permissions Required**: `IAM:READ`
+    - **Description**: Returns all users under the logged-in user tree.
+
+3. **Find By ID**
+    - **URL**: `/api/users/{id}`
+    - **Method**: `GET`
+    - **Permissions Required**: `IAM:READ`
+    - **Description**: Returns user details if the user is within the logged-in user's tree.
+
+---
+
+## **Setup Instructions**
+
+### **1. Prerequisites**
+- JDK 17 or higher
+- Maven 3.6+
+- MySQL database
+
+### **2. Clone the Repository**
+```bash
+git clone https://github.com/jahid-csedu/iam-system.git
+cd iam-system
 ```
 
-#### Example Response:
-```aidl,
-{
-    "username": "test_user",
-    "password": null,
-    "fullName": "Test User",
-    "email": "test@mail.com"
-}
+### **3. Configure Database**
+Update the `application.yml` file with your database details:
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/<db_name>
+    username: <username>
+    password: <password>
 ```
 
-Users can register to the system by making a POST request to this endpoint with the required information in the request body.
-
-## Authenticate a User
-
-Endpoint: `/api/auth/authenticate`  
-HTTP Method: _POST_  
-#### Example Request Body: 
-```aidl,
-{
-    "username": "test_user",
-    "password": "password"
-}
+### **4. Build the Project**
+```bash
+./mvnw clean install
 ```
 
-#### Example Response:
-```aidl,
-{
-    "username": "test_user",
-    "refresh_token": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0X3VzZXIiLCJpYXQiOjE2NzYyMjA0ODYsImV4cCI6MTY3NjMwNjg4Nn0.dgBHtw5muRlqSgFBNVNY_40URezZ5K7H7ctB6BPbIpgsv_6YE8banGvGUawtPNfK",
-    "access_token": "eyJhbGciOiJIUzI1NiJ9.eyJhdXRob3JpdGllcyI6W3siYXV0aG9yaXR5IjoiUk9MRV9VU0VSIn1dLCJzdWIiOiJ0ZXN0X3VzZXIiLCJpYXQiOjE2NzYyMjA0ODYsImV4cCI6MTY3NjIyMDc4Nn0.RkXuqS-bWZCCeEXDBiLhm6ofv1IaNbMm3f0sohRS8mM"
-}
+### **5. Run the Application**
+```bash
+./mvnw spring-boot:run
 ```
 
-Registered users can authenticate themselves to the system by providing their `username` and `password` in the request body. On successful authentication, the system will return a `access_token` and a `refresh_token` that can be used to access secured endpoints.
+---
 
-## Refresh Token
-
-Endpoint: `/api/auth/token/refresh`  
-HTTP Method: _POST_
-#### Example Request Body:
-```aidl,
-{
-    "username": "test_user",
-    "refresh_token": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJqYWhpZCIsImlhdCI6MTY3NjIxNDQ2MiwiZXhwIjoxNjc2MzAwODYyfQ.ho_C5iSygz-Lr3Wkopn0LQ-UBEdOrtBKrf0SrBPxrlqxtRBqFWw4QjI2jk_Lmlj2"
-}
+## **Testing**
+### **Unit Tests**
+Run the unit tests:
+```bash
+./mvnw test
 ```
 
-#### Example Response:
-```aidl,
-{
-    "username": "test_user",
-    "refresh_token": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJqYWhpZCIsImlhdCI6MTY3NjIyMDM4NSwiZXhwIjoxNjc2MzA2Nzg1fQ.Fd80aBeHE-mrlydYwaNys16ZoaL_7EA5oHj7HU5SUjmYBWGv9-WB-S7UAzCdTqfL",
-    "access_token": "eyJhbGciOiJIUzI1NiJ9.eyJhdXRob3JpdGllcyI6W3siYXV0aG9yaXR5IjoiUk9MRV9VU0VSIn1dLCJzdWIiOiJqYWhpZCIsImlhdCI6MTY3NjIyMDM4NSwiZXhwIjoxNjc2MjIwNjg1fQ.fSYhOQC_UVgDRAnLm_h008HnAnmF-FWIGlch51sJZnM"
-}
+### **Integration Tests**
+Integration tests use Testcontainers to spin up a MySQL/PostgreSQL container:
+```bash
+./mvnw verify
 ```
 
-Users can refresh their `access_token` by making a POST request to this endpoint with the `refresh_token` in the request body. The system will return a new `access_token` that can be used to access secured endpoints.
+---
 
-## Secured Endpoints
+## **Future Enhancements**
+- Policy-based permissions similar to AWS IAM.
+- Support for OAuth2 and OpenID Connect.
+- Role delegation and inheritance.
+- Logging and auditing features.
 
-All endpoints except the above three endpoints are secured and require a valid `access_token` to be provided in the `Authorization` header.
-
-Example:
-Authorization: Bearer <access_token>
-
-
-## Note
-
-Ensure to store the `access_token` and `refresh_token` securely on the client-side as they grant access to secured endpoints.
-
-## Developed By:
-### Md. Jahid Hasan
-LinkedIn Profile:
-[https://www.linkedin.com/in/jahid-csedu/](https://www.linkedin.com/in/jahid-csedu/)
+---
