@@ -10,7 +10,7 @@ import com.example.iamsystem.security.dto.AuthorizationResponse;
 import com.example.iamsystem.security.dto.TokenValidationRequest;
 import com.example.iamsystem.security.dto.TokenValidationResponse;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
-import com.example.iamsystem.security.user.UserDetailsServiceImpl;
+import com.example.iamsystem.security.user.DefaultUserDetailsService;
 import com.example.iamsystem.user.model.dto.UserLoginDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +34,7 @@ import static com.example.iamsystem.constant.TokenType.REFRESH_TOKEN;
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
-    private final UserDetailsServiceImpl userDetailsService;
+    private final DefaultUserDetailsService userDetailsService;
     private final JwtTokenUtil jwtTokenUtil;
 
 

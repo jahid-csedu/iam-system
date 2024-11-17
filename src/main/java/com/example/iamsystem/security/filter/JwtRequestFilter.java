@@ -4,7 +4,7 @@ import com.example.iamsystem.constant.ErrorMessage;
 import com.example.iamsystem.constant.JwtConstant;
 import com.example.iamsystem.exception.JwtException;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
-import com.example.iamsystem.security.user.UserDetailsServiceImpl;
+import com.example.iamsystem.security.user.DefaultUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,7 +28,7 @@ import static com.example.iamsystem.constant.TokenType.ACCESS_TOKEN;
 @RequiredArgsConstructor
 @Slf4j
 public class JwtRequestFilter extends OncePerRequestFilter {
-    private final UserDetailsServiceImpl userDetailsService;
+    private final DefaultUserDetailsService userDetailsService;
     private final JwtTokenUtil tokenUtil;
 
     @Override

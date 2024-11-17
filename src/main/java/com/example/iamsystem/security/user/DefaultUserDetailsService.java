@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class UserDetailsServiceImpl implements UserDetailsService {
+public class DefaultUserDetailsService implements UserDetailsService {
 
     private final UserRepository repository;
 
@@ -22,6 +22,6 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         if (user.isEmpty()) {
             throw new UsernameNotFoundException("User doesn't exist");
         }
-        return new UserDetailsImpl(user.get());
+        return new DefaultUserDetails(user.get());
     }
 }

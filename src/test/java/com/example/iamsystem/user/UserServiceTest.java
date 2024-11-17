@@ -7,7 +7,7 @@ import com.example.iamsystem.permission.Permission;
 import com.example.iamsystem.permission.PermissionAction;
 import com.example.iamsystem.permission.PermissionService;
 import com.example.iamsystem.role.Role;
-import com.example.iamsystem.security.user.UserDetailsImpl;
+import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
@@ -70,7 +70,7 @@ class UserServiceTest {
     private Authentication authentication;
 
     @Mock
-    private UserDetailsImpl userDetails;
+    private DefaultUserDetails userDetails;
 
     private UserRegistrationDto userRegistrationDto;
     private User user;
