@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master # Trigger the workflow on pushes to the main branch
+  pull_request:
 env:
   IMAGE_NAME: ${{ github.repository }}
 
@@ -28,6 +29,9 @@ jobs:
           server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
           settings-path: ${{ github.workspace }} # location for the settings.xml file
 
+      - name: Grant execute permission for Maven Wrapper
+        run: chmod +x ./mvnw
+
       # Step 3: Cache Maven dependencies
       - name: Cache Maven dependencies
         uses: actions/cache@v4
@@ -40,6 +44,13 @@ jobs:
       # Step 4: Run Maven tests
       - name: Run Maven tests
         run: ./mvnw clean test
+
+      - name: SonarQube Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: mvn sonar:sonar \
+          -Dsonar.projectKey=jahid-csedu_iam-system \
+          -Dsonar.login=${SONAR_TOKEN}
 
       # Step 5: Log in to Docker Hub
       - name: Log in to Docker Hub
