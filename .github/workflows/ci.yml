@@ -22,7 +22,7 @@ jobs:
           - 3306:3306
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: user_management
+          MYSQL_DATABASE: iam_system_db
         options: >-
           --health-cmd="mysqladmin ping -h localhost"
           --health-interval=10s
@@ -71,7 +71,7 @@ jobs:
       # Step 6: Build the Docker image
       - name: Build Docker image
         run: |
-          ./gradlew bootBuildImage --image-name ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          ./gradlew bootBuildImage --imageName ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
           docker tag ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
 
       # Step 7: Push the Docker image
