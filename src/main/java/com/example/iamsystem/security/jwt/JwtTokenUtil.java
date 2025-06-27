@@ -42,11 +42,11 @@ public class JwtTokenUtil implements Serializable {
 
     // For retrieving any information from token we will need the secret key
     private Claims getAllClaimsFromToken(String token, TokenType tokenType) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSecretKey(tokenType))
+        return Jwts.parser()
+                .verifyWith(getSecretKey(tokenType))
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     // Check if the token has expired
@@ -74,10 +74,10 @@ public class JwtTokenUtil implements Serializable {
         long expiryTime = tokenType.equals(ACCESS_TOKEN) ? JWT_ACCESS_TOKEN_VALIDITY : JWT_REFRESH_TOKEN_VALIDITY;
 
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + expiryTime * 1000))
+                .claims(claims)
+                .subject(subject)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + expiryTime * 1000))
                 .signWith(getSecretKey(tokenType))
                 .compact();
     }

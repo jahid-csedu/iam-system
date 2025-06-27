@@ -1,214 +1,138 @@
+# IAM System: User & Access Management
 
-# **IAM System**
+## What Is This Project?
 
-## **Overview**
-The Identity and Access Management (IAM) Service provides centralized authentication and authorization for multiple microservices. It supports hierarchical user management, dynamic role-based access control, and token-based authentication using JWT.
+This project is a centralized **Identity and Access Management (IAM) system**. Think of it as a digital gatekeeper for a company's applications. It ensures that only the right people can access the right software and perform specific actions.
 
----
+For example, you can use it to:
+-   Give an "Admin" user full control over all applications.
+-   Allow a "Sales" user to view customer data but not delete it.
+-   Let a "Marketing" user access the company blog but not the financial software.
 
-## **Features**
-- **Authentication**:
-    - Authenticate with username and password.
-    - Token generation and validation using JWT.
-- **Authorization**:
-    - Permissions dynamically assigned based on roles and services.
-    - Support for service-action-based permission checks.
-- **User Management**:
-    - Hierarchical user tree with root and non-root users.
-    - Non-root users can only be created by authorized users.
-    - Recursive user tree queries for descendant-based access control.
-- **Microservice Integration**:
-    - Centralized authorization for external microservices via REST API.
-- **Security**:
-    - Secure password storage using BCrypt.
-    - Enforced authorization checks via the `/api/auth/authorize` endpoint.
+It's the backbone for ensuring your company's digital assets are secure and that users only have the permissions they need to do their jobs.
 
----
+## Key Features
 
-## **Tech Stack**
-- **Programming Language**: Java (JDK 17)
-- **Frameworks**:
-    - Spring Boot
-    - Spring Security
-- **Build Tool**: Maven
-- **Database**: MySQL
-- **JWT Library**: Integrated for token-based authentication.
+*   **User Login:** Securely log in with a username and password.
+*   **User Management:** Create, view, and manage users. It supports a hierarchy, so a manager can see the activity of the employees they manage.
+*   **Role Management:** Define roles (like "Admin," "Editor," or "Viewer") and assign them to users.
+*   **Permissions:** Assign specific permissions to each role (e.g., `READ`, `WRITE`, `DELETE`). This gives you fine-grained control over what users can do.
+*   **Centralized Control:** It’s designed to manage access for multiple applications from one central place.
 
-## **Endpoints**
+## How to Run and Test the Project (Using Docker)
 
-### **Authentication**
-1. **Authentication**
-    - **URL**: `/api/auth/authenticate`
-    - **Method**: `POST`
-    - **Request**:
-      ```json
-      {
-        "username": "user",
-        "password": "securepassword"
-      }
-      ```
-    - **Response**:
-      ```json
-      {
-         "username": "user",
-         "access_token": "JWT_TOKEN",
-         "refresh_token": "REFRESH_TOKEN"
-      }
-      ```
+This project is set up to run easily using Docker. You only need to install Docker on your machine, and it will handle all the other dependencies.
 
-2. **Validate Token**
-    - **URL**: `/api/auth/token/validate`
-    - **Method**: `POST`
-    - **Request**:
-      ```json
-      {
-        "token": "JWT_TOKEN"
-      }
-      ```
-    - **Response**:
-      ```json
-      {
-        "valid": true,
-        "message": "Valid"
-      }
-      ```
+### Step 1: Install Docker
 
-3. **Authorize**
-    - **URL**: `/api/auth/authorize`
-    - **Method**: `POST`
-    - **Header**: `Authorization` (Bearer token)
-    - **Request**:
-      ```json
-      {
-        "username": "user",
-        "serviceName": "service-name",
-        "action": "READ"
-      }
-      ```
-    - **Response**:
-      ```json
-      {
-        "authorized": true,
-        "message": "Access granted"
-      }
-      ```
+If you don't have Docker installed, download and install Docker Desktop from the official website:
 
-4. **Token Refresh**
-    - **URL**: `/api/auth/token/refresh`
-    - **Method**: `POST`
-    - **Request**:
-      ```json
-      {
-         "username": "root2",
-         "refresh_token": "REFRESH_TOKEN"
-      }
-      ```
-    - **Response**:
-      ```json
-      {
-         "username": "user",
-         "access_token": "JWT_TOKEN",
-         "refresh_token": "REFRESH_TOKEN"
-      }
-      ```
+*   [Download Docker Desktop](https://www.docker.com/products/docker-desktop)
+
+Follow the installation instructions for your operating system.
+
+### Step 2: Run the Application
+
+1.  Open a terminal or command prompt.
+2.  Navigate to the project's root directory (the `iam-system` folder).
+3.  Run the following command:
+    ```bash
+    docker-compose up --build
+    ```
+
+    This command will:
+    *   Build the application's Docker image.
+    *   Start the MySQL database.
+    *   Start your IAM system application.
+
+    This might take a few minutes the first time as it downloads necessary components and builds the application.
+
+If everything is successful, you'll see logs from both the `db` and `app` services. Look for messages indicating that the Spring Boot application has started successfully (e.g., "Started IamSystemApplication").
+
+### Step 3: Test the API with Postman
+
+Now you can use a tool like Postman to interact with the system. Here are a few key operations you can test:
+
+#### 1. Create a User
+
+*   **Method:** `POST`
+*   **URL:** `http://localhost:8080/api/users/register`
+*   **Body (select `raw` and `JSON`):**
+    ```json
+    {
+      "username": "testuser",
+      "password": "password123",
+      "fullName": "Test User",
+      "email": "test@example.com",
+      "rootUser": true
+    }
+    ```
+*   **Action:** Click "Send." You should get a successful response.
+
+#### 2. Log In
+
+*   **Method:** `POST`
+*   **URL:** `http://localhost:8080/api/auth/authenticate`
+*   **Body (select `raw` and `JSON`):**
+    ```json
+    {
+      "username": "testuser",
+      "password": "password123"
+    }
+    ```
+*   **Action:** Click "Send." The response will include an `access_token`. **Copy this token** for the next steps.
+
+#### 3. Get All Users (Requires Authentication)
+
+*   **Method:** `GET`
+*   **URL:** `http://localhost:8080/api/users`
+*   **Headers:**
+    *   Add a new header with the key `Authorization`.
+    *   For the value, type `Bearer ` (with a space at the end) and then paste the `access_token` you copied.
+*   **Action:** Click "Send." You should see a list of all users in the system.
 
 ---
 
-### **User Management**
-1. **Create User**
-    - **URL**: `/api/users/register`
-    - **Method**: `POST`
-    - **Permissions Required**: `IAM:WRITE`
-    - **Request**:
-      ```json
-      {
-         "username": "root",
-         "password": "password",
-         "fullName": "Root User",
-         "email": "root@mail.com",
-         "rootUser": true
-      }
-      ```
-    - **Response**:
-      ```json
-      {
-         "username": "root",
-         "password": null,
-         "fullName": "Root User",
-         "email": "root@mail.com",
-         "rootUser": true,
-         "roleIds": []
-      }
-      ```
+## Available API Endpoints
 
-2. **Find All Descendants**
-    - **URL**: `/api/users`
-    - **Method**: `GET`
-    - **Permissions Required**: `IAM:READ`
-    - **Description**: Returns all users under the logged-in user tree.
+Here is a list of the main operations you can perform. For protected endpoints, you must include the `Authorization` header as described above.
 
-3. **Find By ID**
-    - **URL**: `/api/users/{id}`
-    - **Method**: `GET`
-    - **Permissions Required**: `IAM:READ`
-    - **Description**: Returns user details if the user is within the logged-in user's tree.
+### Authentication
+| Action | Method | URL | Protected |
+| --- | --- | --- | --- |
+| Log In | `POST` | `/api/auth/authenticate` | No |
+| Validate Token | `POST` | `/api/auth/token/validate` | No |
+| Refresh Token | `POST` | `/api/auth/token/refresh` | No |
+| Authorize Action | `POST` | `/api/auth/authorize` | Yes |
 
----
+### User Management
+| Action | Method | URL | Protected |
+| --- | --- | --- | --- |
+| Create User | `POST` | `/api/users/register` | No |
+| Get All Users | `GET` | `/api/users` | Yes |
+| Get User by ID | `GET` | `/api/users/{id}` | Yes |
+| Get User by Username | `GET` | `/api/users/by-username` | Yes |
+| Get User by Email | `GET` | `/api/users/by-email` | Yes |
+| Delete User | `DELETE`| `/api/users/{id}` | Yes |
+| Assign Roles to User | `PUT` | `/api/users/roles` | Yes |
+| Remove Roles from User| `DELETE`| `/api/users/roles` | Yes |
 
-## **Setup Instructions**
+### Role Management
+| Action | Method | URL | Protected |
+| --- | --- | --- | --- |
+| Create Role | `POST` | `/api/roles` | Yes |
+| Get All Roles | `GET` | `/api/roles` | Yes |
+| Get Role by ID | `GET` | `/api/roles/{id}` | Yes |
+| Update Role | `PUT` | `/api/roles/{id}` | Yes |
+| Delete Role | `DELETE`| `/api/roles/{id}` | Yes |
+| Assign Permissions | `PUT` | `/api/roles/permissions` | Yes |
+| Remove Permissions | `DELETE`| `/api/roles/permissions` | Yes |
 
-### **1. Prerequisites**
-- JDK 17 or higher
-- Maven 3.6+
-- MySQL database
-
-### **2. Clone the Repository**
-```bash
-git clone https://github.com/jahid-csedu/iam-system.git
-cd iam-system
-```
-
-### **3. Configure Database**
-Update the `application.yml` file with your database details:
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/<db_name>
-    username: <username>
-    password: <password>
-```
-
-### **4. Build the Project**
-```bash
-./mvnw clean install
-```
-
-### **5. Run the Application**
-```bash
-./mvnw spring-boot:run
-```
-
----
-
-## **Testing**
-### **Unit Tests**
-Run the unit tests:
-```bash
-./mvnw test
-```
-
-### **Integration Tests**
-Integration tests use Testcontainers to spin up a MySQL/PostgreSQL container:
-```bash
-./mvnw verify
-```
-
----
-
-## **Future Enhancements**
-- Policy-based permissions similar to AWS IAM.
-- Support for OAuth2 and OpenID Connect.
-- Role delegation and inheritance.
-- Logging and auditing features.
-
----
+### Permission Management
+| Action | Method | URL | Protected |
+| --- | --- | --- | --- |
+| Create Permission | `POST` | `/api/permissions` | Yes |
+| Get All Permissions | `GET` | `/api/permissions` | Yes |
+| Get Permission by ID| `GET` | `/api/permissions/{id}`| Yes |
+| Update Permission | `PUT` | `/api/permissions/{id}`| Yes |
+| Delete Permission | `DELETE`| `/api/permissions/{id}`| Yes |
