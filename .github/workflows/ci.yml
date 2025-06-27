@@ -59,7 +59,7 @@ jobs:
 
       - name: Extract Project Version
         id: project-version
-        run: echo "VERSION=$(./gradlew properties --no-daemon --console=plain -q | grep \"version:\" | awk '{print $2}')" >> $GITHUB_ENV
+        run: echo "VERSION=$(grep "version =" build.gradle | awk -F"'" '{print $2}')" >> $GITHUB_ENV
 
       # Step 5: Log in to Docker Hub
       - name: Log in to Docker Hub
