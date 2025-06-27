@@ -69,6 +69,12 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       # Step 6: Build the Docker image
+      - name: Debug Docker Image Name Variables
+        run: |
+          echo "DOCKER_REPOSITORY: ${{ vars.DOCKER_REPOSITORY }}"
+          echo "IMAGE_NAME: ${{ env.IMAGE_NAME }}"
+          echo "VERSION: ${{ env.VERSION }}"
+          echo "Full Image Name Attempt: ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
       - name: Build Docker image
         run: |
           ./gradlew bootBuildImage --imageName ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
