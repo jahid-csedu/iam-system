@@ -1,4 +1,4 @@
-package com.example.iamsystem.role;
+package com.example.iamsystem.role.model;
 
 import com.example.iamsystem.constant.ErrorMessage;
 import jakarta.validation.constraints.NotNull;

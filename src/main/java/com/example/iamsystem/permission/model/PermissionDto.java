@@ -1,4 +1,4 @@
-package com.example.iamsystem.permission;
+package com.example.iamsystem.permission.model;
 
 import com.example.iamsystem.constant.ErrorMessage;
 import com.example.iamsystem.util.validators.action.ValidAction;

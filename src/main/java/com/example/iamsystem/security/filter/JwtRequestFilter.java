@@ -2,7 +2,6 @@ package com.example.iamsystem.security.filter;
 
 import com.example.iamsystem.constant.ErrorMessage;
 import com.example.iamsystem.constant.JwtConstant;
-import com.example.iamsystem.exception.JwtException;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
 import com.example.iamsystem.security.user.DefaultUserDetailsService;
 import jakarta.servlet.FilterChain;
@@ -42,8 +41,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 if (Objects.nonNull(username) && Objects.isNull(SecurityContextHolder.getContext().getAuthentication())) {
                     authenticateUser(request, jwtToken, username);
                 }
-            } catch (Exception e) {
-                throw new JwtException(ErrorMessage.INVALID_TOKEN);
+            } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+                log.error("JWT validation failed: {}", e.getMessage());
+                throw new com.example.iamsystem.exception.JwtException(ErrorMessage.INVALID_TOKEN);
             }
         }
 
@@ -52,12 +52,8 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
     private String extractToken(HttpServletRequest request) {
         final String authorizationHeader = request.getHeader(JwtConstant.REQUEST_HEADER);
-        if(Objects.isNull(authorizationHeader)) {
-            log.warn("Authorization header is null");
-            return null;
-        }
-        if (!authorizationHeader.startsWith(JwtConstant.BEARER)) {
-            log.warn("Token doesn't start with Bearer ");
+        if (Objects.isNull(authorizationHeader) || !authorizationHeader.startsWith(JwtConstant.BEARER)) {
+            log.warn("Authorization header is missing or token doesn't start with Bearer");
             return null;
         }
         return authorizationHeader.replace(JwtConstant.BEARER, "");

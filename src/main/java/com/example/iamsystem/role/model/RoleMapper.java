@@ -1,6 +1,6 @@
-package com.example.iamsystem.role;
+package com.example.iamsystem.role.model;
 
-import com.example.iamsystem.permission.Permission;
+import com.example.iamsystem.permission.model.Permission;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;

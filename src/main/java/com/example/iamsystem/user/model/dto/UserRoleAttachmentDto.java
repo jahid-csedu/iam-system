@@ -11,7 +11,7 @@ import java.util.Set;
 public class UserRoleAttachmentDto {
     @NotNull(message = ErrorMessage.USERNAME_REQUIRED)
     private String username;
-    @NotNull(message = ErrorMessage.ROLE_ID_REQUIRED)
-    @NotEmpty(message = ErrorMessage.ROLE_ID_NOT_EMPTY)
+    @NotNull(message = ErrorMessage.ROLE_LIST_REQUIRED)
+    @NotEmpty(message = ErrorMessage.ROLE_LIST_NOT_EMPTY)
     private Set<Long> roleIds;
 }

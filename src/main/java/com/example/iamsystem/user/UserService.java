@@ -3,7 +3,7 @@ package com.example.iamsystem.user;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.permission.PermissionService;
-import com.example.iamsystem.role.Role;
+import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
@@ -38,7 +38,7 @@ public class UserService {
     private static final String USER_CREATE_PERMISSION = "IAM:WRITE";
     private static final String USER_UPDATE_PERMISSION = "IAM:UPDATE";
 
-    public User registerUser(UserRegistrationDto userDto) {
+    public UserDto registerUser(UserRegistrationDto userDto) {
         validateRequest(userDto);
         validateUserCreationPermission(userDto.isRootUser());
         userDto.setPassword(passwordEncoder.encode(userDto.getPassword()));
@@ -48,7 +48,7 @@ public class UserService {
         }
 
         log.info("Adding new User: {}", user.getUsername());
-        return userRepository.save(user);
+        return userMapper.toDto(userRepository.save(user));
     }
 
     public void assignRoles(UserRoleAttachmentDto userRoleAttachmentDto) {

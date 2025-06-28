@@ -1,6 +1,6 @@
 package com.example.iamsystem.user;
 
-import com.example.iamsystem.role.Role;
+import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.entity.User;

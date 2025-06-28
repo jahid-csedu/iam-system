@@ -1,4 +1,4 @@
-package com.example.iamsystem.dto;
+package com.example.iamsystem.security.dto;
 
 import com.example.iamsystem.constant.ErrorMessage;
 import com.fasterxml.jackson.annotation.JsonProperty;

@@ -1,13 +1,16 @@
 package com.example.iamsystem.role;
 
 import com.example.iamsystem.exception.DataNotFoundException;
-import com.example.iamsystem.permission.Permission;
+import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.permission.PermissionRepository;
+import com.example.iamsystem.role.model.Role;
+import com.example.iamsystem.role.model.RoleDto;
+import com.example.iamsystem.role.model.RoleMapper;
+import com.example.iamsystem.role.model.RolePermissionDto;
 import lombok.RequiredArgsConstructor;
 import org.mapstruct.factory.Mappers;
 import org.springframework.stereotype.Service;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -27,7 +30,7 @@ public class RoleService {
 
     public RoleDto updateRole(Long id, RoleDto roleDto) {
         Role role = roleRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND));
+                .orElseThrow(() -> new DataNotFoundException(ROLE_NOT_FOUND));
         roleMapper.toUpdateEntity(role, roleDto);
         return roleMapper.toDto(roleRepository.save(role));
     }
@@ -39,13 +42,13 @@ public class RoleService {
 
     public RoleDto getRole(Long id) {
         Role role = roleRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND));
+                .orElseThrow(() -> new DataNotFoundException(ROLE_NOT_FOUND));
         return roleMapper.toDto(role);
     }
 
     public RoleDto getRoleByName(String name) {
         Role role = roleRepository.findByName(name)
-                .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND));
+                .orElseThrow(() -> new DataNotFoundException(ROLE_NOT_FOUND));
         return roleMapper.toDto(role);
     }
 
@@ -64,7 +67,7 @@ public class RoleService {
     public void removePermissions(RolePermissionDto rolePermissionDto) {
         Role role = findRoleById(rolePermissionDto);
 
-        dettachPermissionFromRole(role, rolePermissionDto.getPermissionIds());
+        detachPermissionFromRole(role, rolePermissionDto.getPermissionIds());
         roleRepository.save(role);
     }
 
@@ -76,13 +79,13 @@ public class RoleService {
     private void attachPermissionToRole(Role role, Set<Long> permissionIds) {
         List<Permission> permissions = getPermissions(permissionIds);
 
-        role.getPermissions().addAll(new HashSet<>(permissions));
+        role.getPermissions().addAll(permissions);
     }
 
-    private void dettachPermissionFromRole(Role role, Set<Long> permissionIds) {
+    private void detachPermissionFromRole(Role role, Set<Long> permissionIds) {
         List<Permission> permissions = getPermissions(permissionIds);
 
-        role.getPermissions().removeAll(new HashSet<>(permissions));
+        permissions.forEach(role.getPermissions()::remove);
     }
 
     private List<Permission> getPermissions(Set<Long> permissionIds) {

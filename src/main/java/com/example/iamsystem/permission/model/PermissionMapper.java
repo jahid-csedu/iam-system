@@ -1,4 +1,4 @@
-package com.example.iamsystem.permission;
+package com.example.iamsystem.permission.model;
 
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

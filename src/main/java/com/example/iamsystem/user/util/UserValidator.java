@@ -13,7 +13,7 @@ public class UserValidator {
     private final UserRepository userRepository;
 
     public void validateEmailAvailable(String email) {
-        if(email != null && emailExists(email)) {
+        if(emailExists(email)) {
             log.error("Email already exists: {}", email);
             throw new UserAlreadyExistsException("Email not available");
         }

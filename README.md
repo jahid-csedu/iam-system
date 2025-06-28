@@ -41,7 +41,7 @@ Follow the installation instructions for your operating system.
     ```
 
     This command will:
-    *   Build the application's Docker image.
+    *   Build the application's Docker image using a multi-stage build for optimization.
     *   Start the MySQL database.
     *   Start your IAM system application.
 
@@ -67,7 +67,7 @@ Now you can use a tool like Postman to interact with the system. Here are a few 
       "rootUser": true
     }
     ```
-*   **Action:** Click "Send." You should get a successful response.
+*   **Action:** Click "Send." You should get a `201 Created` response with a `UserDto` (without the password).
 
 #### 2. Log In
 
@@ -103,12 +103,12 @@ Here is a list of the main operations you can perform. For protected endpoints, 
 | Log In | `POST` | `/api/auth/authenticate` | No |
 | Validate Token | `POST` | `/api/auth/token/validate` | No |
 | Refresh Token | `POST` | `/api/auth/token/refresh` | No |
-| Authorize Action | `POST` | `/api/auth/authorize` | Yes |
+| Authorize Action | `POST` | `/api/auth/authorize` | Yes (Authorization is handled by Aspect) |
 
 ### User Management
 | Action | Method | URL | Protected |
 | --- | --- | --- | --- |
-| Create User | `POST` | `/api/users/register` | No |
+| Create User | `POST` | `/api/users/register` | No (Returns 201 Created) |
 | Get All Users | `GET` | `/api/users` | Yes |
 | Get User by ID | `GET` | `/api/users/{id}` | Yes |
 | Get User by Username | `GET` | `/api/users/by-username` | Yes |

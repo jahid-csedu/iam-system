@@ -1,4 +1,4 @@
-package com.example.iamsystem.role;
+package com.example.iamsystem.role.model;
 
 import com.example.iamsystem.constant.ErrorMessage;
 import jakarta.validation.constraints.NotEmpty;
@@ -13,9 +13,9 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RolePermissionDto{
-    @NotNull(message = ErrorMessage.ROLE_ID_REQUIRED)
+    @NotNull(message = ErrorMessage.ROLE_LIST_REQUIRED)
     private Long roleId;
-    @NotNull(message = ErrorMessage.PERMISSION_ID_REQUIRED)
-    @NotEmpty(message = ErrorMessage.PERMISSION_ID_NOT_EMPTY)
+    @NotNull(message = ErrorMessage.PERMISSION_LIST_REQUIRED)
+    @NotEmpty(message = ErrorMessage.PERMISSION_LIST_NOT_EMPTY)
     private Set<Long> permissionIds;
 }
