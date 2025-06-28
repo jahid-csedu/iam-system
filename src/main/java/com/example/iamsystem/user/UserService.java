@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.mapstruct.factory.Mappers;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -133,7 +134,7 @@ public class UserService {
         if(Objects.isNull(user)) {
             throw new NoAccessException(NO_PERMISSION);
         }
-        boolean hasPermission = permissionService.hasPermission(user, requiredPermission);
+        boolean hasPermission = permissionService.hasPermission(requiredPermission);
         if (!hasPermission) {
             throw new NoAccessException(NO_PERMISSION);
         }

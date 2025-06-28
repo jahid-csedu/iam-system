@@ -146,7 +146,7 @@ class UserServiceTest {
         mockSecurityContext(user);
         when(passwordEncoder.encode(anyString())).thenReturn("encoded_password");
         user.setCreatedBy(user);
-        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(true);
+        when(permissionService.hasPermission(anyString())).thenReturn(true);
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         // Act
@@ -212,7 +212,7 @@ class UserServiceTest {
         userRegistrationDto.setRootUser(false);
 
         mockSecurityContext(user); // user logged in
-        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(false);
+        when(permissionService.hasPermission(anyString())).thenReturn(false);
         doNothing().when(userValidator).validateUsernameAvailable(anyString());
         doNothing().when(userValidator).validateEmailAvailable(anyString());
 
@@ -228,7 +228,7 @@ class UserServiceTest {
         userRoleAttachmentDto.setUsername("testUser");
         Set<Long> roleIds = Set.of(1L);
         userRoleAttachmentDto.setRoleIds(roleIds);
-        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(true);
+        when(permissionService.hasPermission(anyString())).thenReturn(true);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
         when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
         when(userRepository.save(any(User.class))).thenReturn(user);
@@ -298,7 +298,7 @@ class UserServiceTest {
         userRoleAttachmentDto.setUsername("testUser");
         Set<Long> roleIds = Set.of(1L);
         userRoleAttachmentDto.setRoleIds(roleIds);
-        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(true);
+        when(permissionService.hasPermission(anyString())).thenReturn(true);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
         doThrow(new DataNotFoundException("Some roles not found")).when(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
 
@@ -314,7 +314,7 @@ class UserServiceTest {
         userRoleAttachmentDto.setUsername("testUser");
         userRoleAttachmentDto.setRoleIds(Set.of(1L));
 
-        when(permissionService.hasPermission(any(User.class), anyString())).thenReturn(true);
+        when(permissionService.hasPermission(anyString())).thenReturn(true);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
         when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
 
