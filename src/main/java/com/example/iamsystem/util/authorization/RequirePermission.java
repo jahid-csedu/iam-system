@@ -1,6 +1,6 @@
 package com.example.iamsystem.util.authorization;
 
-import com.example.iamsystem.permission.PermissionAction;
+import com.example.iamsystem.permission.model.PermissionAction;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

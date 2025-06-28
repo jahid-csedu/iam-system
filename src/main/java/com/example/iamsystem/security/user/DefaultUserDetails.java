@@ -1,6 +1,6 @@
 package com.example.iamsystem.security.user;
 
-import com.example.iamsystem.role.Role;
+import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.user.model.entity.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;

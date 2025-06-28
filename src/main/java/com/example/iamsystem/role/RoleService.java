@@ -1,8 +1,12 @@
 package com.example.iamsystem.role;
 
 import com.example.iamsystem.exception.DataNotFoundException;
-import com.example.iamsystem.permission.Permission;
+import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.permission.PermissionRepository;
+import com.example.iamsystem.role.model.Role;
+import com.example.iamsystem.role.model.RoleDto;
+import com.example.iamsystem.role.model.RoleMapper;
+import com.example.iamsystem.role.model.RolePermissionDto;
 import lombok.RequiredArgsConstructor;
 import org.mapstruct.factory.Mappers;
 import org.springframework.stereotype.Service;

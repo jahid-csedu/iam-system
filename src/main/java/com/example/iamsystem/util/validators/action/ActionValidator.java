@@ -1,6 +1,6 @@
 package com.example.iamsystem.util.validators.action;
 
-import com.example.iamsystem.permission.PermissionAction;
+import com.example.iamsystem.permission.model.PermissionAction;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 

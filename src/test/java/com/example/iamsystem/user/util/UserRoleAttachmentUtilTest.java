@@ -1,7 +1,7 @@
 package com.example.iamsystem.user.util;
 
 import com.example.iamsystem.exception.DataNotFoundException;
-import com.example.iamsystem.role.Role;
+import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.role.RoleRepository;
 import com.example.iamsystem.user.model.entity.User;
 import org.junit.jupiter.api.Test;

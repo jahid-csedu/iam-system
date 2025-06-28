@@ -20,9 +20,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-import static com.example.iamsystem.permission.PermissionAction.DELETE;
-import static com.example.iamsystem.permission.PermissionAction.READ;
-import static com.example.iamsystem.permission.PermissionAction.UPDATE;
+import static com.example.iamsystem.permission.model.PermissionAction.DELETE;
+import static com.example.iamsystem.permission.model.PermissionAction.READ;
+import static com.example.iamsystem.permission.model.PermissionAction.UPDATE;
 
 @RestController
 @RequestMapping("/api/users")

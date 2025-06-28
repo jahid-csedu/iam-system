@@ -1,5 +1,6 @@
 package com.example.iamsystem.permission;
 
+import com.example.iamsystem.permission.model.PermissionDto;
 import com.example.iamsystem.util.authorization.RequirePermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -15,10 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-import static com.example.iamsystem.permission.PermissionAction.DELETE;
-import static com.example.iamsystem.permission.PermissionAction.READ;
-import static com.example.iamsystem.permission.PermissionAction.UPDATE;
-import static com.example.iamsystem.permission.PermissionAction.WRITE;
+import static com.example.iamsystem.permission.model.PermissionAction.DELETE;
+import static com.example.iamsystem.permission.model.PermissionAction.READ;
+import static com.example.iamsystem.permission.model.PermissionAction.UPDATE;
+import static com.example.iamsystem.permission.model.PermissionAction.WRITE;
 
 @RestController
 @RequestMapping("/api/permissions")

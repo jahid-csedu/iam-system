@@ -3,10 +3,10 @@ package com.example.iamsystem.user;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.exception.UserAlreadyExistsException;
-import com.example.iamsystem.permission.Permission;
-import com.example.iamsystem.permission.PermissionAction;
+import com.example.iamsystem.permission.model.Permission;
+import com.example.iamsystem.permission.model.PermissionAction;
 import com.example.iamsystem.permission.PermissionService;
-import com.example.iamsystem.role.Role;
+import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
@@ -129,7 +129,7 @@ class UserServiceTest {
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         // Act
-        User registeredUser = userService.registerUser(userRegistrationDto);
+        UserDto registeredUser = userService.registerUser(userRegistrationDto);
 
         // Assert
         assertNotNull(registeredUser);
@@ -150,11 +150,11 @@ class UserServiceTest {
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         // Act
-        User registeredUser = userService.registerUser(userRegistrationDto);
+        UserDto registeredUser = userService.registerUser(userRegistrationDto);
 
         // Assert
         assertNotNull(registeredUser);
-        assertEquals(user.getId(), registeredUser.getCreatedBy().getId());
+        assertEquals(user.getUsername(), registeredUser.getCreatedBy());
         verify(userValidator).validateUsernameAvailable(anyString());
         verify(userValidator).validateEmailAvailable(anyString());
         verify(passwordEncoder).encode(anyString());

@@ -1,0 +1,9 @@
+ext.jacocoExcludes = [
+        'com/example/iamsystem/security/dto/**',
+        'com/example/iamsystem/aspect/**',
+        'com/example/iamsystem/constant/**',
+        'com/example/iamsystem/exception/**',
+        'com/example/iamsystem/user/model/**',
+        'com/example/iamsystem/role/model/**',
+        'com/example/iamsystem/permission/model/**',
+]

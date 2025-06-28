@@ -3,7 +3,7 @@ package com.example.iamsystem.user;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.permission.PermissionService;
-import com.example.iamsystem.role.Role;
+import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;

@@ -1,9 +1,12 @@
 package com.example.iamsystem.role;
 
 import com.example.iamsystem.exception.DataNotFoundException;
-import com.example.iamsystem.permission.Permission;
-import com.example.iamsystem.permission.PermissionAction;
+import com.example.iamsystem.permission.model.Permission;
+import com.example.iamsystem.permission.model.PermissionAction;
 import com.example.iamsystem.permission.PermissionRepository;
+import com.example.iamsystem.role.model.Role;
+import com.example.iamsystem.role.model.RoleDto;
+import com.example.iamsystem.role.model.RolePermissionDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -1,23 +1,34 @@
-# Use a lightweight Java 21 JDK image
-FROM eclipse-temurin:21-jdk-jammy
+# Build Stage
+FROM eclipse-temurin:21-jdk-jammy AS build
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy the Gradle build files and source code
-COPY build.gradle settings.gradle ./ 
+# Copy Gradle wrapper and build files
+COPY gradlew .
+COPY gradle gradle
+COPY build.gradle settings.gradle ./
+
+# Copy source code
 COPY src ./src
 
-# Install Gradle (if not already present in base image)
-RUN apt-get update && apt-get install -y gradle
+# Make gradlew executable
+RUN chmod +x gradlew
 
-# Build the application using Gradle
-# The -x test flag is used to skip running tests during the build process inside the Dockerfile.
-# This is common practice for faster image builds, as tests can be run separately.
-RUN gradle clean build -x test
+# Build the application
+# Use --no-daemon for CI/CD environments
+# -x test to skip tests during build
+RUN ./gradlew clean build -x test
+
+# Run Stage
+FROM eclipse-temurin:21-jre-jammy
+
+WORKDIR /app
+
+# Copy the JAR from the build stage
+COPY --from=build /app/build/libs/*.jar app.jar
 
 # Expose the port the Spring Boot application runs on
 EXPOSE 8080
 
 # Define the command to run the application
-ENTRYPOINT ["java", "-jar", "build/libs/iam-system-1.0.0.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]

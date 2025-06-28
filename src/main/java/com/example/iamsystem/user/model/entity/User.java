@@ -1,6 +1,6 @@
 package com.example.iamsystem.user.model.entity;
 
-import com.example.iamsystem.role.Role;
+import com.example.iamsystem.role.model.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;

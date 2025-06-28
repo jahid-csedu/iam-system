@@ -1,8 +1,10 @@
 package com.example.iamsystem.permission;
 
 import com.example.iamsystem.exception.DataNotFoundException;
-import com.example.iamsystem.exception.NoAccessException;
-import com.example.iamsystem.role.Role;
+import com.example.iamsystem.permission.model.Permission;
+import com.example.iamsystem.permission.model.PermissionAction;
+import com.example.iamsystem.permission.model.PermissionDto;
+import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.user.model.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,7 +66,7 @@ class PermissionServiceTest {
 
     @Test
     void savePermission_savesAndReturnsPermission() {
-        when(permissionRepository.findAllByServiceName("TEST_SERVICE")).thenReturn(Collections.emptyList());
+        when(permissionRepository.findByServiceNameAndAction(any(String.class), any(PermissionAction.class))).thenReturn(Optional.empty());
         when(permissionRepository.save(any(Permission.class))).thenReturn(permission);
 
         PermissionDto result = permissionService.savePermission(permissionDto);
@@ -77,9 +79,9 @@ class PermissionServiceTest {
 
     @Test
     void savePermission_throwsExceptionWhenPermissionExists() {
-        when(permissionRepository.findAllByServiceName("TEST_SERVICE")).thenReturn(Collections.singletonList(permission));
+        when(permissionRepository.findByServiceNameAndAction(any(String.class), any(PermissionAction.class))).thenReturn(Optional.of(permission));
 
-        assertThrows(IllegalArgumentException.class, () -> permissionService.savePermission(permissionDto));
+        assertThrows(com.example.iamsystem.exception.PermissionAlreadyExistsException.class, () -> permissionService.savePermission(permissionDto));
     }
 
     @Test

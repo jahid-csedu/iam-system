@@ -1,5 +1,7 @@
 package com.example.iamsystem.permission;
 
+import com.example.iamsystem.permission.model.Permission;
+import com.example.iamsystem.permission.model.PermissionAction;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.example.iamsystem.permission;
+package com.example.iamsystem.permission.model;
 
 public enum PermissionAction {
     READ,
