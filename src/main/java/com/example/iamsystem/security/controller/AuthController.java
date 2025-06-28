@@ -1,11 +1,12 @@
 package com.example.iamsystem.security.controller;
 
 import com.example.iamsystem.constant.ErrorMessage;
-import com.example.iamsystem.exception.JwtException;
-import com.example.iamsystem.security.dto.AuthorizationRequest;
-import com.example.iamsystem.security.dto.AuthorizationResponse;
 import com.example.iamsystem.security.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.security.dto.JwtResponse;
+import com.example.iamsystem.exception.JwtException;
+import com.example.iamsystem.permission.PermissionAction;
+import com.example.iamsystem.security.dto.AuthorizationRequest;
+import com.example.iamsystem.security.dto.AuthorizationResponse;
 import com.example.iamsystem.security.dto.TokenValidationRequest;
 import com.example.iamsystem.security.dto.TokenValidationResponse;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -62,7 +64,14 @@ public class AuthController {
 
     @PostMapping("/authorize")
     public ResponseEntity<AuthorizationResponse> authorize(@Valid @RequestBody AuthorizationRequest authorizationRequest) {
-        return ResponseEntity.ok(new AuthorizationResponse(true));
+        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        boolean permission = hasPermission(userDetails, authorizationRequest.getServiceName(), PermissionAction.valueOf(authorizationRequest.getAction()));
+        return ResponseEntity.ok(new AuthorizationResponse(permission));
+    }
+
+    private static boolean hasPermission(UserDetails userDetails, String serviceName, PermissionAction action) {
+        return userDetails.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals(serviceName + ":" + action));
     }
 
     private JwtResponse getTokens(UserDetails userDetails, String username) {
