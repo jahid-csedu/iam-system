@@ -5,6 +5,7 @@ import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.permission.model.PermissionAction;
 import com.example.iamsystem.permission.model.PermissionDto;
 import com.example.iamsystem.role.model.Role;
+import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Collections;
 import java.util.List;
@@ -38,10 +42,21 @@ class PermissionServiceTest {
     @InjectMocks
     private PermissionService permissionService;
 
+    @Mock
+    private SecurityContext securityContext;
+
+    @Mock
+    private Authentication authentication;
+
+    @Mock
+    private DefaultUserDetails userDetails;
+
     private Permission permission;
     private PermissionDto permissionDto;
 
+    @Mock
     private User user;
+    @Mock
     private Role role;
 
     @BeforeEach
@@ -54,14 +69,18 @@ class PermissionServiceTest {
         permissionDto.setId(1L);
         permissionDto.setAction("READ");
         permissionDto.setServiceName("TEST_SERVICE");
+    }
 
-        user = new User();
-        user.setUsername("test");
-
-        role = new Role();
-        role.setPermissions(Set.of(permission));
-
-        user.setRoles(Set.of(role));
+    private void setupSecurityContext(boolean isRootUser, Set<Role> roles) {
+        SecurityContextHolder.setContext(securityContext);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+        when(userDetails.getUser()).thenReturn(user);
+        when(user.isRootUser()).thenReturn(isRootUser);
+        if (!isRootUser) {
+            when(user.getRoles()).thenReturn(roles);
+            when(role.getPermissions()).thenReturn(Set.of(permission));
+        }
     }
 
     @Test
@@ -154,11 +173,19 @@ class PermissionServiceTest {
 
     @Test
     void testHasPermission_whenUserHasProvidedPermission_thenReturnTrue() {
-        assertTrue(permissionService.hasPermission(user, "TEST_SERVICE:READ"));
+        setupSecurityContext(false, Set.of(role));
+        assertTrue(permissionService.hasPermission("TEST_SERVICE:READ"));
     }
 
     @Test
     void testHasPermission_whenUserDoesNotHaveProvidedPermission_thenReturnFalse() {
-        assertFalse(permissionService.hasPermission(user, "TEST_SERVICE:WRITE"));
+        setupSecurityContext(false, Set.of(role));
+        assertFalse(permissionService.hasPermission("TEST_SERVICE:WRITE"));
+    }
+
+    @Test
+    void testHasPermission_whenUserIsRootUser_thenReturnTrue() {
+        setupSecurityContext(true, Collections.emptySet());
+        assertTrue(permissionService.hasPermission("ANY_SERVICE:ANY_ACTION"));
     }
 }

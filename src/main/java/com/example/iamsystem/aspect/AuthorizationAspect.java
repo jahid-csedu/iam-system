@@ -19,9 +19,8 @@ public class AuthorizationAspect {
 
     @Before("@annotation(requirePermission)")
     public void checkPermission(JoinPoint joinPoint, RequirePermission requirePermission) {
-        DefaultUserDetails userDetails = (DefaultUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-
-        if (!permissionService.hasPermission(userDetails.getUser(), requirePermission.serviceName()+":"+requirePermission.action())) {
+        String requiredPermission = requirePermission.serviceName() + ":" + requirePermission.action();
+        if (!permissionService.hasPermission(requiredPermission)) {
             throw new NoAccessException("User does not have permission to perform this action");
         }
     }

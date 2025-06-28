@@ -6,9 +6,11 @@ import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.permission.model.PermissionAction;
 import com.example.iamsystem.permission.model.PermissionDto;
 import com.example.iamsystem.permission.model.PermissionMapper;
+import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.mapstruct.factory.Mappers;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -63,7 +65,9 @@ public class PermissionService {
         return permissionMapper.toDto(permissionRepository.findAll());
     }
 
-    public boolean hasPermission(User user, String requiredPermission) {
+    public boolean hasPermission(String requiredPermission) {
+        DefaultUserDetails userDetails = (DefaultUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        User user = userDetails.getUser();
         if(user.isRootUser()) return true;
         return user.getRoles().stream()
                 .flatMap(role -> role.getPermissions().stream())
