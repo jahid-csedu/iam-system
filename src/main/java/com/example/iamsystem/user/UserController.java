@@ -3,7 +3,6 @@ package com.example.iamsystem.user;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
-import com.example.iamsystem.user.model.entity.User;
 import com.example.iamsystem.util.authorization.RequirePermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,13 +32,9 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ResponseEntity<UserRegistrationDto> userRegistration(@RequestBody @Valid UserRegistrationDto userDto) {
-        User registeresUser = userService.registerUser(userDto);
-        userDto.setPassword(null);
-        if (registeresUser.getId() != null) {
-            return new ResponseEntity<>(userDto, HttpStatus.OK);
-        }
-        return new ResponseEntity<>(userDto, HttpStatus.INTERNAL_SERVER_ERROR);
+    public ResponseEntity<UserDto> userRegistration(@RequestBody @Valid UserRegistrationDto userDto) {
+        UserDto registeredUserDto = userService.registerUser(userDto);
+        return new ResponseEntity<>(registeredUserDto, HttpStatus.CREATED);
     }
 
     @PutMapping("/roles")

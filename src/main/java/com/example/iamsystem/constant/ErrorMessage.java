@@ -16,10 +16,10 @@ public class ErrorMessage {
     public static final String PERMISSION_EXISTS = "Permission already exists";
     public static final String SERVICE_NAME_REQUIRED = "Service name cannot be null or blank";
     public static final String ACTION_NAME_REQUIRED = "Action cannot be null or blank";
-    public static final String PERMISSION_ID_REQUIRED = "Permission list cannot be null";
-    public static final String PERMISSION_ID_NOT_EMPTY = "Permission list cannot be empty";
-    public static final String ROLE_ID_REQUIRED = "Role list cannot be null";
-    public static final String ROLE_ID_NOT_EMPTY = "Role list cannot be empty";
+    public static final String PERMISSION_LIST_REQUIRED = "Permission list cannot be null";
+    public static final String PERMISSION_LIST_NOT_EMPTY = "Permission list cannot be empty";
+    public static final String ROLE_LIST_REQUIRED = "Role list cannot be null";
+    public static final String ROLE_LIST_NOT_EMPTY = "Role list cannot be empty";
     public static final String ROLE_NAME_REQUIRED = "Role name cannot be null or blank";
     public static final String TOKEN_REQUIRED = "Token cannot be null or blank";
     public static final String NO_PERMISSION = "Do not have permission to perform this operation";

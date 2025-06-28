@@ -20,9 +20,9 @@ import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 @RestControllerAdvice
 @Slf4j
 public class GlobalHandler {
-    @ExceptionHandler(UserAlreadyExistsException.class)
+    @ExceptionHandler({UserAlreadyExistsException.class, PermissionAlreadyExistsException.class})
     @ResponseStatus(BAD_REQUEST)
-    public ResponseEntity<ExceptionResponse> userAlreadyExistsExceptionHandler(UserAlreadyExistsException exception) {
+    public ResponseEntity<ExceptionResponse> handleUserAndPermissionAlreadyExistsException(RuntimeException exception) {
         return buildExceptionResponse(exception, BAD_REQUEST);
     }
 
@@ -66,16 +66,9 @@ public class GlobalHandler {
         return buildExceptionResponse(exception, HttpStatus.FORBIDDEN);
     }
 
-    @ExceptionHandler(SignatureException.class)
+    @ExceptionHandler({SignatureException.class, JwtException.class})
     @ResponseStatus(HttpStatus.PRECONDITION_FAILED)
-    public ResponseEntity<ExceptionResponse> signatureExceptionHandler(SignatureException exception) {
-        ExceptionResponse response = new ExceptionResponse(PRECONDITION_FAILED.value(), ErrorMessage.INVALID_TOKEN);
-        return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(response);
-    }
-
-    @ExceptionHandler(JwtException.class)
-    @ResponseStatus(HttpStatus.PRECONDITION_FAILED)
-    public ResponseEntity<ExceptionResponse> jwtExceptionHandler(JwtException exception) {
+    public ResponseEntity<ExceptionResponse> handleJwtAndSignatureExceptions(RuntimeException exception) {
         ExceptionResponse response = new ExceptionResponse(PRECONDITION_FAILED.value(), ErrorMessage.INVALID_TOKEN);
         return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(response);
     }

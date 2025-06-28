@@ -1,11 +1,12 @@
 package com.example.iamsystem.exception;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.*;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 @Getter
 @Setter
@@ -14,7 +15,7 @@ import java.util.Objects;
 public class ExceptionResponse {
     private final  int status;
     private final String message;
-    private List<ValidationError> errors;
+    private List<ValidationError> errors = new ArrayList<>();
 
     @Getter
     @Setter
@@ -25,9 +26,6 @@ public class ExceptionResponse {
     }
 
     public void addValidationError(String field, String message) {
-        if(Objects.isNull(errors)) {
-            errors = new ArrayList<>();
-        }
         errors.add(new ValidationError(field, message));
     }
 }

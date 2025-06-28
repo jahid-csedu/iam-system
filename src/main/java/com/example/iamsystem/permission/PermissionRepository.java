@@ -7,4 +7,5 @@ import java.util.Optional;
 
 public interface PermissionRepository extends JpaRepository<Permission, Long> {
     List<Permission> findAllByServiceName(String name);
+    Optional<Permission> findByServiceNameAndAction(String serviceName, PermissionAction action);
 }

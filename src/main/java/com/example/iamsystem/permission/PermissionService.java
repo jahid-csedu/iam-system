@@ -1,6 +1,7 @@
 package com.example.iamsystem.permission;
 
 import com.example.iamsystem.exception.DataNotFoundException;
+import com.example.iamsystem.exception.PermissionAlreadyExistsException;
 import com.example.iamsystem.user.model.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.mapstruct.factory.Mappers;
@@ -26,11 +27,11 @@ public class PermissionService {
     }
 
     private void validateDuplicatePermission(PermissionDto permissionDto) {
-        getPermissionByServiceName(permissionDto.getServiceName()).forEach(permission -> {
-            if (permission.getAction().equals(permissionDto.getAction())) {
-                throw new IllegalArgumentException(PERMISSION_EXISTS);
-            }
-        });
+        PermissionAction action = PermissionAction.valueOf(permissionDto.getAction());
+        permissionRepository.findByServiceNameAndAction(permissionDto.getServiceName(), action)
+                .ifPresent(permission -> {
+                    throw new PermissionAlreadyExistsException(PERMISSION_EXISTS);
+                });
     }
 
     public PermissionDto getPermissionById(Long id) {

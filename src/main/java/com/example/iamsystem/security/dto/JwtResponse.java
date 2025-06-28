@@ -1,4 +1,4 @@
-package com.example.iamsystem.dto;
+package com.example.iamsystem.security.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;

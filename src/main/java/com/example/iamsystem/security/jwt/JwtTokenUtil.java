@@ -60,7 +60,6 @@ public class JwtTokenUtil implements Serializable {
         Map<String, Object> claims = new HashMap<>();
         if (tokenType.equals(ACCESS_TOKEN)) {
             claims.put("authorities", userDetails.getAuthorities());
-            return doGenerateToken(claims, userDetails.getUsername(), tokenType);
         }
         return doGenerateToken(claims, userDetails.getUsername(), tokenType);
     }
