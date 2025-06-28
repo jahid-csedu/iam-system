@@ -2,6 +2,7 @@ package com.example.iamsystem.exception;
 
 import com.example.iamsystem.constant.ErrorMessage;
 import io.jsonwebtoken.security.SignatureException;
+import io.swagger.v3.oas.annotations.Hidden;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,7 @@ import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 
 @RestControllerAdvice
 @Slf4j
+@Hidden
 public class GlobalHandler {
     @ExceptionHandler({UserAlreadyExistsException.class, PermissionAlreadyExistsException.class})
     @ResponseStatus(BAD_REQUEST)

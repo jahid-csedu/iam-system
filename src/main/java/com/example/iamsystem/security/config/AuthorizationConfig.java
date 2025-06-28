@@ -34,6 +34,17 @@ public class AuthorizationConfig {
             "/api/auth/**"
     };
 
+    private static final String[] WHITELISTED_OPENAPI_ENDPOINTS = {
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            "/swagger-ui/index.html",
+            "/v3/api-docs.yaml",
+            "/v3/api-docs/swagger-config",
+            "/swagger-resources/**",
+            "/webjars/**"
+    };
+
 
     private static final String[] SPECIAL_PRIVATE_APIS = {
             "/api/auth/authorize"
@@ -46,6 +57,7 @@ public class AuthorizationConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(request ->
                         request.requestMatchers(SPECIAL_PRIVATE_APIS).authenticated()
+                                .requestMatchers(WHITELISTED_OPENAPI_ENDPOINTS).permitAll()
                                 .requestMatchers(PERMITTED_PUBLIC_APIS).permitAll()
                                 .requestMatchers(HttpMethod.GET, PERMITTED_GET_APIS).permitAll()
                                 .anyRequest().authenticated()

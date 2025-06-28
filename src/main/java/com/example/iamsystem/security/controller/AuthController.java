@@ -10,16 +10,15 @@ import com.example.iamsystem.security.dto.JwtResponse;
 import com.example.iamsystem.security.dto.TokenValidationRequest;
 import com.example.iamsystem.security.dto.TokenValidationResponse;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
-import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.security.user.DefaultUserDetailsService;
 import com.example.iamsystem.user.model.dto.UserLoginDto;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -41,6 +40,7 @@ public class AuthController {
 
 
     @PostMapping("/authenticate")
+    @Operation(summary = "User authentication")
     public ResponseEntity<JwtResponse> createAuthenticationToken(@Valid @RequestBody UserLoginDto userLoginDto) {
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(userLoginDto.getUsername(), userLoginDto.getPassword()));
         var userDetails = userDetailsService.loadUserByUsername(userLoginDto.getUsername());
@@ -48,6 +48,7 @@ public class AuthController {
     }
 
     @PostMapping("/token/refresh")
+    @Operation(summary = "Refresh token")
     public ResponseEntity<JwtResponse> refreshToken(@Valid @RequestBody JwtRefreshTokenDto refreshTokenDto) {
         String username = refreshTokenDto.getUsername();
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
@@ -59,12 +60,14 @@ public class AuthController {
     }
 
     @PostMapping("/token/validate")
+    @Operation(summary = "Token validation")
     public ResponseEntity<TokenValidationResponse> validateToken(@Valid @RequestBody TokenValidationRequest request) {
         boolean valid = jwtTokenUtil.validateToken(request.getToken(), ACCESS_TOKEN);
         return ResponseEntity.ok(new TokenValidationResponse(valid));
     }
 
     @PostMapping("/authorize")
+    @Operation(summary = "User authorization")
     public ResponseEntity<AuthorizationResponse> authorize(@Valid @RequestBody AuthorizationRequest authorizationRequest) {
         String requiredPermission = authorizationRequest.getServiceName() + ":" + authorizationRequest.getAction();
         boolean permission = permissionService.hasPermission(requiredPermission);
