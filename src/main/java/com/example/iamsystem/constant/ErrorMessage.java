@@ -24,5 +24,6 @@ public class ErrorMessage {
     public static final String TOKEN_REQUIRED = "Token cannot be null or blank";
     public static final String NO_PERMISSION = "Do not have permission to perform this operation";
     public static final String PASSWORD_POLICY_VIOLATION = "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
+    public static final String ACCOUNT_LOCKED = "Account is locked. Please try again later.";
 }
 

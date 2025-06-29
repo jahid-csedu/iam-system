@@ -52,6 +52,10 @@ public class User implements Serializable {
     private boolean passwordExpired;
     @Column(name = "user_locked")
     private boolean userLocked;
+    @Column(name = "failed_login_attempts")
+    private Integer failedLoginAttempts = 0;
+    @Column(name = "account_locked_until")
+    private Instant accountLockedUntil;
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",

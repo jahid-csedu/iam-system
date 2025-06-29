@@ -6,6 +6,9 @@ import io.swagger.v3.oas.annotations.Hidden;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -14,8 +17,10 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 import static org.springframework.http.HttpStatus.PRECONDITION_FAILED;
+import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 
 @RestControllerAdvice
@@ -66,6 +71,40 @@ public class GlobalHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ExceptionResponse> authorizationDeniedExceptionHandler(AuthorizationDeniedException exception) {
         return buildExceptionResponse(exception, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    @ResponseStatus(UNAUTHORIZED)
+    public ResponseEntity<ExceptionResponse> handleBadCredentialsException(BadCredentialsException exception) {
+        log.warn("Authentication failed: {}", exception.getMessage());
+        return buildExceptionResponse(exception, UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(LockedException.class)
+    @ResponseStatus(FORBIDDEN)
+    public ResponseEntity<ExceptionResponse> handleLockedException(LockedException exception) {
+        log.warn("Account locked: {}", exception.getMessage());
+        return buildExceptionResponse(exception, FORBIDDEN);
+    }
+
+    @ExceptionHandler(InternalAuthenticationServiceException.class)
+    @ResponseStatus(INTERNAL_SERVER_ERROR)
+    public ResponseEntity<ExceptionResponse> handleInternalAuthenticationServiceException(InternalAuthenticationServiceException exception) {
+        Throwable cause = exception.getCause();
+        switch (cause) {
+            case LockedException lockedException -> {
+                log.warn("Account locked (wrapped): {}", cause.getMessage());
+                return buildExceptionResponse(lockedException, FORBIDDEN);
+            }
+            case BadCredentialsException badCredentialsException -> {
+                log.warn("Authentication failed (wrapped): {}", cause.getMessage());
+                return buildExceptionResponse(badCredentialsException, UNAUTHORIZED);
+            }
+            default -> {
+                log.error("Internal authentication service error occurred", exception);
+                return buildExceptionResponse(exception, INTERNAL_SERVER_ERROR);
+            }
+        }
     }
 
     @ExceptionHandler({SignatureException.class, JwtException.class})
