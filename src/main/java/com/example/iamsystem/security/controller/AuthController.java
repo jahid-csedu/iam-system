@@ -15,6 +15,7 @@ import com.example.iamsystem.user.model.dto.UserLoginDto;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -31,6 +32,7 @@ import static com.example.iamsystem.constant.TokenType.REFRESH_TOKEN;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
@@ -42,41 +44,52 @@ public class AuthController {
     @PostMapping("/authenticate")
     @Operation(summary = "User authentication")
     public ResponseEntity<JwtResponse> createAuthenticationToken(@Valid @RequestBody UserLoginDto userLoginDto) {
+        log.debug("Authentication request received for user: {}", userLoginDto.getUsername());
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(userLoginDto.getUsername(), userLoginDto.getPassword()));
         var userDetails = userDetailsService.loadUserByUsername(userLoginDto.getUsername());
+        log.info("User '{}' authenticated successfully.", userLoginDto.getUsername());
         return new ResponseEntity<>(getTokens(userDetails, userLoginDto.getUsername()), HttpStatus.OK);
     }
 
     @PostMapping("/token/refresh")
     @Operation(summary = "Refresh token")
     public ResponseEntity<JwtResponse> refreshToken(@Valid @RequestBody JwtRefreshTokenDto refreshTokenDto) {
+        log.debug("Refresh token request received for user: {}", refreshTokenDto.getUsername());
         String username = refreshTokenDto.getUsername();
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
         String token = refreshTokenDto.getRefreshToken();
         if (jwtTokenUtil.validateToken(token, userDetails, REFRESH_TOKEN)) {
+            log.info("Refresh token validated successfully for user: {}", username);
             return new ResponseEntity<>(getTokens(userDetails, refreshTokenDto.getUsername()), HttpStatus.OK);
         }
+        log.warn("Invalid refresh token provided for user: {}", username);
         throw new JwtException(ErrorMessage.INVALID_TOKEN);
     }
 
     @PostMapping("/token/validate")
     @Operation(summary = "Token validation")
     public ResponseEntity<TokenValidationResponse> validateToken(@Valid @RequestBody TokenValidationRequest request) {
+        log.debug("Token validation request received.");
         boolean valid = jwtTokenUtil.validateToken(request.getToken(), ACCESS_TOKEN);
+        log.info("Token validation result: {}", valid);
         return ResponseEntity.ok(new TokenValidationResponse(valid));
     }
 
     @PostMapping("/authorize")
     @Operation(summary = "User authorization")
     public ResponseEntity<AuthorizationResponse> authorize(@Valid @RequestBody AuthorizationRequest authorizationRequest) {
+        log.debug("Authorization request received for service: {} and action: {}", authorizationRequest.getServiceName(), authorizationRequest.getAction());
         String requiredPermission = authorizationRequest.getServiceName() + ":" + authorizationRequest.getAction();
         boolean permission = permissionService.hasPermission(requiredPermission);
+        log.info("Authorization result for permission '{}': {}", requiredPermission, permission);
         return ResponseEntity.ok(new AuthorizationResponse(permission));
     }
 
     private JwtResponse getTokens(UserDetails userDetails, String username) {
+        log.debug("Generating access and refresh tokens for user: {}", username);
         String accessToken = jwtTokenUtil.generateToken(userDetails, ACCESS_TOKEN);
         String refreshToken = jwtTokenUtil.generateToken(userDetails, REFRESH_TOKEN);
+        log.debug("Tokens generated for user: {}", username);
         return new JwtResponse(username, refreshToken, accessToken);
     }
 }

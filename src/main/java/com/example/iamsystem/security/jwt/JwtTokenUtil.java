@@ -5,6 +5,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
@@ -23,15 +24,16 @@ import static com.example.iamsystem.constant.JwtConstant.REFRESH_TOKEN_SECRET;
 import static com.example.iamsystem.constant.TokenType.ACCESS_TOKEN;
 
 @Component
+@Slf4j
 public class JwtTokenUtil implements Serializable {
 
-    // Retrieve username from jwt token
     public String getUsernameFromToken(String token, TokenType tokenType) {
+        log.debug("Extracting username from token of type: {}", tokenType);
         return getClaimFromToken(token, Claims::getSubject, tokenType);
     }
 
-    // Retrieve expiration date from jwt token
     public Date getExpirationDateFromToken(String token, TokenType tokenType) {
+        log.debug("Extracting expiration date from token of type: {}", tokenType);
         return getClaimFromToken(token, Claims::getExpiration, tokenType);
     }
 
@@ -40,8 +42,8 @@ public class JwtTokenUtil implements Serializable {
         return claimsResolver.apply(claims);
     }
 
-    // For retrieving any information from token we will need the secret key
     private Claims getAllClaimsFromToken(String token, TokenType tokenType) {
+        log.debug("Getting all claims from token of type: {}", tokenType);
         return Jwts.parser()
                 .verifyWith(getSecretKey(tokenType))
                 .build()
@@ -49,26 +51,28 @@ public class JwtTokenUtil implements Serializable {
                 .getPayload();
     }
 
-    // Check if the token has expired
     private Boolean isTokenExpired(String token, TokenType tokenType) {
         final Date expiration = getExpirationDateFromToken(token, tokenType);
-        return expiration.before(new Date());
+        boolean expired = expiration.before(new Date());
+        if (expired) {
+            log.debug("Token of type {} is expired.", tokenType);
+        } else {
+            log.debug("Token of type {} is not expired.", tokenType);
+        }
+        return expired;
     }
 
-    // Generate token for user
     public String generateToken(UserDetails userDetails, TokenType tokenType) {
+        log.debug("Generating {} token for user: {}", tokenType, userDetails.getUsername());
         Map<String, Object> claims = new HashMap<>();
         if (tokenType.equals(ACCESS_TOKEN)) {
             claims.put("authorities", userDetails.getAuthorities());
         }
-        return doGenerateToken(claims, userDetails.getUsername(), tokenType);
+        String token = doGenerateToken(claims, userDetails.getUsername(), tokenType);
+        log.info("Successfully generated {} token for user: {}", tokenType, userDetails.getUsername());
+        return token;
     }
 
-    // While creating the token -
-    // 1. Define  claims of the token, like Issuer, Expiration, Subject, and the ID
-    // 2. Sign the JWT using the HS512 algorithm and secret key.
-    // 3. According to JWS Compact Serialization(https://tools.ietf.org/html/draft-ietf-jose-json-web-signature-41#section-3.1)
-    // Compaction of the JWT to a URL-safe string
     private String doGenerateToken(Map<String, Object> claims, String subject, TokenType tokenType) {
         long expiryTime = tokenType.equals(ACCESS_TOKEN) ? JWT_ACCESS_TOKEN_VALIDITY : JWT_REFRESH_TOKEN_VALIDITY;
 
@@ -81,18 +85,27 @@ public class JwtTokenUtil implements Serializable {
                 .compact();
     }
 
-    // Validate token
     public boolean validateToken(String token, UserDetails userDetails, TokenType tokenType) {
+        log.debug("Validating {} token for user: {}", tokenType, userDetails.getUsername());
         final String username = getUsernameFromToken(token, tokenType);
 
-        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token, tokenType));
+        boolean isValid = (username.equals(userDetails.getUsername()) && !isTokenExpired(token, tokenType));
+        if (isValid) {
+            log.info("{} token is valid for user: {}", tokenType, userDetails.getUsername());
+        } else {
+            log.warn("{} token is invalid for user: {}", tokenType, userDetails.getUsername());
+        }
+        return isValid;
     }
 
     public boolean validateToken(String token, TokenType tokenType) {
+        log.debug("Validating {} token without user details.", tokenType);
         try {
             getAllClaimsFromToken(token, tokenType);
+            log.info("{} token is valid.", tokenType);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
+            log.warn("{} token validation failed: {}", tokenType, e.getMessage());
             return false;
         }
     }

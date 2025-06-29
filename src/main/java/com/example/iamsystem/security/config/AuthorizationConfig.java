@@ -3,6 +3,7 @@ package com.example.iamsystem.security.config;
 import com.example.iamsystem.security.JwtAuthenticationEntryPoint;
 import com.example.iamsystem.security.filter.JwtRequestFilter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -19,6 +20,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
+@Slf4j
 public class AuthorizationConfig {
 
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
@@ -38,7 +40,6 @@ public class AuthorizationConfig {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/swagger-ui/index.html",
             "/v3/api-docs.yaml",
             "/v3/api-docs/swagger-config",
             "/swagger-resources/**",
@@ -52,15 +53,22 @@ public class AuthorizationConfig {
 
     @Bean
     protected SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationManager authenticationManager) throws Exception {
+        log.info("Configuring Security Filter Chain...");
         http
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(request ->
-                        request.requestMatchers(SPECIAL_PRIVATE_APIS).authenticated()
-                                .requestMatchers(WHITELISTED_OPENAPI_ENDPOINTS).permitAll()
-                                .requestMatchers(PERMITTED_PUBLIC_APIS).permitAll()
-                                .requestMatchers(HttpMethod.GET, PERMITTED_GET_APIS).permitAll()
-                                .anyRequest().authenticated()
+                .authorizeHttpRequests(request -> {
+                            request.requestMatchers(SPECIAL_PRIVATE_APIS).authenticated();
+                            log.debug("Permitting access to special private APIs: {}", String.join(", ", SPECIAL_PRIVATE_APIS));
+                            request.requestMatchers(WHITELISTED_OPENAPI_ENDPOINTS).permitAll();
+                            log.debug("Permitting access to OpenAPI endpoints: {}", String.join(", ", WHITELISTED_OPENAPI_ENDPOINTS));
+                            request.requestMatchers(PERMITTED_PUBLIC_APIS).permitAll();
+                            log.debug("Permitting access to public APIs: {}", String.join(", ", PERMITTED_PUBLIC_APIS));
+                            request.requestMatchers(HttpMethod.GET, PERMITTED_GET_APIS).permitAll();
+                            log.debug("Permitting GET access to APIs: {}", String.join(", ", PERMITTED_GET_APIS));
+                            request.anyRequest().authenticated();
+                            log.debug("All other requests require authentication.");
+                        }
                 )
                 .authenticationManager(authenticationManager)
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(jwtAuthenticationEntryPoint))
@@ -68,6 +76,7 @@ public class AuthorizationConfig {
 
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
+        log.info("Security Filter Chain configured successfully.");
         return http.build();
 
     }

@@ -34,17 +34,22 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
+        log.debug("Processing request for URI: {}", request.getRequestURI());
         String jwtToken = extractToken(request);
         if (Objects.nonNull(jwtToken)) {
             try {
                 String username = tokenUtil.getUsernameFromToken(jwtToken, ACCESS_TOKEN);
                 if (Objects.nonNull(username) && Objects.isNull(SecurityContextHolder.getContext().getAuthentication())) {
+                    log.debug("Authenticating user: {}", username);
                     authenticateUser(request, jwtToken, username);
+                    log.info("User '{}' authenticated successfully.", username);
                 }
             } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
-                log.error("JWT validation failed: {}", e.getMessage());
+                log.error("JWT validation failed for URI {}: {}", request.getRequestURI(), e.getMessage());
                 throw new com.example.iamsystem.exception.JwtException(ErrorMessage.INVALID_TOKEN);
             }
+        } else {
+            log.debug("No JWT token found in request for URI: {}", request.getRequestURI());
         }
 
         filterChain.doFilter(request, response);
@@ -53,9 +58,10 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     private String extractToken(HttpServletRequest request) {
         final String authorizationHeader = request.getHeader(JwtConstant.REQUEST_HEADER);
         if (Objects.isNull(authorizationHeader) || !authorizationHeader.startsWith(JwtConstant.BEARER)) {
-            log.warn("Authorization header is missing or token doesn't start with Bearer");
+            log.error("Authorization header is missing or token doesn't start with Bearer for URI: {}", request.getRequestURI());
             return null;
         }
+        log.debug("JWT token extracted from Authorization header for URI: {}", request.getRequestURI());
         return authorizationHeader.replace(JwtConstant.BEARER, "");
     }
 
@@ -66,6 +72,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                     userDetails, null, userDetails.getAuthorities());
             authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+            log.debug("SecurityContextHolder updated with authentication for user: {}", username);
+        } else {
+            log.warn("JWT token validation failed for user: {}", username);
         }
     }
 }
