@@ -12,10 +12,6 @@ This document outlines important features to consider for the evolution of the I
     *   **Description:** Implement mechanisms to detect and mitigate brute-force attacks (e.g., locking accounts after multiple failed login attempts, rate limiting).
     *   **Why it's important:** Protects against automated password guessing attacks.
 
-3.  **Password Policy Enforcement:**
-    *   **Description:** Enforce strong password policies (e.g., minimum length, complexity requirements, history checks, periodic expiration).
-    *   **Why it's important:** Encourages users to create and maintain strong, unique passwords.
-
 4.  **Audit Logging & Monitoring:**
     *   **Description:** Develop a dedicated, immutable audit trail for all security-relevant events (e.g., logins, logouts, password changes, role/permission modifications, user creation/deletion). Integrate with monitoring tools.
     *   **Why it's important:** Crucial for compliance, forensic analysis, and detecting suspicious activities.

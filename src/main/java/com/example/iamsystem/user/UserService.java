@@ -41,6 +41,7 @@ public class UserService {
     public UserDto registerUser(UserRegistrationDto userDto) {
         log.debug("Attempting to register new user with username: {}", userDto.getUsername());
         validateRequest(userDto);
+        userValidator.validatePasswordPolicy(userDto.getPassword());
         validateUserCreationPermission(userDto.isRootUser());
         userDto.setPassword(passwordEncoder.encode(userDto.getPassword()));
         User user = userMapper.toEntity(userDto);
