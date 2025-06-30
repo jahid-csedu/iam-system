@@ -1,5 +1,6 @@
 package com.example.iamsystem.user;
 
+import com.example.iamsystem.user.model.dto.PasswordChangeDto;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Optional;
 
 import static com.example.iamsystem.constant.PermissionConstants.IAM_SERVICE_NAME;
 import static com.example.iamsystem.permission.model.PermissionAction.DELETE;
@@ -45,6 +48,16 @@ public class UserController {
         UserDto registeredUserDto = userService.registerUser(userDto);
         log.info("User registered successfully with ID: {}", registeredUserDto.getId());
         return new ResponseEntity<>(registeredUserDto, HttpStatus.CREATED);
+    }
+
+    @PatchMapping("/password")
+    @Operation(summary = "Change user password. Can be done by the user or a root user for jejich subordinates")
+    public ResponseEntity<Void> changePassword(@RequestBody @Valid PasswordChangeDto passwordChangeDto,
+                                               @RequestParam(required = false) Long userId) {
+        log.debug("Received request to change password");
+        userService.changePassword(passwordChangeDto, Optional.ofNullable(userId));
+        log.info("Password changed successfully");
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/roles")

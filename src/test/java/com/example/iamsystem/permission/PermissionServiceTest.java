@@ -75,7 +75,7 @@ class PermissionServiceTest {
         SecurityContextHolder.setContext(securityContext);
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.getUser()).thenReturn(user);
+        when(userDetails.user()).thenReturn(user);
         when(user.isRootUser()).thenReturn(isRootUser);
         if (!isRootUser) {
             when(user.getRoles()).thenReturn(roles);

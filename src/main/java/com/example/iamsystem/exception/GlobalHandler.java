@@ -62,6 +62,12 @@ public class GlobalHandler {
         return buildExceptionResponse(exception, HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(InvalidPasswordException.class)
+    @ResponseStatus(BAD_REQUEST)
+    public ResponseEntity<ExceptionResponse> invalidPasswordExceptionHandler(InvalidPasswordException exception) {
+        return buildExceptionResponse(exception, BAD_REQUEST);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(BAD_REQUEST)
     public ResponseEntity<ExceptionResponse> illegalArgumentExceptionHandler(IllegalArgumentException exception) {
