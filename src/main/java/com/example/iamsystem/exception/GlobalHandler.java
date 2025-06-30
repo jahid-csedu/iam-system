@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Hidden;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.LockedException;
@@ -85,6 +86,13 @@ public class GlobalHandler {
     public ResponseEntity<ExceptionResponse> handleLockedException(LockedException exception) {
         log.warn("Account locked: {}", exception.getMessage());
         return buildExceptionResponse(exception, FORBIDDEN);
+    }
+
+    @ExceptionHandler(AccountExpiredException.class)
+    @ResponseStatus(FORBIDDEN)
+    public ResponseEntity<ExceptionResponse> handleAccountExpiredException(AccountExpiredException exception) {
+        log.warn("Password is expired: {}", exception.getMessage());
+        return buildExceptionResponse(new AccountExpiredException("Password is expired. Please change your password", exception.getCause()), FORBIDDEN);
     }
 
     @ExceptionHandler(InternalAuthenticationServiceException.class)

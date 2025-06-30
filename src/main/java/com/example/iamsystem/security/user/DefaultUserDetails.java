@@ -2,24 +2,23 @@ package com.example.iamsystem.security.user;
 
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.user.model.entity.User;
+import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Getter
 public class DefaultUserDetails implements UserDetails {
 
     private final User user;
 
     public DefaultUserDetails(User user) {
         this.user = user;
-    }
-
-    public User getUser() {
-        return this.user;
     }
 
     public boolean isRootUser() {
@@ -47,12 +46,13 @@ public class DefaultUserDetails implements UserDetails {
 
     @Override
     public boolean isAccountNonExpired() {
-        return !user.isUserLocked();
+        return !user.isPasswordExpired();
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return !user.isUserLocked();
+        return !user.isUserLocked()
+                || (user.getAccountLockedUntil() != null && user.getAccountLockedUntil().isBefore(Instant.now()));
     }
 
     @Override
