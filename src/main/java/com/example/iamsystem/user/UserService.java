@@ -1,10 +1,12 @@
 package com.example.iamsystem.user;
 
 import com.example.iamsystem.exception.DataNotFoundException;
+import com.example.iamsystem.exception.InvalidPasswordException;
 import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.permission.PermissionService;
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
+import com.example.iamsystem.user.model.dto.PasswordChangeDto;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
@@ -20,8 +22,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
+import static com.example.iamsystem.constant.ErrorMessage.INVALID_OLD_PASSWORD;
 import static com.example.iamsystem.constant.ErrorMessage.NO_PERMISSION;
 import static com.example.iamsystem.constant.ErrorMessage.USER_NOT_FOUND;
 
@@ -52,6 +56,20 @@ public class UserService {
         User savedUser = userRepository.save(user);
         log.info("User registered successfully with ID: {}", savedUser.getId());
         return userMapper.toDto(savedUser);
+    }
+
+    public void changePassword(PasswordChangeDto passwordChangeDto, Optional<Long> userId) {
+        log.debug("Attempting to change password. User ID from request: {}", userId.orElse(null));
+        User currentUser = getCurrentUser();
+        if (userId.isPresent()) {
+            User userToUpdate = userRepository.findById(userId.get())
+                    .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+            validatePasswordChangePermission(currentUser, userToUpdate);
+            updatePassword(userToUpdate, passwordChangeDto.newPassword());
+        } else {
+            validateOldPassword(currentUser, passwordChangeDto.oldPassword());
+            updatePassword(currentUser, passwordChangeDto.newPassword());
+        }
     }
 
     public void assignRoles(UserRoleAttachmentDto userRoleAttachmentDto) {
@@ -230,7 +248,7 @@ public class UserService {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (principal instanceof DefaultUserDetails userDetails) {
             log.debug("Current user retrieved: {}", userDetails.getUsername());
-            return userDetails.getUser();
+            return userDetails.user();
         }
         log.warn("No authenticated user found in security context");
         return null;
@@ -250,5 +268,35 @@ public class UserService {
                     log.warn("User not found by username: {}", username);
                     return new DataNotFoundException(USER_NOT_FOUND);
                 });
+    }
+
+    private void validatePasswordChangePermission(User currentUser, User userToUpdate) {
+        log.debug("Validating password change permission for user: {}", userToUpdate.getUsername());
+        if (currentUser.isRootUser() && isUserInTree(currentUser, userToUpdate)) {
+            log.debug("Root user '{}' has permission to change password for subordinate user '{}'", currentUser.getUsername(), userToUpdate.getUsername());
+            return; // Root user can change password of their subordinates
+        }
+        if (!currentUser.equals(userToUpdate)) {
+            log.warn("User '{}' does not have permission to change password for user '{}'", currentUser.getUsername(), userToUpdate.getUsername());
+            throw new NoAccessException(NO_PERMISSION);
+        }
+        log.debug("Password change permission validated for user: {}", userToUpdate.getUsername());
+    }
+
+    private void validateOldPassword(User user, String oldPassword) {
+        log.debug("Validating old password for user: {}", user.getUsername());
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            log.warn("Invalid old password provided for user: {}", user.getUsername());
+            throw new InvalidPasswordException(INVALID_OLD_PASSWORD);
+        }
+        log.debug("Old password validated for user: {}", user.getUsername());
+    }
+
+    private void updatePassword(User user, String newPassword) {
+        log.debug("Updating password for user: {}", user.getUsername());
+        userValidator.validatePasswordPolicy(newPassword);
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        log.info("Password updated successfully for user: {}", user.getUsername());
     }
 }

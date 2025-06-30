@@ -6,21 +6,13 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class DefaultUserDetails implements UserDetails {
 
-    private final User user;
-
-    public DefaultUserDetails(User user) {
-        this.user = user;
-    }
-
-    public User getUser() {
-        return this.user;
-    }
+public record DefaultUserDetails(User user) implements UserDetails {
 
     public boolean isRootUser() {
         return user.isRootUser();
@@ -47,12 +39,14 @@ public class DefaultUserDetails implements UserDetails {
 
     @Override
     public boolean isAccountNonExpired() {
-        return !user.isUserLocked();
+        return !user.isPasswordExpired();
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return !user.isUserLocked();
+        return !user.isUserLocked()
+                || (user.getAccountLockedUntil() != null
+                    && user.getAccountLockedUntil().isBefore(Instant.now()));
     }
 
     @Override

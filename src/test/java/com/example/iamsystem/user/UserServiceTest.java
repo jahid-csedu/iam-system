@@ -1,6 +1,7 @@
 package com.example.iamsystem.user;
 
 import com.example.iamsystem.exception.DataNotFoundException;
+import com.example.iamsystem.exception.InvalidPasswordException;
 import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.exception.UserAlreadyExistsException;
 import com.example.iamsystem.permission.model.Permission;
@@ -8,6 +9,7 @@ import com.example.iamsystem.permission.model.PermissionAction;
 import com.example.iamsystem.permission.PermissionService;
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
+import com.example.iamsystem.user.model.dto.PasswordChangeDto;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
@@ -218,6 +220,84 @@ class UserServiceTest {
 
         // Act & Assert
         assertThrows(NoAccessException.class, () -> userService.registerUser(userRegistrationDto));
+    }
+
+    @Test
+    void changePassword_byUser_successful() {
+        // Arrange
+        mockSecurityContext(user);
+        PasswordChangeDto passwordChangeDto = new PasswordChangeDto("oldPassword", "newPassword");
+        when(passwordEncoder.matches("oldPassword", user.getPassword())).thenReturn(true);
+        when(passwordEncoder.encode("newPassword")).thenReturn("encodedNewPassword");
+
+        // Act
+        userService.changePassword(passwordChangeDto, Optional.empty());
+
+        // Assert
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void changePassword_byRootUser_forSubordinate_successful() {
+        // Arrange
+        user.setRootUser(true);
+        childUser.setCreatedBy(user);
+        mockSecurityContext(user);
+        PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
+        when(userRepository.findById(2L)).thenReturn(Optional.of(childUser));
+        when(passwordEncoder.encode("newPassword")).thenReturn("encodedNewPassword");
+
+        // Act
+        userService.changePassword(passwordChangeDto, Optional.of(2L));
+
+        // Assert
+        verify(userRepository).save(childUser);
+    }
+
+    @Test
+    void changePassword_byUser_invalidOldPassword() {
+        // Arrange
+        mockSecurityContext(user);
+        PasswordChangeDto passwordChangeDto = new PasswordChangeDto("wrongOldPassword", "newPassword");
+        when(passwordEncoder.matches("wrongOldPassword", user.getPassword())).thenReturn(false);
+
+        // Act & Assert
+        assertThrows(InvalidPasswordException.class, () -> userService.changePassword(passwordChangeDto, Optional.empty()));
+    }
+
+    @Test
+    void changePassword_byUser_forAnotherUser_unauthorized() {
+        // Arrange
+        mockSecurityContext(user);
+        PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
+        when(userRepository.findById(2L)).thenReturn(Optional.of(childUser));
+
+        // Act & Assert
+        assertThrows(NoAccessException.class, () -> userService.changePassword(passwordChangeDto, Optional.of(2L)));
+    }
+
+    @Test
+    void changePassword_byRootUser_forNonSubordinate_unauthorized() {
+        // Arrange
+        user.setRootUser(true);
+        mockSecurityContext(user);
+        PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
+        when(userRepository.findById(2L)).thenReturn(Optional.of(childUser));
+
+        // Act & Assert
+        assertThrows(NoAccessException.class, () -> userService.changePassword(passwordChangeDto, Optional.of(2L)));
+    }
+
+    @Test
+    void changePassword_passwordPolicyViolation() {
+        // Arrange
+        mockSecurityContext(user);
+        PasswordChangeDto passwordChangeDto = new PasswordChangeDto("oldPassword", "weak");
+        when(passwordEncoder.matches("oldPassword", user.getPassword())).thenReturn(true);
+        doThrow(new InvalidPasswordException("Password policy violation")).when(userValidator).validatePasswordPolicy("weak");
+
+        // Act & Assert
+        assertThrows(InvalidPasswordException.class, () -> userService.changePassword(passwordChangeDto, Optional.empty()));
     }
 
     @Test
@@ -531,6 +611,6 @@ class UserServiceTest {
         SecurityContextHolder.setContext(securityContext);
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.getUser()).thenReturn(user);
+        when(userDetails.user()).thenReturn(user);
     }
 }

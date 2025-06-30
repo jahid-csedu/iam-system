@@ -93,7 +93,7 @@ public class PermissionService {
     public boolean hasPermission(String requiredPermission) {
         log.debug("Checking if current user has permission: {}", requiredPermission);
         DefaultUserDetails userDetails = (DefaultUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        User user = userDetails.getUser();
+        User user = userDetails.user();
         if(user.isRootUser()) {
             log.info("Root user has all permissions. Granting access for: {}", requiredPermission);
             return true;

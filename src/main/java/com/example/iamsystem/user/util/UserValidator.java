@@ -18,7 +18,7 @@ import static com.example.iamsystem.constant.ErrorMessage.PASSWORD_POLICY_VIOLAT
 public class UserValidator {
     private final UserRepository userRepository;
 
-    private static final String PASSWORD_PATTERN = "^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&-+=()])(?=\\S+$).{8,}$";
+    private static final String PASSWORD_PATTERN = "^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#!$%^&-+=()])(?=\\S+$).{8,}$";
     private static final Pattern pattern = Pattern.compile(PASSWORD_PATTERN);
 
     public void validateEmailAvailable(String email) {
