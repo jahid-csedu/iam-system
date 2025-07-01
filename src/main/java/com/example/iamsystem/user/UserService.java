@@ -166,6 +166,10 @@ public class UserService {
                 throw new NoAccessException(NO_PERMISSION);
             }
         } else {
+            if (Objects.isNull(currentUser)) {
+                log.debug("No current user, allowing non-root user creation.");
+                return;
+            }
             validateUserPermission(currentUser, USER_CREATE_PERMISSION);
         }
         log.debug("User creation permission validated.");
