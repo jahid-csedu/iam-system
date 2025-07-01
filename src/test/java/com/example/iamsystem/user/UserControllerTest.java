@@ -74,7 +74,7 @@ class UserControllerTest {
                 "NewUser1!",
                 null,
                 "newuser@example.com",
-                false,
+                true,
                 new HashSet<>()
         );
 

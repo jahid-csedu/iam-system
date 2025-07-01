@@ -162,16 +162,12 @@ public class UserService {
         User currentUser = getCurrentUser();
         if (isRootUser) {
             if (Objects.nonNull(currentUser)) {
-                log.warn("Attempted to create root user by non-null current user: {}", currentUser.getUsername());
+                log.warn("Attempted to create root user by another root user: {}", currentUser.getUsername());
                 throw new NoAccessException(NO_PERMISSION);
             }
-        } else {
-            if (Objects.isNull(currentUser)) {
-                log.debug("No current user, allowing non-root user creation.");
-                return;
-            }
-            validateUserPermission(currentUser, USER_CREATE_PERMISSION);
+            return;
         }
+        validateUserPermission(currentUser, USER_CREATE_PERMISSION);
         log.debug("User creation permission validated.");
     }
 

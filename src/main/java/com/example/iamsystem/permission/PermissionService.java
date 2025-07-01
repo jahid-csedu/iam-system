@@ -11,6 +11,7 @@ import com.example.iamsystem.user.model.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.mapstruct.factory.Mappers;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -92,9 +93,14 @@ public class PermissionService {
 
     public boolean hasPermission(String requiredPermission) {
         log.debug("Checking if current user has permission: {}", requiredPermission);
-        DefaultUserDetails userDetails = (DefaultUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!(principal instanceof DefaultUserDetails)) {
+            log.error("Non authenticated user trying to access: {}", requiredPermission);
+            return false;
+        }
+        DefaultUserDetails userDetails = (DefaultUserDetails) principal;
         User user = userDetails.user();
-        if(user.isRootUser()) {
+        if (user.isRootUser()) {
             log.info("Root user has all permissions. Granting access for: {}", requiredPermission);
             return true;
         }

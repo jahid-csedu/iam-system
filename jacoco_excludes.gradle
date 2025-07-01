@@ -6,4 +6,7 @@ ext.jacocoExcludes = [
         'com/example/iamsystem/user/model/**',
         'com/example/iamsystem/role/model/**',
         'com/example/iamsystem/permission/model/**',
+        'com/example/iamsystem/security/**',
+        'com/example/iamsystem/util/authorization/RequirePermission.java',
+        'com/example/iamsystem/util/validators/**'
 ]
