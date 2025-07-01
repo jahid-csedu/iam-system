@@ -72,6 +72,10 @@ public class User implements Serializable {
     @UpdateTimestamp
     private Instant updatedAt;
 
+    public void addRole(Role role) {
+        this.roles.add(role);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
