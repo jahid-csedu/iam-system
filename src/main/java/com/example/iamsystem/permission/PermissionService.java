@@ -11,11 +11,11 @@ import com.example.iamsystem.user.model.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.mapstruct.factory.Mappers;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 import static com.example.iamsystem.constant.ErrorMessage.PERMISSION_EXISTS;
 import static com.example.iamsystem.constant.ErrorMessage.PERMISSION_NOT_FOUND;
@@ -93,13 +93,11 @@ public class PermissionService {
 
     public boolean hasPermission(String requiredPermission) {
         log.debug("Checking if current user has permission: {}", requiredPermission);
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (!(principal instanceof DefaultUserDetails)) {
+        User user = getCurrentUser();
+        if(Objects.isNull(getCurrentUser())) {
             log.error("Non authenticated user trying to access: {}", requiredPermission);
             return false;
         }
-        DefaultUserDetails userDetails = (DefaultUserDetails) principal;
-        User user = userDetails.user();
         if (user.isRootUser()) {
             log.info("Root user has all permissions. Granting access for: {}", requiredPermission);
             return true;
@@ -114,5 +112,16 @@ public class PermissionService {
             log.warn("User '{}' does NOT have permission: {}", user.getUsername(), requiredPermission);
         }
         return hasPermission;
+    }
+
+    private User getCurrentUser() {
+        log.debug("Attempting to retrieve current authenticated user");
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof DefaultUserDetails userDetails) {
+            log.debug("Current user retrieved: {}", userDetails.getUsername());
+            return userDetails.user();
+        }
+        log.warn("No authenticated user found in security context");
+        return null;
     }
 }

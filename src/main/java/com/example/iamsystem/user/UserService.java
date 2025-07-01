@@ -28,6 +28,7 @@ import java.util.Set;
 import static com.example.iamsystem.constant.ErrorMessage.INVALID_OLD_PASSWORD;
 import static com.example.iamsystem.constant.ErrorMessage.NO_PERMISSION;
 import static com.example.iamsystem.constant.ErrorMessage.USER_NOT_FOUND;
+import static com.example.iamsystem.constant.ErrorMessage.USER_NOT_LOGGED_IN;
 
 @Service
 @Slf4j
@@ -61,6 +62,10 @@ public class UserService {
     public void changePassword(PasswordChangeDto passwordChangeDto, Optional<Long> userId) {
         log.debug("Attempting to change password. User ID from request: {}", userId.orElse(null));
         User currentUser = getCurrentUser();
+        if(Objects.isNull(currentUser)) {
+            log.error("No Logged in user");
+            throw new NoAccessException(USER_NOT_LOGGED_IN);
+        }
         if (userId.isPresent()) {
             User userToUpdate = userRepository.findById(userId.get())
                     .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
