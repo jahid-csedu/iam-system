@@ -6,7 +6,7 @@ import lombok.experimental.UtilityClass;
 public class ErrorMessage {
     public static final String USERNAME_REQUIRED = "Username is required";
     public static final String USER_NOT_FOUND = "User not found";
-    public static final String USER_NOT_LOGGED_IN = "No logged in user not found";
+    public static final String USER_NOT_LOGGED_IN = "No logged in user found";
     public static final String PASSWORD_REQUIRED = "Password is required";
     public static final String PASSWORD_LENGTH = "Password should be between 6 to 15 characters";
     public static final String INVALID_EMAIL = "Email should be a valid email address";
