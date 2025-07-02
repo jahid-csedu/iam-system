@@ -51,9 +51,11 @@ dependencies {
 
 apply from: 'jacoco_excludes.gradle'
 
+
 tasks.named('test') {
     useJUnitPlatform()
     finalizedBy jacocoTestReport
+    systemProperties loadEnvVariables()
 }
 
 jacocoTestReport {
@@ -68,8 +70,12 @@ jacocoTestReport {
     }
 }
 
-// Task to load environment variables from .env file
 bootRun {
+    environment loadEnvVariables()
+}
+
+def loadEnvVariables() {
+    def envVariables = [:]
     File envFile = project.file('.env')
     if (envFile.exists()) {
         envFile.eachLine { line ->
@@ -77,8 +83,9 @@ bootRun {
                 def parts = line.split('=', 2)
                 def key = parts[0].trim()
                 def value = parts[1].trim()
-                environment key, value
+                envVariables[key] = value
             }
         }
     }
+    return envVariables
 }
