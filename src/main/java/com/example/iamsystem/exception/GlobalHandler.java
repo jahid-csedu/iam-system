@@ -136,6 +136,12 @@ public class GlobalHandler {
         return ResponseEntity.status(INTERNAL_SERVER_ERROR).body(response);
     }
 
+    @ExceptionHandler(InvalidPasswordResetTokenException.class)
+    @ResponseStatus(BAD_REQUEST)
+    public ResponseEntity<ExceptionResponse> invalidPasswordResetTokenExceptionHandler(InvalidPasswordResetTokenException exception) {
+        return buildExceptionResponse(exception, BAD_REQUEST);
+    }
+
     private ResponseEntity<ExceptionResponse> buildExceptionResponse(Exception e, HttpStatus httpStatus) {
         ExceptionResponse response = new ExceptionResponse(httpStatus.value(), e.getMessage());
         return ResponseEntity.status(httpStatus).body(response);

@@ -17,6 +17,7 @@ It's the backbone for ensuring your company's digital assets are secure and that
 *   **User Management:** Create, view, and manage users. It supports a hierarchy, so a manager can see the activity of the employees they manage.
 *   **Role Management:** Define roles (like "Admin," "Editor," or "Viewer") and assign them to users.
 *   **Permissions:** Assign specific permissions to each role (e.g., `READ`, `WRITE`, `DELETE`). This gives you fine-grained control over what users can do.
+*   **Password Reset:** Users can securely reset their passwords via email verification.
 *   **Centralized Control:** It’s designed to manage access for multiple applications from one central place.
 
 ## How to Run and Test the Project (Using Docker)
@@ -106,16 +107,18 @@ Here is a list of the main operations you can perform. For protected endpoints, 
 | Authorize Action | `POST` | `/api/auth/authorize` | Yes (Authorization is handled by Aspect) |
 
 ### User Management
-| Action | Method | URL | Protected |
-| --- | --- | --- | --- |
-| Create User | `POST` | `/api/users/register` | No (Returns 201 Created) |
-| Get All Users | `GET` | `/api/users` | Yes |
-| Get User by ID | `GET` | `/api/users/{id}` | Yes |
-| Get User by Username | `GET` | `/api/users/by-username` | Yes |
-| Get User by Email | `GET` | `/api/users/by-email` | Yes |
-| Delete User | `DELETE`| `/api/users/{id}` | Yes |
-| Assign Roles to User | `PUT` | `/api/users/roles` | Yes |
-| Remove Roles from User| `DELETE`| `/api/users/roles` | Yes |
+| Action                 | Method   | URL                      | Protected |
+|------------------------|----------|--------------------------| --- |
+| Create User            | `POST`   | `/api/users/register`    | No (Returns 201 Created) |
+| Change Password        | `PATCH`  | `/api/users/password`    | Yes |
+| Get All Users          | `GET`    | `/api/users`             | Yes |
+| Get User by ID         | `GET`    | `/api/users/{id}`        | Yes |
+| Get User by Username   | `GET`    | `/api/users/by-username` | Yes |
+| Get User by Email      | `GET`    | `/api/users/by-email`    | Yes |
+| Delete User            | `DELETE` | `/api/users/{id}`        | Yes |
+| Assign Roles to User   | `PUT`    | `/api/users/roles`       | Yes |
+| Remove Roles from User | `DELETE` | `/api/users/roles`       | Yes |
+| Change User Password   | `PATCH`  | `/api/users/password`    | Yes |
 
 ### Role Management
 | Action | Method | URL | Protected |
@@ -123,6 +126,7 @@ Here is a list of the main operations you can perform. For protected endpoints, 
 | Create Role | `POST` | `/api/roles` | Yes |
 | Get All Roles | `GET` | `/api/roles` | Yes |
 | Get Role by ID | `GET` | `/api/roles/{id}` | Yes |
+| Get Role by Name | `GET` | `/api/roles/name/{name}` | Yes |
 | Update Role | `PUT` | `/api/roles/{id}` | Yes |
 | Delete Role | `DELETE`| `/api/roles/{id}` | Yes |
 | Assign Permissions | `PUT` | `/api/roles/permissions` | Yes |
@@ -134,5 +138,12 @@ Here is a list of the main operations you can perform. For protected endpoints, 
 | Create Permission | `POST` | `/api/permissions` | Yes |
 | Get All Permissions | `GET` | `/api/permissions` | Yes |
 | Get Permission by ID| `GET` | `/api/permissions/{id}`| Yes |
+| Get Permissions by Service Name | `GET` | `/api/permissions/name/{serviceName}` | Yes |
 | Update Permission | `PUT` | `/api/permissions/{id}`| Yes |
 | Delete Permission | `DELETE`| `/api/permissions/{id}`| Yes |
+
+### Password Reset
+| Action | Method | URL | Protected |
+| --- | --- | --- | --- |
+| Request Password Reset | `POST` | `/api/password/reset-request` | No |
+| Reset Password | `POST` | `/api/password/reset` | No |
