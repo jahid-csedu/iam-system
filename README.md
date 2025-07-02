@@ -17,6 +17,7 @@ It's the backbone for ensuring your company's digital assets are secure and that
 *   **User Management:** Create, view, and manage users. It supports a hierarchy, so a manager can see the activity of the employees they manage.
 *   **Role Management:** Define roles (like "Admin," "Editor," or "Viewer") and assign them to users.
 *   **Permissions:** Assign specific permissions to each role (e.g., `READ`, `WRITE`, `DELETE`). This gives you fine-grained control over what users can do.
+*   **Password Reset:** Users can securely reset their passwords via email verification.
 *   **Centralized Control:** It’s designed to manage access for multiple applications from one central place.
 
 ## How to Run and Test the Project (Using Docker)
@@ -49,7 +50,28 @@ Follow the installation instructions for your operating system.
 
 If everything is successful, you'll see logs from both the `db` and `app` services. Look for messages indicating that the Spring Boot application has started successfully (e.g., "Started IamSystemApplication").
 
-### Step 3: Test the API with Postman
+### Step 3: Configure Environment Variables (for local development)
+
+For local development, sensitive credentials like email passwords are not committed to Git. Instead, they are loaded from a `.env` file.
+
+1.  **Create your `.env` file:** Copy the provided `example.env` file to a new file named `.env` in the project root:
+    ```bash
+    cp example.env .env
+    ```
+    (On Windows, you can use `copy example.env .env`)
+
+2.  **Edit `.env`:** Open the newly created `.env` file and replace the placeholder values with your actual credentials (e.g., your Gmail address and the App Password you generated for your Google account).
+
+    ```properties
+    SPRING_MAIL_USERNAME=your-email@gmail.com
+    SPRING_MAIL_PASSWORD=your-app-password
+    ```
+
+    **Important:** The `.env` file is ignored by Git (`.gitignore`) and should **never** be committed to your repository.
+
+3.  **Run the application:** When you run the application using `./gradlew bootRun`, the `bootRun` task is configured to automatically load these environment variables from your `.env` file.
+
+### Step 4: Test the API with Postman
 
 Now you can use a tool like Postman to interact with the system. Here are a few key operations you can test:
 
@@ -106,16 +128,18 @@ Here is a list of the main operations you can perform. For protected endpoints, 
 | Authorize Action | `POST` | `/api/auth/authorize` | Yes (Authorization is handled by Aspect) |
 
 ### User Management
-| Action | Method | URL | Protected |
-| --- | --- | --- | --- |
-| Create User | `POST` | `/api/users/register` | No (Returns 201 Created) |
-| Get All Users | `GET` | `/api/users` | Yes |
-| Get User by ID | `GET` | `/api/users/{id}` | Yes |
-| Get User by Username | `GET` | `/api/users/by-username` | Yes |
-| Get User by Email | `GET` | `/api/users/by-email` | Yes |
-| Delete User | `DELETE`| `/api/users/{id}` | Yes |
-| Assign Roles to User | `PUT` | `/api/users/roles` | Yes |
-| Remove Roles from User| `DELETE`| `/api/users/roles` | Yes |
+| Action                 | Method   | URL                      | Protected |
+|------------------------|----------|--------------------------| --- |
+| Create User            | `POST`   | `/api/users/register`    | No (Returns 201 Created) |
+| Change Password        | `PATCH`  | `/api/users/password`    | Yes |
+| Get All Users          | `GET`    | `/api/users`             | Yes |
+| Get User by ID         | `GET`    | `/api/users/{id}`        | Yes |
+| Get User by Username   | `GET`    | `/api/users/by-username` | Yes |
+| Get User by Email      | `GET`    | `/api/users/by-email`    | Yes |
+| Delete User            | `DELETE` | `/api/users/{id}`        | Yes |
+| Assign Roles to User   | `PUT`    | `/api/users/roles`       | Yes |
+| Remove Roles from User | `DELETE` | `/api/users/roles`       | Yes |
+| Change User Password   | `PATCH`  | `/api/users/password`    | Yes |
 
 ### Role Management
 | Action | Method | URL | Protected |
@@ -123,6 +147,7 @@ Here is a list of the main operations you can perform. For protected endpoints, 
 | Create Role | `POST` | `/api/roles` | Yes |
 | Get All Roles | `GET` | `/api/roles` | Yes |
 | Get Role by ID | `GET` | `/api/roles/{id}` | Yes |
+| Get Role by Name | `GET` | `/api/roles/name/{name}` | Yes |
 | Update Role | `PUT` | `/api/roles/{id}` | Yes |
 | Delete Role | `DELETE`| `/api/roles/{id}` | Yes |
 | Assign Permissions | `PUT` | `/api/roles/permissions` | Yes |
@@ -134,5 +159,12 @@ Here is a list of the main operations you can perform. For protected endpoints, 
 | Create Permission | `POST` | `/api/permissions` | Yes |
 | Get All Permissions | `GET` | `/api/permissions` | Yes |
 | Get Permission by ID| `GET` | `/api/permissions/{id}`| Yes |
+| Get Permissions by Service Name | `GET` | `/api/permissions/name/{serviceName}` | Yes |
 | Update Permission | `PUT` | `/api/permissions/{id}`| Yes |
 | Delete Permission | `DELETE`| `/api/permissions/{id}`| Yes |
+
+### Password Reset
+| Action | Method | URL | Protected |
+| --- | --- | --- | --- |
+| Request Password Reset | `POST` | `/api/password/reset-request` | No (Sends OTP to email) |
+| Reset Password | `POST` | `/api/password/reset` | No (Requires OTP and email) |
