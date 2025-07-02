@@ -33,7 +33,9 @@ public class AuthorizationConfig {
 
     private static final String[] PERMITTED_PUBLIC_APIS = {
             "/api/users/register/**",
-            "/api/auth/**"
+            "/api/auth/**",
+            "/api/password/reset-request",
+            "/api/password/reset",
     };
 
     private static final String[] WHITELISTED_OPENAPI_ENDPOINTS = {

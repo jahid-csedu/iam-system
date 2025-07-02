@@ -29,6 +29,7 @@ repositories {
 }
 
 dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -50,9 +51,11 @@ dependencies {
 
 apply from: 'jacoco_excludes.gradle'
 
+
 tasks.named('test') {
     useJUnitPlatform()
     finalizedBy jacocoTestReport
+    systemProperties loadEnvVariables()
 }
 
 jacocoTestReport {
@@ -65,4 +68,24 @@ jacocoTestReport {
             fileTree(dir: it, exclude: jacocoExcludes)
         }))
     }
+}
+
+bootRun {
+    environment loadEnvVariables()
+}
+
+def loadEnvVariables() {
+    def envVariables = [:]
+    File envFile = project.file('.env')
+    if (envFile.exists()) {
+        envFile.eachLine { line ->
+            if (line.contains('=')) {
+                def parts = line.split('=', 2)
+                def key = parts[0].trim()
+                def value = parts[1].trim()
+                envVariables[key] = value
+            }
+        }
+    }
+    return envVariables
 }
