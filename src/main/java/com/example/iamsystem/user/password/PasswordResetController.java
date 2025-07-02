@@ -17,12 +17,12 @@ public class PasswordResetController {
     @PostMapping("/reset-request")
     public ResponseEntity<String> requestPasswordReset(@RequestParam("email") String email) {
         passwordResetService.createPasswordResetTokenForUser(email);
-        return ResponseEntity.ok("Password reset token sent to your email.");
+        return ResponseEntity.ok("Password reset OTP sent to your email.");
     }
 
     @PostMapping("/reset")
-    public ResponseEntity<String> resetPassword(@RequestParam("token") String token, @RequestParam("email") String email) {
-        passwordResetService.resetPassword(token, email);
+    public ResponseEntity<String> resetPassword(@RequestParam("otp") String otp, @RequestParam("email") String email) {
+        passwordResetService.resetPassword(otp, email);
         return ResponseEntity.ok("Your new password has been sent to your email.");
     }
 }

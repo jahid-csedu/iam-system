@@ -1,7 +1,7 @@
 package com.example.iamsystem.user.password;
 
 import com.example.iamsystem.exception.DataNotFoundException;
-import com.example.iamsystem.exception.InvalidPasswordResetTokenException;
+import com.example.iamsystem.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.user.UserRepository;
 import com.example.iamsystem.user.model.entity.User;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +16,7 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,44 +24,51 @@ import java.util.stream.Collectors;
 public class PasswordResetService {
 
     private final UserRepository userRepository;
-    private final PasswordResetTokenRepository tokenRepository;
+    private final PasswordResetOTPRepository otpRepository;
     private final JavaMailSender mailSender;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${password.reset.token.expiration.minutes}")
+    @Value("${password.reset.otp.expiration.minutes}")
     private int expiryTimeInMinutes;
 
     public void createPasswordResetTokenForUser(String email) {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new DataNotFoundException("User not found"));
-        String token = UUID.randomUUID().toString();
-        PasswordResetToken myToken = new PasswordResetToken();
-        myToken.setUser(user);
-        myToken.setToken(token);
-        myToken.setExpiryDate(calculateExpiryDate(expiryTimeInMinutes));
-        tokenRepository.save(myToken);
+
+        // Delete any existing OTP for this user
+        PasswordResetOTP existingOtp = otpRepository.findByUser(user);
+        if (existingOtp != null) {
+            otpRepository.delete(existingOtp);
+        }
+
+        String otp = generateOTP();
+        PasswordResetOTP myOtp = new PasswordResetOTP();
+        myOtp.setUser(user);
+        myOtp.setOtp(otp);
+        myOtp.setExpiryDate(calculateExpiryDate(expiryTimeInMinutes));
+        otpRepository.save(myOtp);
 
         SimpleMailMessage emailMessage = new SimpleMailMessage();
         emailMessage.setTo(user.getEmail());
         emailMessage.setSubject("Password Reset Request");
-        emailMessage.setText("To reset your password, use the following token: " + token);
+        emailMessage.setText("To reset your password, use the following OTP: " + otp);
         mailSender.send(emailMessage);
     }
 
-    public void resetPassword(String token, String email) {
-        PasswordResetToken resetToken = tokenRepository.findByToken(token);
-        if (resetToken == null) {
-            throw new InvalidPasswordResetTokenException("Invalid token");
+    public void resetPassword(String otp, String email) {
+        PasswordResetOTP resetOtp = otpRepository.findByOtp(otp);
+        if (resetOtp == null) {
+            throw new InvalidPasswordResetOTPException("Invalid OTP");
         }
 
-        if (!resetToken.getUser().getEmail().equals(email)) {
-            throw new InvalidPasswordResetTokenException("Token does not belong to this user");
+        if (!resetOtp.getUser().getEmail().equals(email)) {
+            throw new InvalidPasswordResetOTPException("OTP does not belong to this user");
         }
 
-        if (resetToken.getExpiryDate().before(new Date())) {
-            throw new InvalidPasswordResetTokenException("Token has expired");
+        if (resetOtp.getExpiryDate().before(new Date())) {
+            throw new InvalidPasswordResetOTPException("OTP has expired");
         }
 
-        User user = resetToken.getUser();
+        User user = resetOtp.getUser();
         String newPassword = generateSecurePassword();
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
@@ -72,7 +79,13 @@ public class PasswordResetService {
         emailMessage.setText("Your new password is: " + newPassword);
         mailSender.send(emailMessage);
 
-        tokenRepository.delete(resetToken);
+        otpRepository.delete(resetOtp);
+    }
+
+    private String generateOTP() {
+        Random random = new Random();
+        int otp = 100000 + random.nextInt(900000); // Generates a 6-digit number
+        return String.valueOf(otp);
     }
 
     private String generateSecurePassword() {

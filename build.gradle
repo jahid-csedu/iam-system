@@ -67,3 +67,18 @@ jacocoTestReport {
         }))
     }
 }
+
+// Task to load environment variables from .env file
+bootRun {
+    File envFile = project.file('.env')
+    if (envFile.exists()) {
+        envFile.eachLine { line ->
+            if (line.contains('=')) {
+                def parts = line.split('=', 2)
+                def key = parts[0].trim()
+                def value = parts[1].trim()
+                environment key, value
+            }
+        }
+    }
+}

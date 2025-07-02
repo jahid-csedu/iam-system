@@ -50,7 +50,28 @@ Follow the installation instructions for your operating system.
 
 If everything is successful, you'll see logs from both the `db` and `app` services. Look for messages indicating that the Spring Boot application has started successfully (e.g., "Started IamSystemApplication").
 
-### Step 3: Test the API with Postman
+### Step 3: Configure Environment Variables (for local development)
+
+For local development, sensitive credentials like email passwords are not committed to Git. Instead, they are loaded from a `.env` file.
+
+1.  **Create your `.env` file:** Copy the provided `example.env` file to a new file named `.env` in the project root:
+    ```bash
+    cp example.env .env
+    ```
+    (On Windows, you can use `copy example.env .env`)
+
+2.  **Edit `.env`:** Open the newly created `.env` file and replace the placeholder values with your actual credentials (e.g., your Gmail address and the App Password you generated for your Google account).
+
+    ```properties
+    SPRING_MAIL_USERNAME=your-email@gmail.com
+    SPRING_MAIL_PASSWORD=your-app-password
+    ```
+
+    **Important:** The `.env` file is ignored by Git (`.gitignore`) and should **never** be committed to your repository.
+
+3.  **Run the application:** When you run the application using `./gradlew bootRun`, the `bootRun` task is configured to automatically load these environment variables from your `.env` file.
+
+### Step 4: Test the API with Postman
 
 Now you can use a tool like Postman to interact with the system. Here are a few key operations you can test:
 
@@ -145,5 +166,5 @@ Here is a list of the main operations you can perform. For protected endpoints, 
 ### Password Reset
 | Action | Method | URL | Protected |
 | --- | --- | --- | --- |
-| Request Password Reset | `POST` | `/api/password/reset-request` | No |
-| Reset Password | `POST` | `/api/password/reset` | No |
+| Request Password Reset | `POST` | `/api/password/reset-request` | No (Sends OTP to email) |
+| Reset Password | `POST` | `/api/password/reset` | No (Requires OTP and email) |
