@@ -19,6 +19,15 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+import static com.example.iamsystem.constant.PasswordResetConstants.INVALID_OTP;
+import static com.example.iamsystem.constant.PasswordResetConstants.OTP_DOES_NOT_BELONG_TO_USER;
+import static com.example.iamsystem.constant.PasswordResetConstants.OTP_HAS_EXPIRED;
+import static com.example.iamsystem.constant.PasswordResetConstants.PASSWORD_RESET_REQUEST_BODY_PREFIX;
+import static com.example.iamsystem.constant.PasswordResetConstants.PASSWORD_RESET_REQUEST_SUBJECT;
+import static com.example.iamsystem.constant.PasswordResetConstants.PASSWORD_RESET_SUCCESS_BODY_PREFIX;
+import static com.example.iamsystem.constant.PasswordResetConstants.PASSWORD_RESET_SUCCESS_SUBJECT;
+import static com.example.iamsystem.constant.PasswordResetConstants.USER_NOT_FOUND;
+
 @Service
 @RequiredArgsConstructor
 public class PasswordResetService {
@@ -32,7 +41,7 @@ public class PasswordResetService {
     private int expiryTimeInMinutes;
 
     public void createPasswordResetTokenForUser(String email) {
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new DataNotFoundException("User not found"));
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
 
         // Delete any existing OTP for this user
         PasswordResetOTP existingOtp = otpRepository.findByUser(user);
@@ -49,23 +58,23 @@ public class PasswordResetService {
 
         SimpleMailMessage emailMessage = new SimpleMailMessage();
         emailMessage.setTo(user.getEmail());
-        emailMessage.setSubject("Password Reset Request");
-        emailMessage.setText("To reset your password, use the following OTP: " + otp);
+        emailMessage.setSubject(PASSWORD_RESET_REQUEST_SUBJECT);
+        emailMessage.setText(PASSWORD_RESET_REQUEST_BODY_PREFIX + otp);
         mailSender.send(emailMessage);
     }
 
     public void resetPassword(String otp, String email) {
         PasswordResetOTP resetOtp = otpRepository.findByOtp(otp);
         if (resetOtp == null) {
-            throw new InvalidPasswordResetOTPException("Invalid OTP");
+            throw new InvalidPasswordResetOTPException(INVALID_OTP);
         }
 
         if (!resetOtp.getUser().getEmail().equals(email)) {
-            throw new InvalidPasswordResetOTPException("OTP does not belong to this user");
+            throw new InvalidPasswordResetOTPException(OTP_DOES_NOT_BELONG_TO_USER);
         }
 
         if (resetOtp.getExpiryDate().before(new Date())) {
-            throw new InvalidPasswordResetOTPException("OTP has expired");
+            throw new InvalidPasswordResetOTPException(OTP_HAS_EXPIRED);
         }
 
         User user = resetOtp.getUser();
@@ -75,8 +84,8 @@ public class PasswordResetService {
 
         SimpleMailMessage emailMessage = new SimpleMailMessage();
         emailMessage.setTo(user.getEmail());
-        emailMessage.setSubject("Password Reset");
-        emailMessage.setText("Your new password is: " + newPassword);
+        emailMessage.setSubject(PASSWORD_RESET_SUCCESS_SUBJECT);
+        emailMessage.setText(PASSWORD_RESET_SUCCESS_BODY_PREFIX + newPassword);
         mailSender.send(emailMessage);
 
         otpRepository.delete(resetOtp);
@@ -88,26 +97,25 @@ public class PasswordResetService {
         return String.valueOf(otp);
     }
 
+    private static final String UPPER_CASE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static final String LOWER_CASE_LETTERS = "abcdefghijklmnopqrstuvwxyz";
+    private static final String NUMBERS = "0123456789";
+    private static final String SPECIAL_CHARS = "@#!$%^&-+=()";
+    private static final String ALL_CHARS = UPPER_CASE_LETTERS + LOWER_CASE_LETTERS + NUMBERS + SPECIAL_CHARS;
+
     private String generateSecurePassword() {
-        String upperCaseLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        String lowerCaseLetters = "abcdefghijklmnopqrstuvwxyz";
-        String numbers = "0123456789";
-        String specialChars = "@#!$%^&-+=()";
-
-        String allChars = upperCaseLetters + lowerCaseLetters + numbers + specialChars;
-
         SecureRandom random = new SecureRandom();
         StringBuilder password = new StringBuilder();
 
         // Ensure at least one of each required character type
-        password.append(upperCaseLetters.charAt(random.nextInt(upperCaseLetters.length())));
-        password.append(lowerCaseLetters.charAt(random.nextInt(lowerCaseLetters.length())));
-        password.append(numbers.charAt(random.nextInt(numbers.length())));
-        password.append(specialChars.charAt(random.nextInt(specialChars.length())));
+        password.append(UPPER_CASE_LETTERS.charAt(random.nextInt(UPPER_CASE_LETTERS.length())));
+        password.append(LOWER_CASE_LETTERS.charAt(random.nextInt(LOWER_CASE_LETTERS.length())));
+        password.append(NUMBERS.charAt(random.nextInt(NUMBERS.length())));
+        password.append(SPECIAL_CHARS.charAt(random.nextInt(SPECIAL_CHARS.length())));
 
         // Fill the rest of the password with random characters
         for (int i = 4; i < 12; i++) {
-            password.append(allChars.charAt(random.nextInt(allChars.length())));
+            password.append(ALL_CHARS.charAt(random.nextInt(ALL_CHARS.length())));
         }
 
         // Shuffle the password to randomize the character positions
