@@ -26,8 +26,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import static com.example.iamsystem.constant.TokenType.ACCESS_TOKEN;
-import static com.example.iamsystem.constant.TokenType.REFRESH_TOKEN;
+import static com.example.iamsystem.enums.TokenType.ACCESS_TOKEN;
+import static com.example.iamsystem.enums.TokenType.REFRESH_TOKEN;
 
 @RestController
 @RequestMapping("/api/auth")

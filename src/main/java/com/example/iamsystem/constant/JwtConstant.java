@@ -1,8 +1,9 @@
 package com.example.iamsystem.constant;
 
-import lombok.experimental.UtilityClass;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
-@UtilityClass
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class JwtConstant {
     public static final String REQUEST_HEADER = "Authorization";
     public static final String ACCESS_TOKEN_SECRET_KEY = "dGhpc0lzTXlEZWZhdWx0U2VjdXJpdHlKd3RTZWNyZXQ=";

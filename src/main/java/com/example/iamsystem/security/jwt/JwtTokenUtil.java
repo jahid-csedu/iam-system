@@ -1,6 +1,6 @@
 package com.example.iamsystem.security.jwt;
 
-import com.example.iamsystem.constant.TokenType;
+import com.example.iamsystem.enums.TokenType;
 import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.entity.User;
 import io.jsonwebtoken.Claims;
@@ -17,14 +17,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 
 import static com.example.iamsystem.constant.JwtConstant.ACCESS_TOKEN_SECRET_KEY;
 import static com.example.iamsystem.constant.JwtConstant.JWT_ACCESS_TOKEN_VALIDITY;
 import static com.example.iamsystem.constant.JwtConstant.JWT_REFRESH_TOKEN_VALIDITY;
 import static com.example.iamsystem.constant.JwtConstant.REFRESH_TOKEN_SECRET;
-import static com.example.iamsystem.constant.TokenType.ACCESS_TOKEN;
+import static com.example.iamsystem.enums.TokenType.ACCESS_TOKEN;
 
 @Component
 @Slf4j
