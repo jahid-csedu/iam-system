@@ -11,11 +11,13 @@ import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.model.entity.User;
+import com.example.iamsystem.user.util.DateUtil;
 import com.example.iamsystem.user.util.UserRoleAttachmentUtil;
 import com.example.iamsystem.user.util.UserValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.mapstruct.factory.Mappers;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,9 @@ public class UserService {
     private static final String USER_CREATE_PERMISSION = "IAM:WRITE";
     private static final String USER_UPDATE_PERMISSION = "IAM:UPDATE";
 
+    @Value("${password.expiration.days}")
+    private int passwordExpiryTimeInDays;
+
     public UserDto registerUser(UserRegistrationDto userDto) {
         log.debug("Attempting to register new user with username: {}", userDto.getUsername());
         validateRequest(userDto);
@@ -53,7 +58,7 @@ public class UserService {
         if (!userDto.isRootUser()) {
             user.setCreatedBy(getCurrentUser());
         }
-
+        user.setPasswordExpiryDate(DateUtil.calculateExpiryDate(passwordExpiryTimeInDays));
         User savedUser = userRepository.save(user);
         log.info("User registered successfully with ID: {}", savedUser.getId());
         return userMapper.toDto(savedUser);
@@ -301,6 +306,7 @@ public class UserService {
         log.debug("Updating password for user: {}", user.getUsername());
         userValidator.validatePasswordPolicy(newPassword);
         user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPasswordExpiryDate(DateUtil.calculateExpiryDate(passwordExpiryTimeInDays));
         userRepository.save(user);
         log.info("Password updated successfully for user: {}", user.getUsername());
     }

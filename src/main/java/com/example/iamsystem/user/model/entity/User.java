@@ -12,6 +12,7 @@ import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -50,6 +51,8 @@ public class User implements Serializable {
     private boolean active;
     @Column(name = "password_expired")
     private boolean passwordExpired;
+    @Column(name = "password_expiry_date")
+    private Instant passwordExpiryDate;
     @Column(name = "user_locked")
     private boolean userLocked;
     @Column(name = "failed_login_attempts")
@@ -71,6 +74,8 @@ public class User implements Serializable {
     private Instant createdAt;
     @UpdateTimestamp
     private Instant updatedAt;
+    @Version
+    private int version;
 
     public void addRole(Role role) {
         this.roles.add(role);

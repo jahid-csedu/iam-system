@@ -24,6 +24,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -94,7 +95,7 @@ class RoleControllerTest {
         adminRole = roleRepository.save(adminRole);
 
         // Create a test user with admin role
-        testUser = new User(null, "testuser", passwordEncoder.encode("password"), "Test User", "test@example.com", true, true, false, false, 0, null, new HashSet<>(), null, null, null);
+        testUser = new User(null, "testuser", passwordEncoder.encode("password"), "Test User", "test@example.com", true, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
         testUser.getRoles().add(adminRole);
         testUser = userRepository.save(testUser);
 
@@ -103,7 +104,7 @@ class RoleControllerTest {
         readOnlyRole.getPermissions().add(readPermission);
         readOnlyRole = roleRepository.save(readOnlyRole);
 
-        readOnlyUser = new User(null, "readonlyuser", passwordEncoder.encode("password"), "Read Only User", "readonly@example.com", false, true, false, false, 0, null, new HashSet<>(), null, null, null);
+        readOnlyUser = new User(null, "readonlyuser", passwordEncoder.encode("password"), "Read Only User", "readonly@example.com", false, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
         readOnlyUser.getRoles().add(readOnlyRole);
         readOnlyUser = userRepository.save(readOnlyUser);
     }

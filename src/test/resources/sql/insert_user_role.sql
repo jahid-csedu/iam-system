@@ -30,11 +30,13 @@ INSERT INTO
     `full_name`,
     `password`,
     `password_expired`,
+    `password_expiry_date`,
     `is_root_user`,
     `updated_at`,
     `user_locked`,
     `username`,
-    `created_by`
+    `created_by`,
+    `version`
   )
 VALUES
   (
@@ -47,11 +49,13 @@ VALUES
     'Root User',
     '$2a$10$aPjQgDcFSRBvSY6QY2jRgOz28DM6D0Go./U/fLJNblCHlx4kwIN1O',
     '0',
+    '3025-06-29 11:16:25.108024',
     '1',
     '2025-06-29 11:16:25.108024',
     '0',
     'root',
-    NULL
+    NULL,
+    0
   );
 
 INSERT INTO
@@ -65,11 +69,13 @@ INSERT INTO
     `full_name`,
     `password`,
     `password_expired`,
+    `password_expiry_date`,
     `is_root_user`,
     `updated_at`,
     `user_locked`,
     `username`,
-    `created_by`
+    `created_by`,
+    `version`
   )
 VALUES
   (
@@ -82,9 +88,11 @@ VALUES
     'Normal User',
     '$2a$10$aPjQgDcFSRBvSY6QY2jRgOz28DM6D0Go./U/fLJNblCHlx4kwIN1O',
     '0',
+    '3025-06-29 11:16:25.108024',
     '0',
     '2025-06-29 11:16:25.108024',
     '0',
     'user',
-    '1'
+    '1',
+    0
   );

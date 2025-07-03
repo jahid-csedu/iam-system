@@ -1,8 +1,9 @@
 package com.example.iamsystem.constant;
 
-import lombok.experimental.UtilityClass;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
-@UtilityClass
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class PermissionConstants {
     public static final String IAM_SERVICE_NAME = "IAM";
 }
