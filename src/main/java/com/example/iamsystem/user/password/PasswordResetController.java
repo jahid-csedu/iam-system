@@ -19,7 +19,7 @@ public class PasswordResetController {
 
     @PostMapping("/reset-request")
     public ResponseEntity<String> requestPasswordReset(@RequestParam("email") String email) {
-        passwordResetService.createPasswordResetTokenForUser(email);
+        passwordResetService.createPasswordResetOtpForUser(email);
         return ResponseEntity.ok(OTP_SENT_SUCCESS);
     }
 

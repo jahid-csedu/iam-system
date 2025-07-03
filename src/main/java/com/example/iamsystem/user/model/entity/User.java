@@ -50,6 +50,8 @@ public class User implements Serializable {
     private boolean active;
     @Column(name = "password_expired")
     private boolean passwordExpired;
+    @Column(name = "password_expiry_date")
+    private Instant passwordExpiryDate;
     @Column(name = "user_locked")
     private boolean userLocked;
     @Column(name = "failed_login_attempts")
