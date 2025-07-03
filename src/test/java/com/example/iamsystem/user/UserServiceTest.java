@@ -27,6 +27,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -110,6 +111,7 @@ class UserServiceTest {
         user.setUsername("testUser");
         user.setPassword("encoded_password");
         user.setEmail("test@example.com");
+        user.setPasswordExpiryDate(Instant.now().plusSeconds(1000));
         user.setRoles(roles);
 
         childUser = new User();

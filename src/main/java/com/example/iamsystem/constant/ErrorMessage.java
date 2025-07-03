@@ -1,8 +1,9 @@
 package com.example.iamsystem.constant;
 
-import lombok.experimental.UtilityClass;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
-@UtilityClass
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ErrorMessage {
     public static final String USERNAME_REQUIRED = "Username is required";
     public static final String USER_NOT_FOUND = "User not found";

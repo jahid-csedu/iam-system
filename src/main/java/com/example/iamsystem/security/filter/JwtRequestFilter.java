@@ -21,7 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Objects;
 
-import static com.example.iamsystem.constant.TokenType.ACCESS_TOKEN;
+import static com.example.iamsystem.enums.TokenType.ACCESS_TOKEN;
 
 @Component
 @RequiredArgsConstructor

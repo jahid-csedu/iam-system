@@ -8,6 +8,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -39,13 +40,15 @@ public record DefaultUserDetails(User user) implements UserDetails {
 
     @Override
     public boolean isAccountNonExpired() {
-        return !user.isPasswordExpired();
+        return !user.isPasswordExpired()
+                && (Objects.isNull(user.getPasswordExpiryDate())
+                    || user.getPasswordExpiryDate().isAfter(Instant.now()));
     }
 
     @Override
     public boolean isAccountNonLocked() {
         return !user.isUserLocked()
-                || (user.getAccountLockedUntil() != null
+                || (Objects.nonNull(user.getAccountLockedUntil())
                     && user.getAccountLockedUntil().isBefore(Instant.now()));
     }
 
