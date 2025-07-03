@@ -1,6 +1,8 @@
 package com.example.iamsystem.security.jwt;
 
 import com.example.iamsystem.constant.TokenType;
+import com.example.iamsystem.security.user.DefaultUserDetails;
+import com.example.iamsystem.user.model.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -15,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 import static com.example.iamsystem.constant.JwtConstant.ACCESS_TOKEN_SECRET_KEY;
@@ -27,6 +30,9 @@ import static com.example.iamsystem.constant.TokenType.ACCESS_TOKEN;
 @Slf4j
 public class JwtTokenUtil implements Serializable {
 
+    public static final String VERSION = "version";
+    public static final String AUTHORITIES = "authorities";
+
     public String getUsernameFromToken(String token, TokenType tokenType) {
         log.debug("Extracting username from token of type: {}", tokenType);
         return getClaimFromToken(token, Claims::getSubject, tokenType);
@@ -35,6 +41,12 @@ public class JwtTokenUtil implements Serializable {
     public Date getExpirationDateFromToken(String token, TokenType tokenType) {
         log.debug("Extracting expiration date from token of type: {}", tokenType);
         return getClaimFromToken(token, Claims::getExpiration, tokenType);
+    }
+
+    public int getVersionFromToken(String token, TokenType tokenType) {
+        int version = (int) getClaimFromToken(token, claims -> claims.getOrDefault(VERSION, 0), tokenType);
+        log.debug("Extracted version from token: {}", version);
+        return version;
     }
 
     public <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver, TokenType tokenType) {
@@ -66,8 +78,10 @@ public class JwtTokenUtil implements Serializable {
         log.debug("Generating {} token for user: {}", tokenType, userDetails.getUsername());
         Map<String, Object> claims = new HashMap<>();
         if (tokenType.equals(ACCESS_TOKEN)) {
-            claims.put("authorities", userDetails.getAuthorities());
+            claims.put(AUTHORITIES, userDetails.getAuthorities());
         }
+        User user = getUser(userDetails);
+        claims.put(VERSION, user.getVersion());
         String token = doGenerateToken(claims, userDetails.getUsername(), tokenType);
         log.info("Successfully generated {} token for user: {}", tokenType, userDetails.getUsername());
         return token;
@@ -88,7 +102,12 @@ public class JwtTokenUtil implements Serializable {
     public boolean validateToken(String token, UserDetails userDetails, TokenType tokenType) {
         log.debug("Validating {} token for user: {}", tokenType, userDetails.getUsername());
         final String username = getUsernameFromToken(token, tokenType);
-
+        User user = getUser(userDetails);
+        int version = getVersionFromToken(token, tokenType);
+        if(user.getVersion() != version) {
+            log.error("Token version mismatch. Extracted version: {}, user version: {}", version, user.getVersion());
+            return false;
+        }
         boolean isValid = (username.equals(userDetails.getUsername()) && !isTokenExpired(token, tokenType));
         if (isValid) {
             log.info("{} token is valid for user: {}", tokenType, userDetails.getUsername());
@@ -96,6 +115,11 @@ public class JwtTokenUtil implements Serializable {
             log.warn("{} token is invalid for user: {}", tokenType, userDetails.getUsername());
         }
         return isValid;
+    }
+
+    private static User getUser(UserDetails userDetails) {
+        DefaultUserDetails defaultUserDetails = (DefaultUserDetails) userDetails;
+        return defaultUserDetails.user();
     }
 
     public boolean validateToken(String token, TokenType tokenType) {

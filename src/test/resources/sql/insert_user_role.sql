@@ -35,7 +35,8 @@ INSERT INTO
     `updated_at`,
     `user_locked`,
     `username`,
-    `created_by`
+    `created_by`,
+    `version`
   )
 VALUES
   (
@@ -53,7 +54,8 @@ VALUES
     '2025-06-29 11:16:25.108024',
     '0',
     'root',
-    NULL
+    NULL,
+    0
   );
 
 INSERT INTO
@@ -72,7 +74,8 @@ INSERT INTO
     `updated_at`,
     `user_locked`,
     `username`,
-    `created_by`
+    `created_by`,
+    `version`
   )
 VALUES
   (
@@ -90,5 +93,6 @@ VALUES
     '2025-06-29 11:16:25.108024',
     '0',
     'user',
-    '1'
+    '1',
+    0
   );
