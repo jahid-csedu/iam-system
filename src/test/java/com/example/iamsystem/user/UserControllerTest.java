@@ -221,7 +221,7 @@ class UserControllerTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
-                        .param("userId", String.valueOf(subordinateUser.getId()))
+                        .param("username", subordinateUser.getUsername())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(passwordChangeDto)))
                 .andExpect(status().isNoContent())
@@ -255,7 +255,7 @@ class UserControllerTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
-                        .param("userId", String.valueOf(rootUserForTest.getId()))
+                        .param("username", rootUserForTest.getUsername())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(passwordChangeDto)))
                 .andExpect(status().isForbidden());

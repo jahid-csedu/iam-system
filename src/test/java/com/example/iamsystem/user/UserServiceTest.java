@@ -116,6 +116,7 @@ class UserServiceTest {
 
         childUser = new User();
         childUser.setId(2L);
+        childUser.setUsername("user");
 
         userDto = new UserDto();
         userDto.setId(1L);
@@ -233,7 +234,7 @@ class UserServiceTest {
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedNewPassword");
 
         // Act
-        userService.changePassword(passwordChangeDto, Optional.empty());
+        userService.changePassword(passwordChangeDto, null);
 
         // Assert
         verify(userRepository).save(user);
@@ -246,11 +247,11 @@ class UserServiceTest {
         childUser.setCreatedBy(user);
         mockSecurityContext(user);
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
-        when(userRepository.findById(2L)).thenReturn(Optional.of(childUser));
+        when(userRepository.findByUsername(childUser.getUsername())).thenReturn(Optional.of(childUser));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedNewPassword");
 
         // Act
-        userService.changePassword(passwordChangeDto, Optional.of(2L));
+        userService.changePassword(passwordChangeDto, childUser.getUsername());
 
         // Assert
         verify(userRepository).save(childUser);
@@ -264,7 +265,7 @@ class UserServiceTest {
         when(passwordEncoder.matches("wrongOldPassword", user.getPassword())).thenReturn(false);
 
         // Act & Assert
-        assertThrows(InvalidPasswordException.class, () -> userService.changePassword(passwordChangeDto, Optional.empty()));
+        assertThrows(InvalidPasswordException.class, () -> userService.changePassword(passwordChangeDto, null));
     }
 
     @Test
@@ -272,10 +273,10 @@ class UserServiceTest {
         // Arrange
         mockSecurityContext(user);
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
-        when(userRepository.findById(2L)).thenReturn(Optional.of(childUser));
+        when(userRepository.findByUsername(childUser.getUsername())).thenReturn(Optional.of(childUser));
 
         // Act & Assert
-        assertThrows(NoAccessException.class, () -> userService.changePassword(passwordChangeDto, Optional.of(2L)));
+        assertThrows(NoAccessException.class, () -> userService.changePassword(passwordChangeDto, childUser.getUsername()));
     }
 
     @Test
@@ -284,10 +285,10 @@ class UserServiceTest {
         user.setRootUser(true);
         mockSecurityContext(user);
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
-        when(userRepository.findById(2L)).thenReturn(Optional.of(childUser));
+        when(userRepository.findByUsername(childUser.getUsername())).thenReturn(Optional.of(childUser));
 
         // Act & Assert
-        assertThrows(NoAccessException.class, () -> userService.changePassword(passwordChangeDto, Optional.of(2L)));
+        assertThrows(NoAccessException.class, () -> userService.changePassword(passwordChangeDto, childUser.getUsername()));
     }
 
     @Test
@@ -299,7 +300,7 @@ class UserServiceTest {
         doThrow(new InvalidPasswordException("Password policy violation")).when(userValidator).validatePasswordPolicy("weak");
 
         // Act & Assert
-        assertThrows(InvalidPasswordException.class, () -> userService.changePassword(passwordChangeDto, Optional.empty()));
+        assertThrows(InvalidPasswordException.class, () -> userService.changePassword(passwordChangeDto, null));
     }
 
     @Test

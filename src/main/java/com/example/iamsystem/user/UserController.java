@@ -53,9 +53,9 @@ public class UserController {
     @PatchMapping("/password")
     @Operation(summary = "Change user password. Can be done by the user or a root user for each subordinates")
     public ResponseEntity<Void> changePassword(@RequestBody @Valid PasswordChangeDto passwordChangeDto,
-                                               @RequestParam(required = false) Long userId) {
+                                               @RequestParam(required = false) String username) {
         log.debug("Received request to change password");
-        userService.changePassword(passwordChangeDto, Optional.ofNullable(userId));
+        userService.changePassword(passwordChangeDto, username);
         log.info("Password changed successfully");
         return ResponseEntity.noContent().build();
     }

@@ -64,15 +64,15 @@ public class UserService {
         return userMapper.toDto(savedUser);
     }
 
-    public void changePassword(PasswordChangeDto passwordChangeDto, Optional<Long> userId) {
-        log.debug("Attempting to change password. User ID from request: {}", userId.orElse(null));
+    public void changePassword(PasswordChangeDto passwordChangeDto, String username) {
+        log.debug("Attempting to change password. Username from request: {}", username);
         User currentUser = getCurrentUser();
         if(Objects.isNull(currentUser)) {
             log.error("No Logged in user");
             throw new NoAccessException(USER_NOT_LOGGED_IN);
         }
-        if (userId.isPresent()) {
-            User userToUpdate = userRepository.findById(userId.get())
+        if (Objects.nonNull(username)) {
+            User userToUpdate = userRepository.findByUsername(username)
                     .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
             validatePasswordChangePermission(currentUser, userToUpdate);
             updatePassword(userToUpdate, passwordChangeDto.newPassword());
