@@ -1,5 +1,8 @@
 package com.example.iamsystem.user;
 
+import com.example.iamsystem.audit.AuditService;
+import com.example.iamsystem.audit.enums.AuditEventType;
+import com.example.iamsystem.audit.enums.AuditOutcome;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.InvalidPasswordException;
 import com.example.iamsystem.exception.NoAccessException;
@@ -16,6 +19,7 @@ import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.model.entity.User;
 import com.example.iamsystem.user.util.UserRoleAttachmentUtil;
 import com.example.iamsystem.user.util.UserValidator;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +32,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -37,6 +42,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.anySet;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doNothing;
@@ -65,6 +72,12 @@ class UserServiceTest {
 
     @Mock
     private PermissionService permissionService;
+
+    @Mock
+    private AuditService auditService;
+
+    @Mock
+    private HttpServletRequest request;
 
     @Mock
     private SecurityContext securityContext;
@@ -132,6 +145,7 @@ class UserServiceTest {
         mockSecurityContext(null);
         when(passwordEncoder.encode(anyString())).thenReturn("encoded_password");
         when(userRepository.save(any(User.class))).thenReturn(user);
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act
         UserDto registeredUser = userService.registerUser(userRegistrationDto);
@@ -142,6 +156,7 @@ class UserServiceTest {
         verify(userValidator).validateEmailAvailable(anyString());
         verify(passwordEncoder).encode(anyString());
         verify(userRepository).save(any(User.class));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.USER_REGISTERED), eq("SYSTEM"), eq(user.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -153,6 +168,7 @@ class UserServiceTest {
         user.setCreatedBy(user);
         when(permissionService.hasPermission(anyString())).thenReturn(true);
         when(userRepository.save(any(User.class))).thenReturn(user);
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act
         UserDto registeredUser = userService.registerUser(userRegistrationDto);
@@ -164,16 +180,18 @@ class UserServiceTest {
         verify(userValidator).validateEmailAvailable(anyString());
         verify(passwordEncoder).encode(anyString());
         verify(userRepository).save(any(User.class));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.USER_REGISTERED), eq(user.getUsername()), eq(user.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
     void registerUser_whenUsernameNotAvailable_thenValidationFailure() {
         // Arrange
         doThrow(new UserAlreadyExistsException("Username not available")).when(userValidator).validateUsernameAvailable(anyString());
-
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.registerUser(userRegistrationDto));
         verify(userValidator).validateUsernameAvailable(anyString());
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.USER_REGISTRATION_FAILED), anyString(), eq(userRegistrationDto.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -181,10 +199,11 @@ class UserServiceTest {
         // Arrange
         doNothing().when(userValidator).validateUsernameAvailable(anyString());
         doThrow(new UserAlreadyExistsException("Email not available")).when(userValidator).validateEmailAvailable(anyString());
-
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.registerUser(userRegistrationDto));
         verify(userValidator).validateUsernameAvailable(anyString());
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.USER_REGISTRATION_FAILED), anyString(), eq(userRegistrationDto.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -232,12 +251,16 @@ class UserServiceTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("oldPassword", "newPassword");
         when(passwordEncoder.matches("oldPassword", user.getPassword())).thenReturn(true);
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedNewPassword");
+        when(userRepository.save(any(User.class))).thenReturn(user);
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act
         userService.changePassword(passwordChangeDto, null);
 
         // Assert
         verify(userRepository).save(user);
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_CHANGE_SUCCESS), eq(user.getUsername()), eq(user.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_UPDATED), eq(user.getUsername()), eq(user.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -249,12 +272,16 @@ class UserServiceTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
         when(userRepository.findByUsername(childUser.getUsername())).thenReturn(Optional.of(childUser));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedNewPassword");
+        when(userRepository.save(any(User.class))).thenReturn(childUser);
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act
         userService.changePassword(passwordChangeDto, childUser.getUsername());
 
         // Assert
         verify(userRepository).save(childUser);
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_CHANGE_SUCCESS), eq(user.getUsername()), eq(childUser.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_UPDATED), eq(user.getUsername()), eq(childUser.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -263,9 +290,11 @@ class UserServiceTest {
         mockSecurityContext(user);
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("wrongOldPassword", "newPassword");
         when(passwordEncoder.matches("wrongOldPassword", user.getPassword())).thenReturn(false);
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(InvalidPasswordException.class, () -> userService.changePassword(passwordChangeDto, null));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_CHANGE_FAILURE), eq(user.getUsername()), eq(user.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -274,9 +303,11 @@ class UserServiceTest {
         mockSecurityContext(user);
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
         when(userRepository.findByUsername(childUser.getUsername())).thenReturn(Optional.of(childUser));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(NoAccessException.class, () -> userService.changePassword(passwordChangeDto, childUser.getUsername()));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_CHANGE_FAILURE), eq(user.getUsername()), eq(childUser.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -286,9 +317,11 @@ class UserServiceTest {
         mockSecurityContext(user);
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
         when(userRepository.findByUsername(childUser.getUsername())).thenReturn(Optional.of(childUser));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(NoAccessException.class, () -> userService.changePassword(passwordChangeDto, childUser.getUsername()));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_CHANGE_FAILURE), eq(user.getUsername()), eq(childUser.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -298,9 +331,11 @@ class UserServiceTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("oldPassword", "weak");
         when(passwordEncoder.matches("oldPassword", user.getPassword())).thenReturn(true);
         doThrow(new InvalidPasswordException("Password policy violation")).when(userValidator).validatePasswordPolicy("weak");
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(InvalidPasswordException.class, () -> userService.changePassword(passwordChangeDto, null));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_CHANGE_FAILURE), eq(user.getUsername()), eq(user.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -315,11 +350,13 @@ class UserServiceTest {
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
         when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
         when(userRepository.save(any(User.class))).thenReturn(user);
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         userService.assignRoles(userRoleAttachmentDto);
         verify(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
         verify(userRepository).save(any(User.class));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.ROLES_ASSIGNED), eq(user.getUsername()), eq(userRoleAttachmentDto.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -340,9 +377,11 @@ class UserServiceTest {
         Set<Long> roleIds = Set.of(1L);
         userRoleAttachmentDto.setRoleIds(roleIds);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.assignRoles(userRoleAttachmentDto));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.ROLES_ASSIGNMENT_FAILED), eq(user.getUsername()), eq(userRoleAttachmentDto.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -354,22 +393,28 @@ class UserServiceTest {
         Set<Long> roleIds = Set.of(1L);
         userRoleAttachmentDto.setRoleIds(roleIds);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.assignRoles(userRoleAttachmentDto));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.ROLES_ASSIGNMENT_FAILED), eq(childUser.getUsername()), eq(userRoleAttachmentDto.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
     void assignRoles_whenUserNotFound_AttachmentFailure() {
         // Arrange
+        user.setRootUser(true);
+        mockSecurityContext(user);
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("testUser");
         Set<Long> roleIds = Set.of(1L);
         userRoleAttachmentDto.setRoleIds(roleIds);
         doThrow(new DataNotFoundException("User not found")).when(userRepository).findByUsername(anyString());
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.assignRoles(userRoleAttachmentDto));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.ROLES_ASSIGNMENT_FAILED), eq("testUser"), eq(userRoleAttachmentDto.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -384,9 +429,11 @@ class UserServiceTest {
         when(permissionService.hasPermission(anyString())).thenReturn(true);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
         doThrow(new DataNotFoundException("Some roles not found")).when(userRoleAttachmentUtil).validateAndRetrieveRoles(anySet());
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.assignRoles(userRoleAttachmentDto));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.ROLES_ASSIGNMENT_FAILED), eq(user.getUsername()), eq(userRoleAttachmentDto.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -400,11 +447,14 @@ class UserServiceTest {
         when(permissionService.hasPermission(anyString())).thenReturn(true);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
         when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
+        when(userRepository.save(any(User.class))).thenReturn(user);
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         userService.removeRoles(userRoleAttachmentDto);
 
         verify(userRoleAttachmentUtil).removeRolesFromUser(user, roles);
-        verify(userRepository).save(user);
+        verify(userRepository).save(any(User.class));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.ROLES_REMOVED), eq(user.getUsername()), eq(userRoleAttachmentDto.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -425,9 +475,11 @@ class UserServiceTest {
         Set<Long> roleIds = Set.of(1L);
         userRoleAttachmentDto.setRoleIds(roleIds);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.removeRoles(userRoleAttachmentDto));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.ROLES_REMOVAL_FAILED), eq(user.getUsername()), eq(userRoleAttachmentDto.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
 
@@ -441,9 +493,11 @@ class UserServiceTest {
         Set<Long> roleIds = Set.of(1L);
         userRoleAttachmentDto.setRoleIds(roleIds);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.ofNullable(user));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.removeRoles(userRoleAttachmentDto));
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.ROLES_REMOVAL_FAILED), eq(childUser.getUsername()), eq(userRoleAttachmentDto.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -561,10 +615,12 @@ class UserServiceTest {
         mockSecurityContext(user);
         user.setRootUser(true);
         when(userRepository.findById(anyLong())).thenReturn(Optional.of(user));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         userService.deleteUser(1L);
 
         verify(userRepository, times(1)).deleteById(1L);
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.USER_DELETED), eq(user.getUsername()), eq(user.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -573,20 +629,25 @@ class UserServiceTest {
         user.setRootUser(false);
         childUser.setCreatedBy(user);
         when(userRepository.findById(anyLong())).thenReturn(Optional.of(childUser));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         userService.deleteUser(2L);
 
         verify(userRepository, times(1)).deleteById(2L);
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.USER_DELETED), eq(user.getUsername()), eq(childUser.getUsername()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
     void deleteUser_whenUserNotFound_thenThrowsException() {
+        mockSecurityContext(user);
         when(userRepository.findById(anyLong())).thenReturn(Optional.empty());
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         assertThrows(DataNotFoundException.class, () -> userService.deleteUser(2L));
 
         verify(userRepository, times(1)).findById(2L);
         verify(userRepository, times(0)).deleteById(2L);
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.USER_DELETION_FAILED), anyString(), eq("ID: 2"), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -594,20 +655,24 @@ class UserServiceTest {
         childUser.setRootUser(true);
         mockSecurityContext(user);
         when(userRepository.findById(anyLong())).thenReturn(Optional.of(childUser));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         assertThrows(NoAccessException.class, () -> userService.deleteUser(2L));
         verify(userRepository).findById(2L);
         verify(userRepository, times(0)).deleteById(2L);
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.USER_DELETION_FAILED), eq(user.getUsername()), eq(childUser.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
     void deleteUser_whenNonRootUserAndNotInTheSameTree_thenThrowsException() {
         mockSecurityContext(user);
         when(userRepository.findById(anyLong())).thenReturn(Optional.of(childUser));
+        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         assertThrows(NoAccessException.class, () -> userService.deleteUser(1L));
         verify(userRepository).findById(1L);
         verify(userRepository, times(0)).deleteById(1L);
+        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.USER_DELETION_FAILED), eq(user.getUsername()), eq(childUser.getUsername()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     private void mockSecurityContext(User user) {

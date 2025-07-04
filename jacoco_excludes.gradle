@@ -8,5 +8,10 @@ ext.jacocoExcludes = [
         'com/example/iamsystem/permission/model/**',
         'com/example/iamsystem/security/**',
         'com/example/iamsystem/util/authorization/RequirePermission.java',
-        'com/example/iamsystem/util/validators/**'
+        'com/example/iamsystem/util/validators/**',
+        'java/com/example/iamsystem/user/password/PasswordResetOTP.java',
+        'java/com/example/iamsystem/user/password/PasswordResetOTPRepository.java',
+        'java/com/example/iamsystem/user/UserRepository.java',
+        'java/com/example/iamsystem/role/RoleRepository.java',
+        'java/com/example/iamsystem/permission/PermissionRepository.java'
 ]

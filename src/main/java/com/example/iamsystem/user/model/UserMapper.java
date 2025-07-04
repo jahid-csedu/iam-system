@@ -1,4 +1,4 @@
-package com.example.iamsystem.user;
+package com.example.iamsystem.user.model;
 
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.user.model.dto.UserDto;

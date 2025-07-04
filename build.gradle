@@ -57,7 +57,7 @@ tasks.named('test') {
     useJUnitPlatform()
     finalizedBy jacocoTestReport
     systemProperties loadEnvVariables()
-    systemProperty "spring.application.version", version
+    systemProperty "spring.profiles.active", "test"
 }
 
 jacocoTestReport {
@@ -74,7 +74,6 @@ jacocoTestReport {
 
 bootRun {
     environment loadEnvVariables()
-    systemProperty "spring.application.version", version
 }
 
 def loadEnvVariables() {

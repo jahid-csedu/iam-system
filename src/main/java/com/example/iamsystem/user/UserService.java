@@ -1,11 +1,15 @@
 package com.example.iamsystem.user;
 
+import com.example.iamsystem.audit.AuditService;
+import com.example.iamsystem.audit.enums.AuditEventType;
+import com.example.iamsystem.audit.enums.AuditOutcome;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.InvalidPasswordException;
 import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.permission.PermissionService;
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
+import com.example.iamsystem.user.model.UserMapper;
 import com.example.iamsystem.user.model.dto.PasswordChangeDto;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
@@ -14,6 +18,7 @@ import com.example.iamsystem.user.model.entity.User;
 import com.example.iamsystem.user.util.DateUtil;
 import com.example.iamsystem.user.util.UserRoleAttachmentUtil;
 import com.example.iamsystem.user.util.UserValidator;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.mapstruct.factory.Mappers;
@@ -22,10 +27,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.example.iamsystem.constant.ErrorMessage.INVALID_OLD_PASSWORD;
 import static com.example.iamsystem.constant.ErrorMessage.NO_PERMISSION;
@@ -36,11 +43,18 @@ import static com.example.iamsystem.constant.ErrorMessage.USER_NOT_LOGGED_IN;
 @Slf4j
 @RequiredArgsConstructor
 public class UserService {
+    public static final String SYSTEM = "SYSTEM";
+    public static final String REASON = "reason";
+    public static final String UNKNOWN = "UNKNOWN";
+    public static final String ROLES_ASSIGNED = "roles_assigned";
+    public static final String ROLES_REMOVED = "roles_removed";
     private final UserValidator userValidator;
     private final UserRoleAttachmentUtil userRoleAttachmentUtil;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final PermissionService permissionService;
+    private final AuditService auditService;
+    private final HttpServletRequest request;
     private static final UserMapper userMapper = Mappers.getMapper(UserMapper.class);
     private static final String USER_CREATE_PERMISSION = "IAM:WRITE";
     private static final String USER_UPDATE_PERMISSION = "IAM:UPDATE";
@@ -50,58 +64,123 @@ public class UserService {
 
     public UserDto registerUser(UserRegistrationDto userDto) {
         log.debug("Attempting to register new user with username: {}", userDto.getUsername());
-        validateRequest(userDto);
-        userValidator.validatePasswordPolicy(userDto.getPassword());
-        validateUserCreationPermission(userDto.isRootUser());
-        userDto.setPassword(passwordEncoder.encode(userDto.getPassword()));
-        User user = userMapper.toEntity(userDto);
-        if (!userDto.isRootUser()) {
-            user.setCreatedBy(getCurrentUser());
+        String actor = (getCurrentUser() != null) ? getCurrentUser().getUsername() : SYSTEM;
+        Map<String, Object> commonDetails = auditService.getRequestDetails(request);
+
+        try {
+            validateRequest(userDto);
+            userValidator.validatePasswordPolicy(userDto.getPassword());
+            validateUserCreationPermission(userDto.isRootUser());
+            userDto.setPassword(passwordEncoder.encode(userDto.getPassword()));
+            User user = userMapper.toEntity(userDto);
+            if (!userDto.isRootUser()) {
+                user.setCreatedBy(getCurrentUser());
+            }
+            user.setPasswordExpiryDate(DateUtil.calculateExpiryDate(passwordExpiryTimeInDays));
+            User savedUser = userRepository.save(user);
+            log.info("User registered successfully with ID: {}", savedUser.getId());
+
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put("new_user_id", savedUser.getId());
+            details.put("new_username", savedUser.getUsername());
+            auditService.logAuditEvent(AuditEventType.USER_REGISTERED, actor, savedUser.getUsername(), AuditOutcome.SUCCESS, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+
+            return userMapper.toDto(savedUser);
+        } catch (Exception e) {
+            log.error("User registration failed for username: {}", userDto.getUsername(), e);
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(REASON, e.getMessage());
+            auditService.logAuditEvent(AuditEventType.USER_REGISTRATION_FAILED, actor, userDto.getUsername(), AuditOutcome.FAILURE, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+            throw e;
         }
-        user.setPasswordExpiryDate(DateUtil.calculateExpiryDate(passwordExpiryTimeInDays));
-        User savedUser = userRepository.save(user);
-        log.info("User registered successfully with ID: {}", savedUser.getId());
-        return userMapper.toDto(savedUser);
     }
 
     public void changePassword(PasswordChangeDto passwordChangeDto, String username) {
         log.debug("Attempting to change password. Username from request: {}", username);
         User currentUser = getCurrentUser();
-        if(Objects.isNull(currentUser)) {
-            log.error("No Logged in user");
-            throw new NoAccessException(USER_NOT_LOGGED_IN);
-        }
-        if (Objects.nonNull(username)) {
-            User userToUpdate = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
-            validatePasswordChangePermission(currentUser, userToUpdate);
-            updatePassword(userToUpdate, passwordChangeDto.newPassword());
-        } else {
-            validateOldPassword(currentUser, passwordChangeDto.oldPassword());
-            updatePassword(currentUser, passwordChangeDto.newPassword());
+        String actor = currentUser != null ? currentUser.getUsername() : UNKNOWN;
+        String targetUser = (username != null) ? username : actor;
+        Map<String, Object> commonDetails = auditService.getRequestDetails(request);
+
+        try {
+            if(Objects.isNull(currentUser)) {
+                log.error("No Logged in user");
+                throw new NoAccessException(USER_NOT_LOGGED_IN);
+            }
+            if (Objects.nonNull(username)) {
+                User userToUpdate = userRepository.findByUsername(username)
+                        .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+                validatePasswordChangePermission(currentUser, userToUpdate);
+                updatePassword(userToUpdate, passwordChangeDto.newPassword());
+            } else {
+                validateOldPassword(currentUser, passwordChangeDto.oldPassword());
+                updatePassword(currentUser, passwordChangeDto.newPassword());
+            }
+            auditService.logAuditEvent(AuditEventType.PASSWORD_CHANGE_SUCCESS, actor, targetUser, AuditOutcome.SUCCESS, commonDetails, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+        } catch (Exception e) {
+            log.error("Password change failed for user: {}", targetUser, e);
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(REASON, e.getMessage());
+            auditService.logAuditEvent(AuditEventType.PASSWORD_CHANGE_FAILURE, actor, targetUser, AuditOutcome.FAILURE, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+            throw e;
         }
     }
 
     public void assignRoles(UserRoleAttachmentDto userRoleAttachmentDto) {
         log.debug("Attempting to assign roles to user with: {}", userRoleAttachmentDto.getUsername());
-        User user = getUserByUsername(userRoleAttachmentDto.getUsername());
-        validateUserUpdatePermission(user);
-        Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userRoleAttachmentDto.getRoleIds());
+        User currentUser = getCurrentUser();
+        String actor = (currentUser != null) ? currentUser.getUsername() : UNKNOWN;
+        String targetUser = userRoleAttachmentDto.getUsername();
+        Map<String, Object> commonDetails = auditService.getRequestDetails(request);
 
-        userRoleAttachmentUtil.assignRolesToUser(user, roles);
-        userRepository.save(user);
-        log.info("Roles assigned successfully to user: {}", userRoleAttachmentDto.getUsername());
+        try {
+            User user = getUserByUsername(userRoleAttachmentDto.getUsername());
+            validateUserUpdatePermission(user);
+            Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userRoleAttachmentDto.getRoleIds());
+
+            userRoleAttachmentUtil.assignRolesToUser(user, roles);
+            userRepository.save(user);
+            log.info("Roles assigned successfully to user: {}", userRoleAttachmentDto.getUsername());
+
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(ROLES_ASSIGNED, roles.stream().map(Role::getName).collect(Collectors.joining(", ")));
+            auditService.logAuditEvent(AuditEventType.ROLES_ASSIGNED, actor, targetUser, AuditOutcome.SUCCESS, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+
+        } catch (Exception e) {
+            log.error("Failed to assign roles to user: {}", targetUser, e);
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(REASON, e.getMessage());
+            auditService.logAuditEvent(AuditEventType.ROLES_ASSIGNMENT_FAILED, actor, targetUser, AuditOutcome.FAILURE, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+            throw e;
+        }
     }
 
     public void removeRoles(UserRoleAttachmentDto userRoleAttachmentDto) {
         log.debug("Attempting to remove roles from user with: {}", userRoleAttachmentDto.getUsername());
-        User user = getUserByUsername(userRoleAttachmentDto.getUsername());
-        validateUserUpdatePermission(user);
-        Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userRoleAttachmentDto.getRoleIds());
+        String actor = (getCurrentUser() != null) ? getCurrentUser().getUsername() : UNKNOWN;
+        String targetUser = userRoleAttachmentDto.getUsername();
+        Map<String, Object> commonDetails = auditService.getRequestDetails(request);
 
-        userRoleAttachmentUtil.removeRolesFromUser(user, roles);
-        userRepository.save(user);
-        log.info("Roles removed successfully from user: {}", userRoleAttachmentDto.getUsername());
+        try {
+            User user = getUserByUsername(userRoleAttachmentDto.getUsername());
+            validateUserUpdatePermission(user);
+            Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userRoleAttachmentDto.getRoleIds());
+
+            userRoleAttachmentUtil.removeRolesFromUser(user, roles);
+            userRepository.save(user);
+            log.info("Roles removed successfully from user: {}", userRoleAttachmentDto.getUsername());
+
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(ROLES_REMOVED, roles.stream().map(Role::getName).collect(Collectors.joining(", ")));
+            auditService.logAuditEvent(AuditEventType.ROLES_REMOVED, actor, targetUser, AuditOutcome.SUCCESS, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+
+        } catch (Exception e) {
+            log.error("Failed to remove roles from user: {}", targetUser, e);
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(REASON, e.getMessage());
+            auditService.logAuditEvent(AuditEventType.ROLES_REMOVAL_FAILED, actor, targetUser, AuditOutcome.FAILURE, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+            throw e;
+        }
     }
 
     public List<UserDto> findAllUsers() {
@@ -109,11 +188,12 @@ public class UserService {
         List<User> users = userRepository.findAll();
 
         User currentUser = getCurrentUser();
+        if (Objects.isNull(currentUser)) {
+            throw new NoAccessException("No permission to access");
+        }
+
         List<User> filteredUsers = users.stream()
-                .filter(user -> {
-                    assert currentUser != null;
-                    return isUserInTree(currentUser, user);
-                })
+                .filter(user -> isUserInTree(currentUser, user))
                 .toList();
         log.info("Retrieved {} users after filtering", filteredUsers.size());
         return userMapper.toDtoList(filteredUsers);
@@ -157,14 +237,33 @@ public class UserService {
 
     public void deleteUser(Long id) {
         log.debug("Attempting to delete user with ID: {}", id);
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("User not found for deletion with ID: {}", id);
-                    return new DataNotFoundException(USER_NOT_FOUND);
-                });
-        validateUserDeletionPermission(user);
-        userRepository.deleteById(id);
-        log.info("User with ID: {} deleted successfully", id);
+        User currentUser = getCurrentUser();
+        String actor = (currentUser != null) ? currentUser.getUsername() : UNKNOWN;
+        String targetUser = "ID: " + id; // Initial target, will be updated if user found
+        Map<String, Object> commonDetails = auditService.getRequestDetails(request);
+
+        try {
+            User user = userRepository.findById(id)
+                    .orElseThrow(() -> {
+                        log.warn("User not found for deletion with ID: {}", id);
+                        return new DataNotFoundException(USER_NOT_FOUND);
+                    });
+            targetUser = user.getUsername(); // Update target to username if user found
+            validateUserDeletionPermission(user);
+            userRepository.deleteById(id);
+            log.info("User with ID: {} deleted successfully", id);
+
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put("deleted_user_id", id);
+            auditService.logAuditEvent(AuditEventType.USER_DELETED, actor, targetUser, AuditOutcome.SUCCESS, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+
+        } catch (Exception e) {
+            log.error("Failed to delete user with ID: {}", id, e);
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(REASON, e.getMessage());
+            auditService.logAuditEvent(AuditEventType.USER_DELETION_FAILED, actor, targetUser, AuditOutcome.FAILURE, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+            throw e;
+        }
     }
 
     private void validateUserCreationPermission(boolean isRootUser) {
@@ -304,10 +403,23 @@ public class UserService {
 
     private void updatePassword(User user, String newPassword) {
         log.debug("Updating password for user: {}", user.getUsername());
-        userValidator.validatePasswordPolicy(newPassword);
-        user.setPassword(passwordEncoder.encode(newPassword));
-        user.setPasswordExpiryDate(DateUtil.calculateExpiryDate(passwordExpiryTimeInDays));
-        userRepository.save(user);
-        log.info("Password updated successfully for user: {}", user.getUsername());
+        String actor = (getCurrentUser() != null) ? getCurrentUser().getUsername() : SYSTEM;
+        Map<String, Object> commonDetails = auditService.getRequestDetails(request);
+
+        try {
+            userValidator.validatePasswordPolicy(newPassword);
+            user.setPassword(passwordEncoder.encode(newPassword));
+            user.setPasswordExpiryDate(DateUtil.calculateExpiryDate(passwordExpiryTimeInDays));
+            userRepository.save(user);
+            log.info("Password updated successfully for user: {}", user.getUsername());
+
+            auditService.logAuditEvent(AuditEventType.PASSWORD_UPDATED, actor, user.getUsername(), AuditOutcome.SUCCESS, commonDetails, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+        } catch (Exception e) {
+            log.error("Failed to update password for user: {}", user.getUsername(), e);
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(REASON, e.getMessage());
+            auditService.logAuditEvent(AuditEventType.PASSWORD_UPDATE_FAILED, actor, user.getUsername(), AuditOutcome.FAILURE, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+            throw e;
+        }
     }
 }

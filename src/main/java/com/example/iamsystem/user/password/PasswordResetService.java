@@ -1,9 +1,13 @@
 package com.example.iamsystem.user.password;
 
+import com.example.iamsystem.audit.AuditService;
+import com.example.iamsystem.audit.enums.AuditEventType;
+import com.example.iamsystem.audit.enums.AuditOutcome;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.user.UserRepository;
 import com.example.iamsystem.user.model.entity.User;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
@@ -14,7 +18,9 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 
@@ -32,10 +38,16 @@ import static com.example.iamsystem.user.util.DateUtil.calculateExpiryDate;
 @RequiredArgsConstructor
 public class PasswordResetService {
 
+    public static final String USER_EMAIL = "user_email";
+    public static final String REASON = "reason";
+    public static final String SYSTEM = "SYSTEM";
+    public static final String OTP_GENERATED = "otp_generated";
     private final UserRepository userRepository;
     private final PasswordResetOTPRepository otpRepository;
     private final JavaMailSender mailSender;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
+    private final HttpServletRequest request;
 
     @Value("${password.reset.otp.expiration.minutes}")
     private int expiryTimeInMinutes;
@@ -49,45 +61,76 @@ public class PasswordResetService {
     private static final String ALL_CHARS = UPPER_CASE_LETTERS + LOWER_CASE_LETTERS + NUMBERS + SPECIAL_CHARS;
 
     public void createPasswordResetOtpForUser(String email) {
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+        Map<String, Object> commonDetails = auditService.getRequestDetails(request);
 
-        // Delete any existing OTP for this user
-        PasswordResetOTP existingOtp = otpRepository.findByUser(user);
-        if (existingOtp != null) {
-            otpRepository.delete(existingOtp);
+        try {
+            User user = userRepository.findByEmail(email).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+
+            // Delete any existing OTP for this user
+            PasswordResetOTP existingOtp = otpRepository.findByUser(user);
+            if (existingOtp != null) {
+                otpRepository.delete(existingOtp);
+            }
+
+            String otp = generateOTP();
+            PasswordResetOTP myOtp = new PasswordResetOTP();
+            myOtp.setUser(user);
+            myOtp.setOtp(otp);
+            myOtp.setExpiryDate(calculateExpiryDate(expiryTimeInMinutes));
+            otpRepository.save(myOtp);
+
+            SimpleMailMessage emailMessage = new SimpleMailMessage();
+            emailMessage.setTo(user.getEmail());
+            emailMessage.setSubject(PASSWORD_RESET_REQUEST_SUBJECT);
+            emailMessage.setText(PASSWORD_RESET_REQUEST_BODY_PREFIX + otp);
+            mailSender.send(emailMessage);
+
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(USER_EMAIL, email);
+            details.put(OTP_GENERATED, otp);
+            auditService.logAuditEvent(AuditEventType.PASSWORD_RESET_OTP_REQUESTED, SYSTEM, email, AuditOutcome.SUCCESS, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+
+        } catch (Exception e) {
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(USER_EMAIL, email);
+            details.put(REASON, e.getMessage());
+            auditService.logAuditEvent(AuditEventType.PASSWORD_RESET_OTP_REQUEST_FAILED, SYSTEM, email, AuditOutcome.FAILURE, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+            throw e;
         }
-
-        String otp = generateOTP();
-        PasswordResetOTP myOtp = new PasswordResetOTP();
-        myOtp.setUser(user);
-        myOtp.setOtp(otp);
-        myOtp.setExpiryDate(calculateExpiryDate(expiryTimeInMinutes));
-        otpRepository.save(myOtp);
-
-        SimpleMailMessage emailMessage = new SimpleMailMessage();
-        emailMessage.setTo(user.getEmail());
-        emailMessage.setSubject(PASSWORD_RESET_REQUEST_SUBJECT);
-        emailMessage.setText(PASSWORD_RESET_REQUEST_BODY_PREFIX + otp);
-        mailSender.send(emailMessage);
     }
 
     public void resetPassword(String otp, String email) {
-        PasswordResetOTP resetOtp = otpRepository.findByOtp(otp);
-        validateOtp(email, resetOtp);
+        Map<String, Object> commonDetails = auditService.getRequestDetails(request);
 
-        User user = resetOtp.getUser();
-        String newPassword = generateSecurePassword();
-        user.setPassword(passwordEncoder.encode(newPassword));
-        user.setPasswordExpiryDate(calculateExpiryDate(passwordExpiryTimeInDays));
-        userRepository.save(user);
+        try {
+            PasswordResetOTP resetOtp = otpRepository.findByOtp(otp);
+            validateOtp(email, resetOtp);
 
-        SimpleMailMessage emailMessage = new SimpleMailMessage();
-        emailMessage.setTo(user.getEmail());
-        emailMessage.setSubject(PASSWORD_RESET_SUCCESS_SUBJECT);
-        emailMessage.setText(PASSWORD_RESET_SUCCESS_BODY_PREFIX + newPassword);
-        mailSender.send(emailMessage);
+            User user = resetOtp.getUser();
+            String newPassword = generateSecurePassword();
+            user.setPassword(passwordEncoder.encode(newPassword));
+            user.setPasswordExpiryDate(calculateExpiryDate(passwordExpiryTimeInDays));
+            userRepository.save(user);
 
-        otpRepository.delete(resetOtp);
+            SimpleMailMessage emailMessage = new SimpleMailMessage();
+            emailMessage.setTo(user.getEmail());
+            emailMessage.setSubject(PASSWORD_RESET_SUCCESS_SUBJECT);
+            emailMessage.setText(PASSWORD_RESET_SUCCESS_BODY_PREFIX + newPassword);
+            mailSender.send(emailMessage);
+
+            otpRepository.delete(resetOtp);
+
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(USER_EMAIL, email);
+            auditService.logAuditEvent(AuditEventType.PASSWORD_RESET_SUCCESS, SYSTEM, email, AuditOutcome.SUCCESS, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+
+        } catch (Exception e) {
+            Map<String, Object> details = new HashMap<>(commonDetails);
+            details.put(USER_EMAIL, email);
+            details.put(REASON, e.getMessage());
+            auditService.logAuditEvent(AuditEventType.PASSWORD_RESET_FAILURE, SYSTEM, email, AuditOutcome.FAILURE, details, this.getClass().getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
+            throw e;
+        }
     }
 
     private void validateOtp(String email, PasswordResetOTP resetOtp) {
@@ -132,3 +175,4 @@ public class PasswordResetService {
         return passwordChars.stream().collect(StringBuilder::new, StringBuilder::append, StringBuilder::append).toString();
     }
 }
+
