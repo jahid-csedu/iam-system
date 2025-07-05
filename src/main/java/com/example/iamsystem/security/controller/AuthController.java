@@ -44,6 +44,9 @@ import static com.example.iamsystem.enums.TokenType.REFRESH_TOKEN;
 @Slf4j
 public class AuthController {
 
+    public static final String REASON = "reason";
+    public static final String INVALID_CREDENTIALS = "Invalid credentials";
+    public static final String INVALID_REFRESH_TOKEN = "Invalid refresh token";
     private final AuthenticationManager authenticationManager;
     private final DefaultUserDetailsService userDetailsService;
     private final JwtTokenUtil jwtTokenUtil;
@@ -69,13 +72,13 @@ public class AuthController {
         } catch (BadCredentialsException e) {
             log.warn("Authentication failed for user '{}': Invalid credentials.", username);
             Map<String, Object> details = new HashMap<>(commonDetails);
-            details.put("reason", "Invalid credentials");
+            details.put(REASON, INVALID_CREDENTIALS);
             auditService.logAuditEvent(AuditEventType.LOGIN_FAILURE, username, username, AuditOutcome.FAILURE, details, AuthController.class.getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
             throw e;
         } catch (AuthenticationException e) {
             log.warn("Authentication failed for user '{}': {}.", username, e.getMessage());
             Map<String, Object> details = new HashMap<>(commonDetails);
-            details.put("reason", e.getMessage());
+            details.put(REASON, e.getMessage());
             auditService.logAuditEvent(AuditEventType.LOGIN_FAILURE, username, username, AuditOutcome.FAILURE, details, AuthController.class.getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
             throw e;
         }
@@ -97,7 +100,7 @@ public class AuthController {
         }
         log.warn("Invalid refresh token provided for user: {}", username);
         Map<String, Object> details = new HashMap<>(commonDetails);
-        details.put("reason", "Invalid refresh token");
+        details.put(REASON, INVALID_REFRESH_TOKEN);
         auditService.logAuditEvent(AuditEventType.TOKEN_REFRESH_FAILURE, username, username, AuditOutcome.FAILURE, details, AuthController.class.getSimpleName(), new Object(){}.getClass().getEnclosingMethod().getName());
         throw new JwtException(ErrorMessage.INVALID_TOKEN);
     }

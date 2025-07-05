@@ -93,7 +93,7 @@ public class RoleService {
         } catch (Exception e) {
             log.error("Failed to update role with ID: {}", id, e);
             Map<String, Object> details = new HashMap<>(commonDetails);
-            details.put("reason", e.getMessage());
+            details.put(REASON, e.getMessage());
             auditService.logAuditEvent(AuditEventType.ROLE_UPDATE_FAILED, actor, ID + id, AuditOutcome.FAILURE, details, this.getClass().getSimpleName(), new Object() {}.getClass().getEnclosingMethod().getName());
             throw e;
         }
