@@ -1,7 +1,7 @@
 package com.example.iamsystem.audit;
 
-import com.example.iamsystem.audit.enums.AuditOutcome;
 import com.example.iamsystem.audit.enums.AuditEventType;
+import com.example.iamsystem.audit.enums.AuditOutcome;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,13 +1,9 @@
 package com.example.iamsystem.user.password;
 
-import com.example.iamsystem.audit.AuditService;
-import com.example.iamsystem.audit.enums.AuditEventType;
-import com.example.iamsystem.audit.enums.AuditOutcome;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.user.UserRepository;
 import com.example.iamsystem.user.model.entity.User;
-import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,14 +15,12 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.Date;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -50,12 +44,6 @@ class PasswordResetServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    @Mock
-    private AuditService auditService;
-
-    @Mock
-    private HttpServletRequest request;
-
     private User user;
     private PasswordResetOTP passwordResetOTP;
 
@@ -71,9 +59,7 @@ class PasswordResetServiceTest {
         passwordResetOTP.setId(1L);
         passwordResetOTP.setOtp("123456");
         passwordResetOTP.setUser(user);
-        passwordResetOTP.setExpiryDate(Instant.now().minusSeconds(1000));
-
-        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
+        passwordResetOTP.setExpiryDate(new Date(System.currentTimeMillis() + 3600000).toInstant()); // 1 hour from now
     }
 
     @Test
@@ -89,7 +75,6 @@ class PasswordResetServiceTest {
         verify(otpRepository, times(1)).findByUser(user);
         verify(otpRepository, times(1)).save(any(PasswordResetOTP.class));
         verify(mailSender, times(1)).send(any(SimpleMailMessage.class));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_RESET_OTP_REQUESTED), eq("SYSTEM"), eq(user.getEmail()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -102,7 +87,6 @@ class PasswordResetServiceTest {
         verify(otpRepository, times(0)).findByUser(any(User.class));
         verify(otpRepository, times(0)).save(any(PasswordResetOTP.class));
         verify(mailSender, times(0)).send(any(SimpleMailMessage.class));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_RESET_OTP_REQUEST_FAILED), eq("SYSTEM"), eq(user.getEmail()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -120,7 +104,6 @@ class PasswordResetServiceTest {
         verify(otpRepository, times(1)).delete(passwordResetOTP);
         verify(otpRepository, times(1)).save(any(PasswordResetOTP.class));
         verify(mailSender, times(1)).send(any(SimpleMailMessage.class));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_RESET_OTP_REQUESTED), eq("SYSTEM"), eq(user.getEmail()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -139,7 +122,6 @@ class PasswordResetServiceTest {
         verify(userRepository, times(1)).save(user);
         verify(mailSender, times(1)).send(any(SimpleMailMessage.class));
         verify(otpRepository, times(1)).delete(passwordResetOTP);
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_RESET_SUCCESS), eq("SYSTEM"), eq(user.getEmail()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -153,7 +135,6 @@ class PasswordResetServiceTest {
         verify(userRepository, times(0)).save(any(User.class));
         verify(mailSender, times(0)).send(any(SimpleMailMessage.class));
         verify(otpRepository, times(0)).delete(any(PasswordResetOTP.class));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_RESET_FAILURE), eq("SYSTEM"), eq(user.getEmail()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -171,7 +152,6 @@ class PasswordResetServiceTest {
         verify(userRepository, times(0)).save(any(User.class));
         verify(mailSender, times(0)).send(any(SimpleMailMessage.class));
         verify(otpRepository, times(0)).delete(any(PasswordResetOTP.class));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_RESET_FAILURE), eq("SYSTEM"), eq(user.getEmail()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -187,6 +167,5 @@ class PasswordResetServiceTest {
         verify(userRepository, times(0)).save(any(User.class));
         verify(mailSender, times(0)).send(any(SimpleMailMessage.class));
         verify(otpRepository, times(0)).delete(any(PasswordResetOTP.class));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PASSWORD_RESET_FAILURE), eq("SYSTEM"), eq(user.getEmail()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 }

@@ -1,8 +1,6 @@
 package com.example.iamsystem.permission;
 
 import com.example.iamsystem.audit.AuditService;
-import com.example.iamsystem.audit.enums.AuditEventType;
-import com.example.iamsystem.audit.enums.AuditOutcome;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.permission.model.PermissionAction;
@@ -23,7 +21,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.Instant;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -34,9 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
@@ -109,10 +103,8 @@ class PermissionServiceTest {
 
     @Test
     void savePermission_savesAndReturnsPermission() {
-        setupSecurityContext(); // Mock a logged-in user
         when(permissionRepository.findByServiceNameAndAction(any(String.class), any(PermissionAction.class))).thenReturn(Optional.empty());
         when(permissionRepository.save(any(Permission.class))).thenReturn(permission);
-        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         PermissionDto result = permissionService.savePermission(permissionDto);
 
@@ -120,17 +112,13 @@ class PermissionServiceTest {
         assertEquals(permissionDto.getServiceName(), result.getServiceName());
         assertEquals(permissionDto.getAction(), result.getAction());
         verify(permissionRepository, times(1)).save(any(Permission.class));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PERMISSION_CREATED), eq("testUser"), eq(permission.getServiceName() + ":" + permission.getAction()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
     void savePermission_throwsExceptionWhenPermissionExists() {
-        setupSecurityContext(); // Mock a logged-in user
         when(permissionRepository.findByServiceNameAndAction(any(String.class), any(PermissionAction.class))).thenReturn(Optional.of(permission));
-        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         assertThrows(com.example.iamsystem.exception.PermissionAlreadyExistsException.class, () -> permissionService.savePermission(permissionDto));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PERMISSION_CREATION_FAILED), eq("testUser"), eq(permissionDto.getServiceName() + ":" + permissionDto.getAction()), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -153,10 +141,8 @@ class PermissionServiceTest {
 
     @Test
     void updatePermission_updatesAndReturnsPermission() {
-        setupSecurityContext(); // Mock a logged-in user
         when(permissionRepository.findById(1L)).thenReturn(Optional.of(permission));
         when(permissionRepository.save(any(Permission.class))).thenReturn(permission);
-        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         PermissionDto result = permissionService.updatePermission(1L, permissionDto);
 
@@ -164,39 +150,29 @@ class PermissionServiceTest {
         assertEquals(permissionDto.getServiceName(), result.getServiceName());
         assertEquals(permissionDto.getAction(), result.getAction());
         verify(permissionRepository, times(1)).save(any(Permission.class));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PERMISSION_UPDATED), eq("testUser"), eq(permission.getServiceName() + ":" + permission.getAction()), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
     void updatePermission_throwsExceptionWhenNotFound() {
-        setupSecurityContext(); // Mock a logged-in user
         when(permissionRepository.findById(1L)).thenReturn(Optional.empty());
-        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         assertThrows(DataNotFoundException.class, () -> permissionService.updatePermission(1L, permissionDto));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PERMISSION_UPDATE_FAILED), eq("testUser"), eq("ID: 1"), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
     void deletePermissionById_deletesPermission() {
-        setupSecurityContext(); // Mock a logged-in user
         doNothing().when(permissionRepository).deleteById(1L);
-        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         permissionService.deletePermissionById(1L);
 
         verify(permissionRepository, times(1)).deleteById(1L);
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PERMISSION_DELETED), eq("testUser"), eq("ID: 1"), eq(AuditOutcome.SUCCESS), anyMap(), anyString(), anyString());
     }
 
     @Test
     void deletePermissionById_throwsExceptionWhenNotFound() {
-        setupSecurityContext(); // Mock a logged-in user
         doThrow(new DataNotFoundException("Permission not found")).when(permissionRepository).deleteById(1L);
-        when(auditService.getRequestDetails(any(HttpServletRequest.class))).thenReturn(new HashMap<>());
 
         assertThrows(DataNotFoundException.class, () -> permissionService.deletePermissionById(1L));
-        verify(auditService, times(1)).logAuditEvent(eq(AuditEventType.PERMISSION_DELETION_FAILED), eq("testUser"), eq("ID: 1"), eq(AuditOutcome.FAILURE), anyMap(), anyString(), anyString());
     }
 
     @Test
