@@ -7,7 +7,6 @@ import com.example.iamsystem.permission.model.PermissionAction;
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.role.model.RoleDto;
 import com.example.iamsystem.role.model.RolePermissionDto;
-import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,8 +14,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,15 +43,6 @@ class RoleServiceTest {
 
     @InjectMocks
     private RoleService roleService;
-
-    @Mock
-    private SecurityContext securityContext;
-
-    @Mock
-    private Authentication authentication;
-
-    @Mock
-    private DefaultUserDetails userDetails;
 
     private Role role;
     private RoleDto roleDto;

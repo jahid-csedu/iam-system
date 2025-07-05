@@ -1,6 +1,5 @@
 package com.example.iamsystem.permission;
 
-import com.example.iamsystem.audit.AuditService;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.permission.model.PermissionAction;
@@ -8,7 +7,6 @@ import com.example.iamsystem.permission.model.PermissionDto;
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.entity.User;
-import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -62,12 +60,6 @@ class PermissionServiceTest {
     private User user;
     @Mock
     private Role role;
-
-    @Mock
-    private AuditService auditService;
-
-    @Mock
-    private HttpServletRequest request;
 
     @BeforeEach
     void setUp() {

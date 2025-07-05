@@ -23,12 +23,6 @@ import static com.example.iamsystem.constant.ErrorMessage.ROLE_NOT_FOUND;
 @RequiredArgsConstructor
 @Slf4j
 public class RoleService {
-    public static final String UNKNOWN = "UNKNOWN";
-    public static final String ROLE_ID = "role_id";
-    public static final String ROLE_NAME = "role_name";
-    public static final String ID = "ID: ";
-    public static final String PERMISSIONS_ASSIGNED = "permissions_assigned";
-    public static final String REASON = "reason";
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private static final RoleMapper roleMapper = Mappers.getMapper(RoleMapper.class);
