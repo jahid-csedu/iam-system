@@ -1,5 +1,7 @@
 package com.example.iamsystem.user.password;
 
+import com.example.iamsystem.audit.annotation.Auditable;
+import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.user.UserRepository;
@@ -32,6 +34,10 @@ import static com.example.iamsystem.user.util.DateUtil.calculateExpiryDate;
 @RequiredArgsConstructor
 public class PasswordResetService {
 
+    public static final String USER_EMAIL = "user_email";
+    public static final String REASON = "reason";
+    public static final String SYSTEM = "SYSTEM";
+    public static final String OTP_GENERATED = "otp_generated";
     private final UserRepository userRepository;
     private final PasswordResetOTPRepository otpRepository;
     private final JavaMailSender mailSender;
@@ -48,6 +54,11 @@ public class PasswordResetService {
     private static final String SPECIAL_CHARS = "@#!$%^&-+=()";
     private static final String ALL_CHARS = UPPER_CASE_LETTERS + LOWER_CASE_LETTERS + NUMBERS + SPECIAL_CHARS;
 
+    @Auditable(
+            value = AuditEventType.PASSWORD_RESET_OTP_REQUEST,
+            target = "#email",
+            detailsExpression = "T(java.util.Map).of('otp_generated', #result)"
+    )
     public void createPasswordResetOtpForUser(String email) {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
 
@@ -71,6 +82,10 @@ public class PasswordResetService {
         mailSender.send(emailMessage);
     }
 
+    @Auditable(
+            value = AuditEventType.PASSWORD_RESET,
+            target = "#email"
+    )
     public void resetPassword(String otp, String email) {
         PasswordResetOTP resetOtp = otpRepository.findByOtp(otp);
         validateOtp(email, resetOtp);
@@ -132,3 +147,4 @@ public class PasswordResetService {
         return passwordChars.stream().collect(StringBuilder::new, StringBuilder::append, StringBuilder::append).toString();
     }
 }
+

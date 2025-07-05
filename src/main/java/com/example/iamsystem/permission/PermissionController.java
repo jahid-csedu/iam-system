@@ -1,6 +1,5 @@
 package com.example.iamsystem.permission;
 
-import com.example.iamsystem.constant.PermissionConstants;
 import com.example.iamsystem.permission.model.PermissionDto;
 import com.example.iamsystem.util.authorization.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;

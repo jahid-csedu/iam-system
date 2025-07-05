@@ -1,11 +1,14 @@
 package com.example.iamsystem.user;
 
+import com.example.iamsystem.audit.annotation.Auditable;
+import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.InvalidPasswordException;
 import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.permission.PermissionService;
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
+import com.example.iamsystem.user.model.UserMapper;
 import com.example.iamsystem.user.model.dto.PasswordChangeDto;
 import com.example.iamsystem.user.model.dto.UserDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
@@ -24,7 +27,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 import static com.example.iamsystem.constant.ErrorMessage.INVALID_OLD_PASSWORD;
@@ -48,6 +50,11 @@ public class UserService {
     @Value("${password.expiration.days}")
     private int passwordExpiryTimeInDays;
 
+    @Auditable(
+            value = AuditEventType.USER_REGISTRATION,
+            target = "#userDto.username",
+            detailsExpression = "T(java.util.Map).of('new_user_id', #result.id, 'new_username', #result.username)"
+    )
     public UserDto registerUser(UserRegistrationDto userDto) {
         log.debug("Attempting to register new user with username: {}", userDto.getUsername());
         validateRequest(userDto);
@@ -64,10 +71,16 @@ public class UserService {
         return userMapper.toDto(savedUser);
     }
 
+    @Auditable(
+            value = AuditEventType.PASSWORD_CHANGE,
+            target = "#username",
+            detailsExpression = "T(java.util.Map).of('password_change_type', (#username != null ? 'admin_initiated' : 'user_initiated'))"
+    )
     public void changePassword(PasswordChangeDto passwordChangeDto, String username) {
         log.debug("Attempting to change password. Username from request: {}", username);
         User currentUser = getCurrentUser();
-        if(Objects.isNull(currentUser)) {
+
+        if (Objects.isNull(currentUser)) {
             log.error("No Logged in user");
             throw new NoAccessException(USER_NOT_LOGGED_IN);
         }
@@ -82,8 +95,14 @@ public class UserService {
         }
     }
 
+    @Auditable(
+            value = AuditEventType.ROLES_ASSIGNMENT,
+            target = "#userRoleAttachmentDto.username",
+            detailsExpression = "T(java.util.Map).of('role_ids', #userRoleAttachmentDto.roleIds)"
+    )
     public void assignRoles(UserRoleAttachmentDto userRoleAttachmentDto) {
         log.debug("Attempting to assign roles to user with: {}", userRoleAttachmentDto.getUsername());
+
         User user = getUserByUsername(userRoleAttachmentDto.getUsername());
         validateUserUpdatePermission(user);
         Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userRoleAttachmentDto.getRoleIds());
@@ -93,8 +112,13 @@ public class UserService {
         log.info("Roles assigned successfully to user: {}", userRoleAttachmentDto.getUsername());
     }
 
+    @Auditable(
+            value = AuditEventType.ROLES_REMOVAL,
+            target = "#userRoleAttachmentDto.username",
+            detailsExpression = "T(java.util.Map).of('role_ids', #userRoleAttachmentDto.roleIds)")
     public void removeRoles(UserRoleAttachmentDto userRoleAttachmentDto) {
         log.debug("Attempting to remove roles from user with: {}", userRoleAttachmentDto.getUsername());
+
         User user = getUserByUsername(userRoleAttachmentDto.getUsername());
         validateUserUpdatePermission(user);
         Set<Role> roles = userRoleAttachmentUtil.validateAndRetrieveRoles(userRoleAttachmentDto.getRoleIds());
@@ -104,16 +128,34 @@ public class UserService {
         log.info("Roles removed successfully from user: {}", userRoleAttachmentDto.getUsername());
     }
 
+    @Auditable(
+            value = AuditEventType.USER_DELETE,
+            target = "#id"
+    )
+    public void deleteUser(Long id) {
+        log.debug("Attempting to delete user with ID: {}", id);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.warn("User not found for deletion with ID: {}", id);
+                    return new DataNotFoundException(USER_NOT_FOUND);
+                });
+        validateUserDeletionPermission(user);
+        userRepository.deleteById(id);
+        log.info("User with ID: {} deleted successfully", id);
+    }
+
     public List<UserDto> findAllUsers() {
         log.debug("Attempting to find all users");
         List<User> users = userRepository.findAll();
 
         User currentUser = getCurrentUser();
+        if (Objects.isNull(currentUser)) {
+            throw new NoAccessException("No permission to access");
+        }
+
         List<User> filteredUsers = users.stream()
-                .filter(user -> {
-                    assert currentUser != null;
-                    return isUserInTree(currentUser, user);
-                })
+                .filter(user -> isUserInTree(currentUser, user))
                 .toList();
         log.info("Retrieved {} users after filtering", filteredUsers.size());
         return userMapper.toDtoList(filteredUsers);
@@ -155,18 +197,6 @@ public class UserService {
         return userMapper.toDto(user);
     }
 
-    public void deleteUser(Long id) {
-        log.debug("Attempting to delete user with ID: {}", id);
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("User not found for deletion with ID: {}", id);
-                    return new DataNotFoundException(USER_NOT_FOUND);
-                });
-        validateUserDeletionPermission(user);
-        userRepository.deleteById(id);
-        log.info("User with ID: {} deleted successfully", id);
-    }
-
     private void validateUserCreationPermission(boolean isRootUser) {
         log.debug("Validating user creation permission for root user: {}", isRootUser);
         User currentUser = getCurrentUser();
@@ -187,7 +217,7 @@ public class UserService {
 
         assert currentUser != null;
         if (!isUserInTree(currentUser, user)) {
-            log.warn("Current user '{}' does not have permission to update user '{}'",currentUser.getUsername() , user.getUsername());
+            log.warn("Current user '{}' does not have permission to update user '{}'", currentUser.getUsername(), user.getUsername());
             throw new NoAccessException(NO_PERMISSION);
         }
 
@@ -197,7 +227,7 @@ public class UserService {
 
     private void validateUserPermission(User user, String requiredPermission) {
         log.debug("Checking user '{}' for permission: {}", user != null ? user.getUsername() : "N/A", requiredPermission);
-        if(Objects.isNull(user)) {
+        if (Objects.isNull(user)) {
             log.warn("No current user found for permission check: {}", requiredPermission);
             throw new NoAccessException(NO_PERMISSION);
         }
@@ -214,7 +244,7 @@ public class UserService {
         User currentUser = getCurrentUser();
         assert currentUser != null;
         if (!isUserInTree(currentUser, user)) {
-            log.warn("Current user '{}' does not have permission to fetch user '{}'",currentUser.getUsername(), user.getUsername());
+            log.warn("Current user '{}' does not have permission to fetch user '{}'", currentUser.getUsername(), user.getUsername());
             throw new DataNotFoundException(USER_NOT_FOUND);
         }
         log.debug("User fetch permission validated for user ID: {}", user.getId());

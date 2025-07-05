@@ -1,5 +1,7 @@
 package com.example.iamsystem.security.controller;
 
+import com.example.iamsystem.audit.annotation.Auditable;
+import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.constant.ErrorMessage;
 import com.example.iamsystem.exception.JwtException;
 import com.example.iamsystem.permission.PermissionService;
@@ -34,28 +36,38 @@ import static com.example.iamsystem.enums.TokenType.REFRESH_TOKEN;
 @RequiredArgsConstructor
 @Slf4j
 public class AuthController {
-
     private final AuthenticationManager authenticationManager;
     private final DefaultUserDetailsService userDetailsService;
     private final JwtTokenUtil jwtTokenUtil;
     private final PermissionService permissionService;
 
-
+    @Auditable(
+            value = AuditEventType.USER_LOGIN,
+            target = "#userLoginDto.username"
+    )
     @PostMapping("/authenticate")
     @Operation(summary = "User authentication")
     public ResponseEntity<JwtResponse> createAuthenticationToken(@Valid @RequestBody UserLoginDto userLoginDto) {
         log.debug("Authentication request received for user: {}", userLoginDto.getUsername());
-        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(userLoginDto.getUsername(), userLoginDto.getPassword()));
-        var userDetails = userDetailsService.loadUserByUsername(userLoginDto.getUsername());
-        log.info("User '{}' authenticated successfully.", userLoginDto.getUsername());
-        return new ResponseEntity<>(getTokens(userDetails, userLoginDto.getUsername()), HttpStatus.OK);
+        String username = userLoginDto.getUsername();
+
+        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, userLoginDto.getPassword()));
+        var userDetails = userDetailsService.loadUserByUsername(username);
+        log.info("User '{}' authenticated successfully.", username);
+
+        return new ResponseEntity<>(getTokens(userDetails, username), HttpStatus.OK);
     }
 
+    @Auditable(
+            value = AuditEventType.TOKEN_REFRESH,
+            target = "#refreshTokenDto.username"
+    )
     @PostMapping("/token/refresh")
     @Operation(summary = "Refresh token")
     public ResponseEntity<JwtResponse> refreshToken(@Valid @RequestBody JwtRefreshTokenDto refreshTokenDto) {
         log.debug("Refresh token request received for user: {}", refreshTokenDto.getUsername());
         String username = refreshTokenDto.getUsername();
+
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
         String token = refreshTokenDto.getRefreshToken();
         if (jwtTokenUtil.validateToken(token, userDetails, REFRESH_TOKEN)) {

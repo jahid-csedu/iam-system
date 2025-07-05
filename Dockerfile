@@ -6,7 +6,7 @@ WORKDIR /app
 # Copy Gradle wrapper and build files
 COPY gradlew .
 COPY gradle gradle
-COPY build.gradle settings.gradle ./
+COPY build.gradle settings.gradle jacoco_excludes.gradle ./
 
 # Copy source code
 COPY src ./src

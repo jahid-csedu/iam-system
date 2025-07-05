@@ -1,8 +1,10 @@
 package com.example.iamsystem.role;
 
+import com.example.iamsystem.audit.annotation.Auditable;
+import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.exception.DataNotFoundException;
-import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.permission.PermissionRepository;
+import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.role.model.RoleDto;
 import com.example.iamsystem.role.model.RoleMapper;
@@ -25,6 +27,11 @@ public class RoleService {
     private final PermissionRepository permissionRepository;
     private static final RoleMapper roleMapper = Mappers.getMapper(RoleMapper.class);
 
+    @Auditable(
+            value = AuditEventType.ROLE_CREATION,
+            target = "#roleDto.name",
+            detailsExpression = "T(java.util.Map).of('role_id', #result.id, 'role_name', #result.name)"
+    )
     public RoleDto createRole(RoleDto roleDto) {
         log.debug("Attempting to create role: {}", roleDto.getName());
         Role role = roleMapper.toEntity(roleDto);
@@ -33,6 +40,11 @@ public class RoleService {
         return roleMapper.toDto(savedRole);
     }
 
+    @Auditable(
+            value = AuditEventType.ROLE_UPDATE,
+            target = "#roleDto.name",
+            detailsExpression = "T(java.util.Map).of('role_id', #id, 'role_name', #roleDto.name)"
+    )
     public RoleDto updateRole(Long id, RoleDto roleDto) {
         log.debug("Attempting to update role with ID: {}", id);
         Role role = roleRepository.findById(id)
@@ -46,10 +58,42 @@ public class RoleService {
         return roleMapper.toDto(updatedRole);
     }
 
+    @Auditable(
+            value = AuditEventType.ROLE_DELETE,
+            target = "#id"
+    )
     public void deleteRole(Long id) {
         log.debug("Attempting to delete role with ID: {}", id);
         roleRepository.deleteById(id);
         log.info("Role with ID: {} deleted successfully", id);
+    }
+
+    @Auditable(
+            value = AuditEventType.PERMISSIONS_ASSIGNED_TO_ROLE,
+            target = "#rolePermissionDto.roleId",
+            detailsExpression = "T(java.util.Map).of('role_id', #rolePermissionDto.roleId, 'permissions_assigned', #rolePermissionDto.permissionIds.![toString()].join(','))"
+    )
+    public void assignPermissions(RolePermissionDto rolePermissionDto) {
+        log.debug("Attempting to assign permissions to role ID: {}", rolePermissionDto.getRoleId());
+        Role role = findRoleById(rolePermissionDto);
+
+        attachPermissionToRole(role, rolePermissionDto.getPermissionIds());
+        roleRepository.save(role);
+        log.info("Permissions assigned successfully to role ID: {}", rolePermissionDto.getRoleId());
+    }
+
+    @Auditable(
+            value = AuditEventType.PERMISSIONS_REMOVED_FROM_ROLE,
+            target = "#rolePermissionDto.roleId",
+            detailsExpression = "T(java.util.Map).of('role_id', #rolePermissionDto.roleId, 'permissions_removed', #rolePermissionDto.permissionIds.![toString()].join(','))"
+    )
+    public void removePermissions(RolePermissionDto rolePermissionDto) {
+        log.debug("Attempting to remove permissions from role ID: {}", rolePermissionDto.getRoleId());
+        Role role = findRoleById(rolePermissionDto);
+
+        detachPermissionFromRole(role, rolePermissionDto.getPermissionIds());
+        roleRepository.save(role);
+        log.info("Permissions removed successfully from role ID: {}", rolePermissionDto.getRoleId());
     }
 
 
@@ -80,24 +124,6 @@ public class RoleService {
         List<Role> roles = roleRepository.findAll();
         log.info("Retrieved {} total roles", roles.size());
         return roleMapper.toDto(roles);
-    }
-
-    public void assignPermissions(RolePermissionDto rolePermissionDto) {
-        log.debug("Attempting to assign permissions to role ID: {}", rolePermissionDto.getRoleId());
-        Role role = findRoleById(rolePermissionDto);
-
-        attachPermissionToRole(role, rolePermissionDto.getPermissionIds());
-        roleRepository.save(role);
-        log.info("Permissions assigned successfully to role ID: {}", rolePermissionDto.getRoleId());
-    }
-
-    public void removePermissions(RolePermissionDto rolePermissionDto) {
-        log.debug("Attempting to remove permissions from role ID: {}", rolePermissionDto.getRoleId());
-        Role role = findRoleById(rolePermissionDto);
-
-        detachPermissionFromRole(role, rolePermissionDto.getPermissionIds());
-        roleRepository.save(role);
-        log.info("Permissions removed successfully from role ID: {}", rolePermissionDto.getRoleId());
     }
 
     private Role findRoleById(RolePermissionDto rolePermissionDto) {
@@ -136,3 +162,4 @@ public class RoleService {
         return permissions;
     }
 }
+

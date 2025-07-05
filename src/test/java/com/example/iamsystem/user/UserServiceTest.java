@@ -4,9 +4,9 @@ import com.example.iamsystem.exception.DataNotFoundException;
 import com.example.iamsystem.exception.InvalidPasswordException;
 import com.example.iamsystem.exception.NoAccessException;
 import com.example.iamsystem.exception.UserAlreadyExistsException;
+import com.example.iamsystem.permission.PermissionService;
 import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.permission.model.PermissionAction;
-import com.example.iamsystem.permission.PermissionService;
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.model.dto.PasswordChangeDto;
@@ -170,7 +170,6 @@ class UserServiceTest {
     void registerUser_whenUsernameNotAvailable_thenValidationFailure() {
         // Arrange
         doThrow(new UserAlreadyExistsException("Username not available")).when(userValidator).validateUsernameAvailable(anyString());
-
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.registerUser(userRegistrationDto));
         verify(userValidator).validateUsernameAvailable(anyString());
@@ -181,7 +180,6 @@ class UserServiceTest {
         // Arrange
         doNothing().when(userValidator).validateUsernameAvailable(anyString());
         doThrow(new UserAlreadyExistsException("Email not available")).when(userValidator).validateEmailAvailable(anyString());
-
         // Act & Assert
         assertThrows(RuntimeException.class, () -> userService.registerUser(userRegistrationDto));
         verify(userValidator).validateUsernameAvailable(anyString());
@@ -232,6 +230,7 @@ class UserServiceTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("oldPassword", "newPassword");
         when(passwordEncoder.matches("oldPassword", user.getPassword())).thenReturn(true);
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedNewPassword");
+        when(userRepository.save(any(User.class))).thenReturn(user);
 
         // Act
         userService.changePassword(passwordChangeDto, null);
@@ -249,6 +248,7 @@ class UserServiceTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "newPassword");
         when(userRepository.findByUsername(childUser.getUsername())).thenReturn(Optional.of(childUser));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedNewPassword");
+        when(userRepository.save(any(User.class))).thenReturn(childUser);
 
         // Act
         userService.changePassword(passwordChangeDto, childUser.getUsername());
@@ -400,11 +400,12 @@ class UserServiceTest {
         when(permissionService.hasPermission(anyString())).thenReturn(true);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
         when(userRoleAttachmentUtil.validateAndRetrieveRoles(anySet())).thenReturn(roles);
+        when(userRepository.save(any(User.class))).thenReturn(user);
 
         userService.removeRoles(userRoleAttachmentDto);
 
         verify(userRoleAttachmentUtil).removeRolesFromUser(user, roles);
-        verify(userRepository).save(user);
+        verify(userRepository).save(any(User.class));
     }
 
     @Test

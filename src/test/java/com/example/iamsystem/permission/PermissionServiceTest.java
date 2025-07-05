@@ -17,6 +17,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,18 +71,26 @@ class PermissionServiceTest {
         permissionDto.setId(1L);
         permissionDto.setAction("READ");
         permissionDto.setServiceName("TEST_SERVICE");
+
+        role = new Role();
+        role.setId(1L);
+        role.setName("ROLE_USER");
+        role.setPermissions(Set.of(permission));
+
+        user = new User();
+        user.setId(1L);
+        user.setUsername("testUser");
+        user.setPassword("encoded_password");
+        user.setEmail("test@example.com");
+        user.setPasswordExpiryDate(Instant.now().plusSeconds(1000));
+        user.setRoles(Set.of(role));
     }
 
-    private void setupSecurityContext(boolean isRootUser, Set<Role> roles) {
+    private void setupSecurityContext() {
         SecurityContextHolder.setContext(securityContext);
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.getPrincipal()).thenReturn(userDetails);
         when(userDetails.user()).thenReturn(user);
-        when(user.isRootUser()).thenReturn(isRootUser);
-        if (!isRootUser) {
-            when(user.getRoles()).thenReturn(roles);
-            when(role.getPermissions()).thenReturn(Set.of(permission));
-        }
     }
 
     @Test
@@ -151,6 +161,13 @@ class PermissionServiceTest {
     }
 
     @Test
+    void deletePermissionById_throwsExceptionWhenNotFound() {
+        doThrow(new DataNotFoundException("Permission not found")).when(permissionRepository).deleteById(1L);
+
+        assertThrows(DataNotFoundException.class, () -> permissionService.deletePermissionById(1L));
+    }
+
+    @Test
     void getPermissionByName_returnsPermissionService() {
         when(permissionRepository.findAllByServiceName("TEST_SERVICE")).thenReturn(List.of(permission));
 
@@ -173,19 +190,20 @@ class PermissionServiceTest {
 
     @Test
     void testHasPermission_whenUserHasProvidedPermission_thenReturnTrue() {
-        setupSecurityContext(false, Set.of(role));
+        setupSecurityContext();
         assertTrue(permissionService.hasPermission("TEST_SERVICE:READ"));
     }
 
     @Test
     void testHasPermission_whenUserDoesNotHaveProvidedPermission_thenReturnFalse() {
-        setupSecurityContext(false, Set.of(role));
+        setupSecurityContext();
         assertFalse(permissionService.hasPermission("TEST_SERVICE:WRITE"));
     }
 
     @Test
     void testHasPermission_whenUserIsRootUser_thenReturnTrue() {
-        setupSecurityContext(true, Collections.emptySet());
+        user.setRootUser(true);
+        setupSecurityContext();
         assertTrue(permissionService.hasPermission("ANY_SERVICE:ANY_ACTION"));
     }
 }

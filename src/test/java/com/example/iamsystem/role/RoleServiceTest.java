@@ -1,12 +1,13 @@
 package com.example.iamsystem.role;
 
 import com.example.iamsystem.exception.DataNotFoundException;
+import com.example.iamsystem.permission.PermissionRepository;
 import com.example.iamsystem.permission.model.Permission;
 import com.example.iamsystem.permission.model.PermissionAction;
-import com.example.iamsystem.permission.PermissionRepository;
 import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.role.model.RoleDto;
 import com.example.iamsystem.role.model.RolePermissionDto;
+import com.example.iamsystem.user.model.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.anySet;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -48,6 +49,9 @@ class RoleServiceTest {
     private Set<Long> permissionIds;
     private List<Permission> permissions;
 
+    @Mock
+    private User user;
+
     @BeforeEach
     void setUp() {
         roleDto = new RoleDto();
@@ -69,6 +73,10 @@ class RoleServiceTest {
 
         permissionIds = new HashSet<>(Arrays.asList(1L, 2L));
         permissions = Arrays.asList(p1, p2);
+
+        user = new User();
+        user.setId(1L);
+        user.setUsername("testUser");
     }
 
     @Test
@@ -137,6 +145,7 @@ class RoleServiceTest {
     void assignPermissions_attachesPermissionsToRole() {
         when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
         when(permissionRepository.findAllById(permissionIds)).thenReturn(permissions);
+        when(roleRepository.save(any(Role.class))).thenReturn(role);
 
         RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
         roleService.assignPermissions(rolePermissionDto);
@@ -159,6 +168,7 @@ class RoleServiceTest {
     void removePermissions_removesPermissionsFromRole() {
         when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
         when(permissionRepository.findAllById(permissionIds)).thenReturn(permissions);
+        when(roleRepository.save(any(Role.class))).thenReturn(role);
 
         RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
         roleService.removePermissions(rolePermissionDto);
@@ -170,7 +180,7 @@ class RoleServiceTest {
     @Test
     void removePermissions_throwsExceptionWhenPermissionsNotFound() {
         when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
-        when(permissionRepository.findAllById(permissionIds)).thenReturn(Collections.singletonList(permissions.get(0)));
+        when(permissionRepository.findAllById(permissionIds)).thenReturn(Collections.singletonList(permissions.getFirst()));
 
         RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
 
