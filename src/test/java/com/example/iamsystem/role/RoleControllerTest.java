@@ -81,13 +81,35 @@ class RoleControllerTest {
         permissionRepository.deleteAll();
 
         // Create permissions
-        readPermission = permissionRepository.save(new Permission(null, IAM_SERVICE_NAME, PermissionAction.READ, "Read access to IAM service", null, null));
-        writePermission = permissionRepository.save(new Permission(null, IAM_SERVICE_NAME, PermissionAction.WRITE, "Write access to IAM service", null, null));
-        updatePermission = permissionRepository.save(new Permission(null, IAM_SERVICE_NAME, PermissionAction.UPDATE, "Update access to IAM service", null, null));
-        deletePermission = permissionRepository.save(new Permission(null, IAM_SERVICE_NAME, PermissionAction.DELETE, "Delete access to IAM service", null, null));
+        readPermission = new Permission();
+        readPermission.setAction(PermissionAction.READ);
+        readPermission.setServiceName(IAM_SERVICE_NAME);
+        readPermission.setDescription("Read access to IAM service");
+        readPermission = permissionRepository.save(readPermission);
+
+        writePermission = new Permission();
+        writePermission.setAction(PermissionAction.WRITE);
+        writePermission.setServiceName(IAM_SERVICE_NAME);
+        writePermission.setDescription("Write access to IAM service");
+        writePermission = permissionRepository.save(writePermission);
+
+        updatePermission = new Permission();
+        updatePermission.setAction(PermissionAction.UPDATE);
+        updatePermission.setServiceName(IAM_SERVICE_NAME);
+        updatePermission.setDescription("Update access to IAM service");
+        updatePermission = permissionRepository.save(updatePermission);
+
+        deletePermission = new Permission();
+        deletePermission.setAction(PermissionAction.DELETE);
+        deletePermission.setServiceName(IAM_SERVICE_NAME);
+        deletePermission.setDescription("Delete access to IAM service");
+        deletePermission = permissionRepository.save(deletePermission);
 
         // Create admin role with all permissions
-        adminRole = new Role(null, "ADMIN", "Administrator role", new HashSet<>(), null, null);
+        adminRole = new Role();
+        adminRole.setName("ADMIN");
+        adminRole.setDescription("Administrator role");
+        adminRole.setPermissions(new HashSet<>());
         adminRole.getPermissions().add(readPermission);
         adminRole.getPermissions().add(writePermission);
         adminRole.getPermissions().add(updatePermission);
@@ -95,16 +117,31 @@ class RoleControllerTest {
         adminRole = roleRepository.save(adminRole);
 
         // Create a test user with admin role
-        testUser = new User(null, "testuser", passwordEncoder.encode("password"), "Test User", "test@example.com", true, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
+        testUser = new User();
+        testUser.setUsername("testuser");
+        testUser.setPassword(passwordEncoder.encode("password"));
+        testUser.setFullName("Test User");
+        testUser.setEmail("test@example.com");
+        testUser.setActive(true);
+        testUser.setRoles(new HashSet<>());
         testUser.getRoles().add(adminRole);
         testUser = userRepository.save(testUser);
 
         // Create a read-only user
-        Role readOnlyRole = new Role(null, "READ_ONLY", "Read only role", new HashSet<>(), null, null);
+        Role readOnlyRole = new Role();
+        readOnlyRole.setName("READ_ONLY");
+        readOnlyRole.setDescription("Read only role");
+        readOnlyRole.setPermissions(new HashSet<>());
         readOnlyRole.getPermissions().add(readPermission);
         readOnlyRole = roleRepository.save(readOnlyRole);
 
-        readOnlyUser = new User(null, "readonlyuser", passwordEncoder.encode("password"), "Read Only User", "readonly@example.com", false, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
+        readOnlyUser = new User();
+        readOnlyUser.setUsername("readonlyuser");
+        readOnlyUser.setPassword(passwordEncoder.encode("password"));
+        readOnlyUser.setFullName("Read Only User");
+        readOnlyUser.setEmail("readonly@example.com");
+        readOnlyUser.setActive(true);
+        readOnlyUser.setRoles(new HashSet<>());
         readOnlyUser.getRoles().add(readOnlyRole);
         readOnlyUser = userRepository.save(readOnlyUser);
     }
@@ -213,7 +250,11 @@ class RoleControllerTest {
         authenticateUser(testUser);
 
         // Create a role to delete
-        Role roleToDelete = roleRepository.save(new Role(null, "TO_DELETE", "Role to be deleted", new HashSet<>(), null, null));
+        Role roleToDelete = new Role();
+        roleToDelete.setName("TO_DELETE");
+        roleToDelete.setDescription("Role to be deleted");
+        roleToDelete.setPermissions(new HashSet<>());
+        roleToDelete = roleRepository.save(roleToDelete);
 
         mockMvc.perform(delete("/api/roles/{id}", roleToDelete.getId())
                         .contentType(MediaType.APPLICATION_JSON))
@@ -247,7 +288,11 @@ class RoleControllerTest {
         authenticateUser(testUser);
 
         // Create a new role to assign permissions to
-        Role newRole = roleRepository.save(new Role(null, "NEW_ROLE_FOR_PERMS", "", new HashSet<>(), null, null));
+        Role newRole = new Role();
+        newRole.setName("NEW_ROLE_FOR_PERMS");
+        newRole.setDescription("");
+        newRole.setPermissions(new HashSet<>());
+        newRole = roleRepository.save(newRole);
 
         RolePermissionDto rolePermissionDto = new RolePermissionDto();
         rolePermissionDto.setRoleId(newRole.getId());

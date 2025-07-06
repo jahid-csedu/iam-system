@@ -23,7 +23,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.HashSet;
 
 import static com.example.iamsystem.constant.PermissionConstants.IAM_SERVICE_NAME;
@@ -78,13 +77,35 @@ class PermissionControllerTest {
         permissionRepository.deleteAll();
 
         // Create permissions
-        readPermission = permissionRepository.save(new Permission(null, IAM_SERVICE_NAME, PermissionAction.READ, "Read access to IAM service", null, null));
-        writePermission = permissionRepository.save(new Permission(null, IAM_SERVICE_NAME, PermissionAction.WRITE, "Write access to IAM service", null, null));
-        updatePermission = permissionRepository.save(new Permission(null, IAM_SERVICE_NAME, PermissionAction.UPDATE, "Update access to IAM service", null, null));
-        deletePermission = permissionRepository.save(new Permission(null, IAM_SERVICE_NAME, PermissionAction.DELETE, "Delete access to IAM service", null, null));
+        readPermission = new Permission();
+        readPermission.setAction(PermissionAction.READ);
+        readPermission.setServiceName(IAM_SERVICE_NAME);
+        readPermission.setDescription("Read access to IAM service");
+        readPermission = permissionRepository.save(readPermission);
+
+        writePermission = new Permission();
+        writePermission.setAction(PermissionAction.WRITE);
+        writePermission.setServiceName(IAM_SERVICE_NAME);
+        writePermission.setDescription("Write access to IAM service");
+        writePermission = permissionRepository.save(writePermission);
+
+        updatePermission = new Permission();
+        updatePermission.setAction(PermissionAction.UPDATE);
+        updatePermission.setServiceName(IAM_SERVICE_NAME);
+        updatePermission.setDescription("Update access to IAM service");
+        updatePermission = permissionRepository.save(updatePermission);
+
+        deletePermission = new Permission();
+        deletePermission.setAction(PermissionAction.DELETE);
+        deletePermission.setServiceName(IAM_SERVICE_NAME);
+        deletePermission.setDescription("Delete access to IAM service");
+        deletePermission = permissionRepository.save(deletePermission);
 
         // Create admin role with all permissions
-        adminRole = new Role(null, "ADMIN", "Administrator role", new HashSet<>(), null, null);
+        adminRole = new Role();
+        adminRole.setName("ADMIN");
+        adminRole.setDescription("Administrator role");
+        adminRole.setPermissions(new HashSet<>());
         adminRole.getPermissions().add(readPermission);
         adminRole.getPermissions().add(writePermission);
         adminRole.getPermissions().add(updatePermission);
@@ -92,7 +113,13 @@ class PermissionControllerTest {
         adminRole = roleRepository.save(adminRole);
 
         // Create a test user with admin role
-        testUser = new User(null, "testuser", passwordEncoder.encode("password"), "Test User", "test@example.com", true, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
+        testUser = new User();
+        testUser.setUsername("testuser");
+        testUser.setPassword(passwordEncoder.encode("password"));
+        testUser.setFullName("Test User");
+        testUser.setEmail("test@example.com");
+        testUser.setActive(true);
+        testUser.setRoles(new HashSet<>());
         testUser.getRoles().add(adminRole);
         testUser = userRepository.save(testUser);
     }
@@ -121,7 +148,13 @@ class PermissionControllerTest {
     @Test
     void getAllPermissions_forbidden() throws Exception {
         // Create a user without any permissions
-        User noPermissionUser = new User(null, "nopermission", passwordEncoder.encode("password"), "No Permission User", "nopermission@example.com", false, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
+        User noPermissionUser = new User();
+        noPermissionUser.setUsername("nopermission");
+        noPermissionUser.setPassword(passwordEncoder.encode("password"));
+        noPermissionUser.setFullName("No Permission User");
+        noPermissionUser.setEmail("nopermission@example.com");
+        noPermissionUser.setActive(true);
+        noPermissionUser.setRoles(new HashSet<>());
         noPermissionUser = userRepository.save(noPermissionUser);
         authenticateUser(noPermissionUser);
 
@@ -149,10 +182,21 @@ class PermissionControllerTest {
     @Test
     void createPermission_forbidden() throws Exception {
         // Create a user with only READ permission
-        User readOnlyUser = new User(null, "readonly", passwordEncoder.encode("password"), "Read Only User", "readonly@example.com", false, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
-        Role readOnlyRole = new Role(null, "READ_ONLY", "Read only role", new HashSet<>(), null, null);
+        User readOnlyUser = new User();
+        readOnlyUser.setUsername("readonly");
+        readOnlyUser.setPassword(passwordEncoder.encode("password"));
+        readOnlyUser.setFullName("Read Only User");
+        readOnlyUser.setEmail("readonly@example.com");
+        readOnlyUser.setActive(true);
+        readOnlyUser.setRoles(new HashSet<>());
+
+        Role readOnlyRole = new Role();
+        readOnlyRole.setName("READ_ONLY");
+        readOnlyRole.setDescription("Read only role");
+        readOnlyRole.setPermissions(new HashSet<>());
         readOnlyRole.getPermissions().add(readPermission);
         readOnlyRole = roleRepository.save(readOnlyRole);
+
         readOnlyUser.getRoles().add(readOnlyRole);
         readOnlyUser = userRepository.save(readOnlyUser);
         authenticateUser(readOnlyUser);
@@ -180,7 +224,13 @@ class PermissionControllerTest {
 
     @Test
     void getPermissionById_forbidden() throws Exception {
-        User noPermissionUser = new User(null, "nopermission", passwordEncoder.encode("password"), "No Permission User", "nopermission@example.com", false, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
+        User noPermissionUser = new User();
+        noPermissionUser.setUsername("nopermission");
+        noPermissionUser.setPassword(passwordEncoder.encode("password"));
+        noPermissionUser.setFullName("No Permission User");
+        noPermissionUser.setEmail("nopermission@example.com");
+        noPermissionUser.setActive(true);
+        noPermissionUser.setRoles(new HashSet<>());
         noPermissionUser = userRepository.save(noPermissionUser);
         authenticateUser(noPermissionUser);
 
@@ -206,10 +256,21 @@ class PermissionControllerTest {
 
     @Test
     void updatePermission_forbidden() throws Exception {
-        User readOnlyUser = new User(null, "readonly", passwordEncoder.encode("password"), "Read Only User", "readonly@example.com", false, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
-        Role readOnlyRole = new Role(null, "READ_ONLY", "Read only role", new HashSet<>(), null, null);
+        User readOnlyUser = new User();
+        readOnlyUser.setUsername("readonly");
+        readOnlyUser.setPassword(passwordEncoder.encode("password"));
+        readOnlyUser.setFullName("Read Only User");
+        readOnlyUser.setEmail("readonly@example.com");
+        readOnlyUser.setActive(true);
+        readOnlyUser.setRoles(new HashSet<>());
+
+        Role readOnlyRole = new Role();
+        readOnlyRole.setName("READ_ONLY");
+        readOnlyRole.setDescription("Read only role");
+        readOnlyRole.setPermissions(new HashSet<>());
         readOnlyRole.getPermissions().add(readPermission);
         readOnlyRole = roleRepository.save(readOnlyRole);
+
         readOnlyUser.getRoles().add(readOnlyRole);
         readOnlyUser = userRepository.save(readOnlyUser);
         authenticateUser(readOnlyUser);
@@ -235,10 +296,21 @@ class PermissionControllerTest {
 
     @Test
     void deletePermissionById_forbidden() throws Exception {
-        User readOnlyUser = new User(null, "readonly", passwordEncoder.encode("password"), "Read Only User", "readonly@example.com", false, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
-        Role readOnlyRole = new Role(null, "READ_ONLY", "Read only role", new HashSet<>(), null, null);
+        User readOnlyUser = new User();
+        readOnlyUser.setUsername("readonly");
+        readOnlyUser.setPassword(passwordEncoder.encode("password"));
+        readOnlyUser.setFullName("Read Only User");
+        readOnlyUser.setEmail("readonly@example.com");
+        readOnlyUser.setActive(true);
+        readOnlyUser.setRoles(new HashSet<>());
+
+        Role readOnlyRole = new Role();
+        readOnlyRole.setName("READ_ONLY");
+        readOnlyRole.setDescription("Read only role");
+        readOnlyRole.setPermissions(new HashSet<>());
         readOnlyRole.getPermissions().add(readPermission);
         readOnlyRole = roleRepository.save(readOnlyRole);
+
         readOnlyUser.getRoles().add(readOnlyRole);
         readOnlyUser = userRepository.save(readOnlyUser);
         authenticateUser(readOnlyUser);
@@ -262,7 +334,13 @@ class PermissionControllerTest {
 
     @Test
     void getPermissionByServiceName_forbidden() throws Exception {
-        User noPermissionUser = new User(null, "nopermission", passwordEncoder.encode("password"), "No Permission User", "nopermission@example.com", false, true, false, Instant.now().plusSeconds(1000), false, 0, null, new HashSet<>(), null, null, null, 0);
+        User noPermissionUser = new User();
+        noPermissionUser.setUsername("nopermission");
+        noPermissionUser.setPassword(passwordEncoder.encode("password"));
+        noPermissionUser.setFullName("No Permission User");
+        noPermissionUser.setEmail("nopermission@example.com");
+        noPermissionUser.setActive(true);
+        noPermissionUser.setRoles(new HashSet<>());
         noPermissionUser = userRepository.save(noPermissionUser);
         authenticateUser(noPermissionUser);
 
