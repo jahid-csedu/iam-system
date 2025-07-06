@@ -1,17 +1,16 @@
-package com.example.iamsystem.permission.model;
+package com.example.iamsystem.application.model;
 
-import com.example.iamsystem.application.model.Application;
-import com.example.iamsystem.service.model.Service;
+import com.example.iamsystem.organization.model.Organization;
+import com.example.iamsystem.permission.model.Permission;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -21,52 +20,49 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.io.Serializable;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Set;
 
 @Entity
-@Table(name = "permissions")
+@Table(name = "applications")
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Permission implements Serializable {
+public class Application implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_id") // Nullable
-    private Service service;
+    @Column(name = "application_name", nullable = false)
+    private String applicationName;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "application_id") // Nullable
-    private Application application;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "organization_id")
+    private Organization organization;
 
-    @Column(name = "service_name") // Kept for backward compatibility
-    private String serviceName;
+    @OneToMany(mappedBy = "application")
+    private Set<Permission> permissions;
 
-    @Enumerated(value = EnumType.STRING)
-    private PermissionAction action;
-
-    private String description;
-
+    @Column(name = "created_at", nullable = false, updatable = false)
     @CreationTimestamp
-    private Instant createdAt;
+    private LocalDateTime createdAt;
 
+    @Column(name = "updated_at")
     @UpdateTimestamp
-    private Instant updatedAt;
+    private LocalDateTime updatedAt;
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Permission that = (Permission) o;
-        return Objects.equals(getId(), that.getId());
+        Application that = (Application) o;
+        return Objects.equals(id, that.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getId());
+        return Objects.hash(id);
     }
 }

@@ -8,6 +8,7 @@ INSERT INTO
     `created_at`,
     `description`,
     `name`,
+    `is_global`,
     `updated_at`
   )
 VALUES
@@ -16,6 +17,7 @@ VALUES
     '2025-06-27 14:10:14.550149',
     'Admin User role of the system',
     'ADMIN',
+    false,
     '2025-06-27 14:10:14.550149'
   );
 
@@ -32,6 +34,7 @@ INSERT INTO
     `password_expired`,
     `password_expiry_date`,
     `is_root_user`,
+    `is_super_user`,
     `updated_at`,
     `user_locked`,
     `username`,
@@ -51,6 +54,7 @@ VALUES
     '0',
     '3025-06-29 11:16:25.108024',
     '1',
+    false,
     '2025-06-29 11:16:25.108024',
     '0',
     'root',
@@ -71,6 +75,7 @@ INSERT INTO
     `password_expired`,
     `password_expiry_date`,
     `is_root_user`,
+    `is_super_user`,
     `updated_at`,
     `user_locked`,
     `username`,
@@ -90,6 +95,7 @@ VALUES
     '0',
     '3025-06-29 11:16:25.108024',
     '0',
+    false,
     '2025-06-29 11:16:25.108024',
     '0',
     'user',

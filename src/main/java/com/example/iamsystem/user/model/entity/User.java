@@ -1,5 +1,6 @@
 package com.example.iamsystem.user.model.entity;
 
+import com.example.iamsystem.organization.model.Organization;
 import com.example.iamsystem.role.model.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -45,8 +46,17 @@ public class User implements Serializable {
     private String fullName;
     @Column(unique = true)
     private String email;
-    @Column(name = "is_root_user")
-    private boolean rootUser;
+
+    @Column(name = "is_root_user", nullable = false)
+    private boolean isRootUser = false;
+
+    @Column(name = "is_super_user", nullable = false)
+    private boolean isSuperUser = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_id")
+    private Organization organization;
+
     @Column(name = "active")
     private boolean active;
     @Column(name = "password_expired")
@@ -59,6 +69,7 @@ public class User implements Serializable {
     private Integer failedLoginAttempts = 0;
     @Column(name = "account_locked_until")
     private Instant accountLockedUntil;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
@@ -67,13 +78,17 @@ public class User implements Serializable {
     )
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<Role> roles = new HashSet<>();
+
     @ManyToOne
     @JoinColumn(name = "created_by")
     private User createdBy;
+
     @CreationTimestamp
     private Instant createdAt;
+
     @UpdateTimestamp
     private Instant updatedAt;
+
     @Version
     private int version;
 

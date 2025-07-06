@@ -1,6 +1,8 @@
 package com.example.iamsystem.role.model;
 
+import com.example.iamsystem.organization.model.Organization;
 import com.example.iamsystem.permission.model.Permission;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -9,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -38,6 +41,13 @@ public class Role implements Serializable {
     private String name;
     private String description;
 
+    @Column(name = "is_global", nullable = false)
+    private boolean isGlobal = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_id") // Nullable for Global Roles
+    private Organization organization;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "role_permissions",
@@ -46,8 +56,10 @@ public class Role implements Serializable {
     )
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<Permission> permissions = new HashSet<>();
+
     @CreationTimestamp
     private Instant createdAt;
+
     @UpdateTimestamp
     private Instant updatedAt;
 
