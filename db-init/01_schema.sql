@@ -25,7 +25,9 @@ CREATE TABLE `organizations` (
 
 CREATE TABLE `services` (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-    `service_name` VARCHAR(255) NOT NULL UNIQUE
+    `service_name` VARCHAR(255) NOT NULL UNIQUE,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- Create tables with dependencies
