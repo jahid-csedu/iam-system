@@ -7,13 +7,13 @@ import com.example.iamsystem.user.model.dto.PasswordChangeDto;
 import com.example.iamsystem.user.model.dto.UserRegistrationDto;
 import com.example.iamsystem.user.model.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.model.entity.User;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -47,7 +48,7 @@ class UserControllerTest {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private JsonMapper jsonMapper;
 
     @Autowired
     private RoleRepository roleRepository;
@@ -65,6 +66,11 @@ class UserControllerTest {
         SecurityContextHolder.clearContext();
     }
 
+    private UsernamePasswordAuthenticationToken getAuthenticationToken(User user) {
+        DefaultUserDetails userDetails = new DefaultUserDetails(user);
+        return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+    }
+
     @Test
     @Sql("/sql/delete_user_role.sql")
     void userRegistration_successful() throws Exception {
@@ -80,7 +86,7 @@ class UserControllerTest {
 
         mockMvc.perform(post("/api/users/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(userRegistrationDto)))
+                        .content(jsonMapper.writeValueAsString(userRegistrationDto)))
                 .andExpect(status().isCreated())
                 .andDo(print());
     }
@@ -89,16 +95,15 @@ class UserControllerTest {
     @Sql("/sql/insert_user_role.sql")
     void assignRoles_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("user");
         userRoleAttachmentDto.setRoleIds(Set.of(1L));
 
         mockMvc.perform(put("/api/users/roles")
+                        .with(authentication(getAuthenticationToken(currentUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(userRoleAttachmentDto)))
+                        .content(jsonMapper.writeValueAsString(userRoleAttachmentDto)))
                 .andExpect(status().isNoContent())
                 .andDo(print());
     }
@@ -115,16 +120,15 @@ class UserControllerTest {
         entityManager.detach(user);
 
         User currentUser = userRepository.findByUsername("root").orElseThrow();
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("user");
         userRoleAttachmentDto.setRoleIds(Set.of(testRole.getId()));
 
         mockMvc.perform(delete("/api/users/roles")
+                        .with(authentication(getAuthenticationToken(currentUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(userRoleAttachmentDto)))
+                        .content(jsonMapper.writeValueAsString(userRoleAttachmentDto)))
                 .andExpect(status().isNoContent())
                 .andDo(print());
     }
@@ -133,10 +137,10 @@ class UserControllerTest {
     @Sql("/sql/insert_user_role.sql")
     void getAllUsers_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
-        mockMvc.perform(get("/api/users"))
+        mockMvc.perform(get("/api/users")
+                        .with(authentication(getAuthenticationToken(currentUser)))
+                )
                 .andExpect(status().isOk())
                 .andDo(print());
     }
@@ -146,10 +150,10 @@ class UserControllerTest {
     void getUserById_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
         User targetUser = userRepository.findByUsername("user").orElseThrow();
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
-        mockMvc.perform(get("/api/users/{id}", targetUser.getId()))
+        mockMvc.perform(get("/api/users/{id}", targetUser.getId())
+                        .with(authentication(getAuthenticationToken(currentUser)))
+                )
                 .andExpect(status().isOk())
                 .andDo(print());
     }
@@ -158,10 +162,9 @@ class UserControllerTest {
     @Sql("/sql/insert_user_role.sql")
     void getUserByUsername_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
         mockMvc.perform(get("/api/users/by-username")
+                        .with(authentication(getAuthenticationToken(currentUser)))
                         .param("username", "user"))
                 .andExpect(status().isOk())
                 .andDo(print());
@@ -171,10 +174,9 @@ class UserControllerTest {
     @Sql("/sql/insert_user_role.sql")
     void getUserByEmail_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
         mockMvc.perform(get("/api/users/by-email")
+                        .with(authentication(getAuthenticationToken(currentUser)))
                         .param("email", "user@test.com"))
                 .andExpect(status().isOk())
                 .andDo(print());
@@ -185,10 +187,9 @@ class UserControllerTest {
     void deleteUser_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
         User targetUser = userRepository.findByUsername("user").orElseThrow();
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
-        mockMvc.perform(delete("/api/users/{id}", targetUser.getId()))
+        mockMvc.perform(delete("/api/users/{id}", targetUser.getId())
+                        .with(authentication(getAuthenticationToken(currentUser))))
                 .andExpect(status().isNoContent())
                 .andDo(print());
     }
@@ -197,14 +198,13 @@ class UserControllerTest {
     @Sql("/sql/insert_user_role.sql")
     void changePassword_byUser_successful() throws Exception {
         User currentUser = userRepository.findByUsername("user").orElseThrow();
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("P@ssw0rd", "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
+                        .with(authentication(getAuthenticationToken(currentUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(passwordChangeDto)))
+                        .content(jsonMapper.writeValueAsString(passwordChangeDto)))
                 .andExpect(status().isNoContent())
                 .andDo(print());
     }
@@ -215,15 +215,13 @@ class UserControllerTest {
         User currentRootUser = userRepository.findByUsername("root").orElseThrow();
         User subordinateUser = userRepository.findByUsername("user").orElseThrow();
 
-        DefaultUserDetails rootUserDetails = new DefaultUserDetails(currentRootUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(rootUserDetails, null, rootUserDetails.getAuthorities()));
-
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
+                        .with(authentication(getAuthenticationToken(currentRootUser)))
                         .param("username", subordinateUser.getUsername())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(passwordChangeDto)))
+                        .content(jsonMapper.writeValueAsString(passwordChangeDto)))
                 .andExpect(status().isNoContent())
                 .andDo(print());
     }
@@ -232,14 +230,13 @@ class UserControllerTest {
     @Sql("/sql/insert_user_role.sql")
     void changePassword_byUser_invalidOldPassword() throws Exception {
         User currentUser = userRepository.findByUsername("user").orElseThrow();
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("wrongPassword", "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
+                        .with(authentication(getAuthenticationToken(currentUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(passwordChangeDto)))
+                        .content(jsonMapper.writeValueAsString(passwordChangeDto)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -249,15 +246,13 @@ class UserControllerTest {
         User currentUser = userRepository.findByUsername("user").orElseThrow();
         User rootUserForTest = userRepository.findByUsername("root").orElseThrow();
 
-        DefaultUserDetails userDetails = new DefaultUserDetails(currentUser);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
-
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
+                        .with(authentication(getAuthenticationToken(currentUser)))
                         .param("username", rootUserForTest.getUsername())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(passwordChangeDto)))
+                        .content(jsonMapper.writeValueAsString(passwordChangeDto)))
                 .andExpect(status().isForbidden());
     }
 }

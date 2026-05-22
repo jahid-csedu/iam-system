@@ -9,28 +9,28 @@ import com.example.iamsystem.role.model.RolePermissionDto;
 import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.UserRepository;
 import com.example.iamsystem.user.model.entity.User;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
-import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
 import static com.example.iamsystem.constant.PermissionConstants.IAM_SERVICE_NAME;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -48,7 +48,7 @@ class RoleControllerTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private JsonMapper jsonMapper;
 
     @Autowired
     private RoleRepository roleRepository;
@@ -154,16 +154,15 @@ class RoleControllerTest {
         permissionRepository.deleteAll();
     }
 
-    private void authenticateUser(User user) {
+    private UsernamePasswordAuthenticationToken getAuthenticationToken(User user) {
         DefaultUserDetails userDetails = new DefaultUserDetails(user);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
+        return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
     }
 
     @Test
     void getAllRoles_successful() throws Exception {
-        authenticateUser(testUser);
-
         mockMvc.perform(get("/api/roles")
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2))) // ADMIN and READ_ONLY roles
@@ -181,13 +180,12 @@ class RoleControllerTest {
 
     @Test
     void createRole_successful() throws Exception {
-        authenticateUser(testUser);
-
         RoleDto newRoleDto = new RoleDto(null, "NEW_ROLE", "A newly created role", new HashSet<>());
 
         mockMvc.perform(post("/api/roles")
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newRoleDto)))
+                        .content(jsonMapper.writeValueAsString(newRoleDto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("NEW_ROLE")))
                 .andDo(print());
@@ -195,22 +193,20 @@ class RoleControllerTest {
 
     @Test
     void createRole_forbidden() throws Exception {
-        authenticateUser(readOnlyUser);
-
         RoleDto newRoleDto = new RoleDto(null, "NEW_ROLE", "A newly created role", new HashSet<>());
 
         mockMvc.perform(post("/api/roles")
+                        .with(authentication(getAuthenticationToken(readOnlyUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newRoleDto)))
+                        .content(jsonMapper.writeValueAsString(newRoleDto)))
                 .andExpect(status().isForbidden())
                 .andDo(print());
     }
 
     @Test
     void getRoleById_successful() throws Exception {
-        authenticateUser(testUser);
-
         mockMvc.perform(get("/api/roles/{id}", adminRole.getId())
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("ADMIN")))
@@ -219,13 +215,12 @@ class RoleControllerTest {
 
     @Test
     void updateRole_successful() throws Exception {
-        authenticateUser(testUser);
-
         RoleDto updatedRoleDto = new RoleDto(adminRole.getId(), "ADMIN_UPDATED", "Updated description", new HashSet<>());
 
         mockMvc.perform(put("/api/roles/{id}", adminRole.getId())
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updatedRoleDto)))
+                        .content(jsonMapper.writeValueAsString(updatedRoleDto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("ADMIN_UPDATED")))
                 .andExpect(jsonPath("$.description", is("Updated description")))
@@ -234,21 +229,18 @@ class RoleControllerTest {
 
     @Test
     void updateRole_forbidden() throws Exception {
-        authenticateUser(readOnlyUser);
-
         RoleDto updatedRoleDto = new RoleDto(adminRole.getId(), "ADMIN_UPDATED", "Updated description", new HashSet<>());
 
         mockMvc.perform(put("/api/roles/{id}", adminRole.getId())
+                        .with(authentication(getAuthenticationToken(readOnlyUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updatedRoleDto)))
+                        .content(jsonMapper.writeValueAsString(updatedRoleDto)))
                 .andExpect(status().isForbidden())
                 .andDo(print());
     }
 
     @Test
     void deleteRoleById_successful() throws Exception {
-        authenticateUser(testUser);
-
         // Create a role to delete
         Role roleToDelete = new Role();
         roleToDelete.setName("TO_DELETE");
@@ -257,6 +249,7 @@ class RoleControllerTest {
         roleToDelete = roleRepository.save(roleToDelete);
 
         mockMvc.perform(delete("/api/roles/{id}", roleToDelete.getId())
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNoContent())
                 .andDo(print());
@@ -264,9 +257,8 @@ class RoleControllerTest {
 
     @Test
     void deleteRoleById_forbidden() throws Exception {
-        authenticateUser(readOnlyUser);
-
         mockMvc.perform(delete("/api/roles/{id}", adminRole.getId())
+                        .with(authentication(getAuthenticationToken(readOnlyUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden())
                 .andDo(print());
@@ -274,9 +266,8 @@ class RoleControllerTest {
 
     @Test
     void getRoleByName_successful() throws Exception {
-        authenticateUser(testUser);
-
         mockMvc.perform(get("/api/roles/name/{name}", "ADMIN")
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("ADMIN")))
@@ -285,8 +276,6 @@ class RoleControllerTest {
 
     @Test
     void assignPermissions_successful() throws Exception {
-        authenticateUser(testUser);
-
         // Create a new role to assign permissions to
         Role newRole = new Role();
         newRole.setName("NEW_ROLE_FOR_PERMS");
@@ -299,8 +288,9 @@ class RoleControllerTest {
         rolePermissionDto.setPermissionIds(Set.of(readPermission.getId(), writePermission.getId()));
 
         mockMvc.perform(put("/api/roles/permissions")
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(rolePermissionDto)))
+                        .content(jsonMapper.writeValueAsString(rolePermissionDto)))
                 .andExpect(status().isNoContent())
                 .andDo(print());
 
@@ -314,23 +304,20 @@ class RoleControllerTest {
 
     @Test
     void assignPermissions_forbidden() throws Exception {
-        authenticateUser(readOnlyUser);
-
         RolePermissionDto rolePermissionDto = new RolePermissionDto();
         rolePermissionDto.setRoleId(adminRole.getId());
         rolePermissionDto.setPermissionIds(Set.of(readPermission.getId()));
 
         mockMvc.perform(put("/api/roles/permissions")
+                        .with(authentication(getAuthenticationToken(readOnlyUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(rolePermissionDto)))
+                        .content(jsonMapper.writeValueAsString(rolePermissionDto)))
                 .andExpect(status().isForbidden())
                 .andDo(print());
     }
 
     @Test
     void removePermissions_successful() throws Exception {
-        authenticateUser(testUser);
-
         // Assign some permissions first
         adminRole.getPermissions().add(readPermission);
         adminRole.getPermissions().add(writePermission);
@@ -341,8 +328,9 @@ class RoleControllerTest {
         rolePermissionDto.setPermissionIds(Set.of(readPermission.getId()));
 
         mockMvc.perform(delete("/api/roles/permissions")
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(rolePermissionDto)))
+                        .content(jsonMapper.writeValueAsString(rolePermissionDto)))
                 .andExpect(status().isNoContent())
                 .andDo(print());
 
@@ -356,15 +344,14 @@ class RoleControllerTest {
 
     @Test
     void removePermissions_forbidden() throws Exception {
-        authenticateUser(readOnlyUser);
-
         RolePermissionDto rolePermissionDto = new RolePermissionDto();
         rolePermissionDto.setRoleId(adminRole.getId());
         rolePermissionDto.setPermissionIds(Set.of(readPermission.getId()));
 
         mockMvc.perform(delete("/api/roles/permissions")
+                        .with(authentication(getAuthenticationToken(readOnlyUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(rolePermissionDto)))
+                        .content(jsonMapper.writeValueAsString(rolePermissionDto)))
                 .andExpect(status().isForbidden())
                 .andDo(print());
     }

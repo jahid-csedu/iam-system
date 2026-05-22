@@ -8,26 +8,27 @@ import com.example.iamsystem.role.model.Role;
 import com.example.iamsystem.security.user.DefaultUserDetails;
 import com.example.iamsystem.user.UserRepository;
 import com.example.iamsystem.user.model.entity.User;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.HashSet;
 
 import static com.example.iamsystem.constant.PermissionConstants.IAM_SERVICE_NAME;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -45,7 +46,7 @@ class PermissionControllerTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private JsonMapper jsonMapper;
 
     @Autowired
     private PermissionRepository permissionRepository;
@@ -129,19 +130,19 @@ class PermissionControllerTest {
         SecurityContextHolder.clearContext();
     }
 
-    private void authenticateUser(User user) {
+    private UsernamePasswordAuthenticationToken getAuthenticationToken(User user) {
         DefaultUserDetails userDetails = new DefaultUserDetails(user);
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
+        return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
     }
 
     @Test
     void getAllPermissions_successful() throws Exception {
-        authenticateUser(testUser);
 
         mockMvc.perform(get("/api/permissions")
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(4))) // Expecting 4 permissions created in setup
+                .andExpect(jsonPath("$", hasSize(4)))
                 .andDo(print());
     }
 
@@ -156,9 +157,9 @@ class PermissionControllerTest {
         noPermissionUser.setActive(true);
         noPermissionUser.setRoles(new HashSet<>());
         noPermissionUser = userRepository.save(noPermissionUser);
-        authenticateUser(noPermissionUser);
 
         mockMvc.perform(get("/api/permissions")
+                        .with(authentication(getAuthenticationToken(noPermissionUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden())
                 .andDo(print());
@@ -166,13 +167,13 @@ class PermissionControllerTest {
 
     @Test
     void createPermission_successful() throws Exception {
-        authenticateUser(testUser);
-
-        PermissionDto newPermissionDto = new PermissionDto(null, "NEW_SERVICE", PermissionAction.READ.name(), "New service read access");
+        PermissionDto newPermissionDto = new PermissionDto(null, "NEW_SERVICE", PermissionAction.READ.name(),
+                "New service read access");
 
         mockMvc.perform(post("/api/permissions")
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newPermissionDto)))
+                        .content(jsonMapper.writeValueAsString(newPermissionDto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.serviceName", is("NEW_SERVICE")))
                 .andExpect(jsonPath("$.action", is("READ")))
@@ -199,22 +200,22 @@ class PermissionControllerTest {
 
         readOnlyUser.getRoles().add(readOnlyRole);
         readOnlyUser = userRepository.save(readOnlyUser);
-        authenticateUser(readOnlyUser);
 
-        PermissionDto newPermissionDto = new PermissionDto(null, "NEW_SERVICE", PermissionAction.WRITE.name(), "New service write access");
+        PermissionDto newPermissionDto = new PermissionDto(null, "NEW_SERVICE", PermissionAction.WRITE.name(),
+                "New service write access");
 
         mockMvc.perform(post("/api/permissions")
+                        .with(authentication(getAuthenticationToken(readOnlyUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newPermissionDto)))
+                        .content(jsonMapper.writeValueAsString(newPermissionDto)))
                 .andExpect(status().isForbidden())
                 .andDo(print());
     }
 
     @Test
     void getPermissionById_successful() throws Exception {
-        authenticateUser(testUser);
-
         mockMvc.perform(get("/api/permissions/{id}", readPermission.getId())
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.serviceName", is(IAM_SERVICE_NAME)))
@@ -232,9 +233,9 @@ class PermissionControllerTest {
         noPermissionUser.setActive(true);
         noPermissionUser.setRoles(new HashSet<>());
         noPermissionUser = userRepository.save(noPermissionUser);
-        authenticateUser(noPermissionUser);
 
         mockMvc.perform(get("/api/permissions/{id}", readPermission.getId())
+                        .with(authentication(getAuthenticationToken(noPermissionUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden())
                 .andDo(print());
@@ -242,13 +243,13 @@ class PermissionControllerTest {
 
     @Test
     void updatePermission_successful() throws Exception {
-        authenticateUser(testUser);
-
-        PermissionDto updatedPermissionDto = new PermissionDto(updatePermission.getId(), IAM_SERVICE_NAME, PermissionAction.UPDATE.name(), "Updated description");
+        PermissionDto updatedPermissionDto = new PermissionDto(updatePermission.getId(), IAM_SERVICE_NAME,
+                PermissionAction.UPDATE.name(), "Updated description");
 
         mockMvc.perform(put("/api/permissions/{id}", updatePermission.getId())
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updatedPermissionDto)))
+                        .content(jsonMapper.writeValueAsString(updatedPermissionDto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.description", is("Updated description")))
                 .andDo(print());
@@ -273,22 +274,22 @@ class PermissionControllerTest {
 
         readOnlyUser.getRoles().add(readOnlyRole);
         readOnlyUser = userRepository.save(readOnlyUser);
-        authenticateUser(readOnlyUser);
 
-        PermissionDto updatedPermissionDto = new PermissionDto(updatePermission.getId(), IAM_SERVICE_NAME, PermissionAction.UPDATE.name(), "Updated description");
+        PermissionDto updatedPermissionDto = new PermissionDto(updatePermission.getId(), IAM_SERVICE_NAME,
+                PermissionAction.UPDATE.name(), "Updated description");
 
         mockMvc.perform(put("/api/permissions/{id}", updatePermission.getId())
+                        .with(authentication(getAuthenticationToken(readOnlyUser)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updatedPermissionDto)))
+                        .content(jsonMapper.writeValueAsString(updatedPermissionDto)))
                 .andExpect(status().isForbidden())
                 .andDo(print());
     }
 
     @Test
     void deletePermissionById_successful() throws Exception {
-        authenticateUser(testUser);
-
         mockMvc.perform(delete("/api/permissions/{id}", deletePermission.getId())
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNoContent())
                 .andDo(print());
@@ -313,9 +314,9 @@ class PermissionControllerTest {
 
         readOnlyUser.getRoles().add(readOnlyRole);
         readOnlyUser = userRepository.save(readOnlyUser);
-        authenticateUser(readOnlyUser);
 
         mockMvc.perform(delete("/api/permissions/{id}", deletePermission.getId())
+                        .with(authentication(getAuthenticationToken(readOnlyUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden())
                 .andDo(print());
@@ -323,9 +324,8 @@ class PermissionControllerTest {
 
     @Test
     void getPermissionByServiceName_successful() throws Exception {
-        authenticateUser(testUser);
-
         mockMvc.perform(get("/api/permissions/name/{serviceName}", IAM_SERVICE_NAME)
+                        .with(authentication(getAuthenticationToken(testUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(4))) // Expecting 4 permissions for IAM_SERVICE_NAME
@@ -342,9 +342,9 @@ class PermissionControllerTest {
         noPermissionUser.setActive(true);
         noPermissionUser.setRoles(new HashSet<>());
         noPermissionUser = userRepository.save(noPermissionUser);
-        authenticateUser(noPermissionUser);
 
         mockMvc.perform(get("/api/permissions/name/{serviceName}", IAM_SERVICE_NAME)
+                        .with(authentication(getAuthenticationToken(noPermissionUser)))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden())
                 .andDo(print());

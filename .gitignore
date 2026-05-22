@@ -1,40 +1,62 @@
-HELP.md
-target/
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-.gradle
+# ==========================================
+# Gradle Build and Cache Artifacts
+# ==========================================
+.gradle/
 build/
+out/
+target/
+!gradle-wrapper.jar
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+# ==========================================
+# Secret Environment Variables (Crucial!)
+# ==========================================
+.env
+.env.*
+!.env.example
 
-### IntelliJ IDEA ###
-.idea
+# ==========================================
+# IntelliJ IDEA Configuration
+# ==========================================
+.idea/
 *.iws
 *.iml
 *.ipr
+# If you prefer sharing shared run configurations with your team,
+# uncomment the next line:
+# !.idea/runConfigurations/
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
+# ==========================================
+# Eclipse Configuration
+# ==========================================
+.classpath
+.project
+.settings/
+.bin/
 
-### VS Code ###
+# ==========================================
+# Visual Studio Code Configuration
+# ==========================================
 .vscode/
 
+# ==========================================
+# System / OS Level Files
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
 
+# Windows
+Thumbs.db
+Ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# ==========================================
+# Log Files and Test Reports
+# ==========================================
+*.log
 logs/
-.env
-design/
+jacoco/

@@ -6,13 +6,13 @@ buildscript {
 
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.3'
-    id 'io.spring.dependency-management' version '1.1.6'
+    id 'org.springframework.boot' version '4.0.6'
+    id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
 }
 
 jacoco {
-    toolVersion = "0.8.11"
+    toolVersion = "0.8.14" // Updated to support Java 25 bytecode (class file major version 69)
 }
 
 group = 'com.example'
@@ -20,7 +20,7 @@ version = '1.0.0'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -29,29 +29,42 @@ repositories {
 }
 
 dependencies {
+    // Spring Boot Starters (versions managed by Spring Boot 4.0.6 automatically)
     implementation 'org.springframework.boot:spring-boot-starter-mail'
-    implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Logging (Updated to support Spring Boot 4 / Logback 1.5+ internals)
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+    // JWT Authentication
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    // Development Utilities
     runtimeOnly 'org.springframework.boot:spring-boot-devtools'
     runtimeOnly 'com.mysql:mysql-connector-j'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Code Generation Utilities (Updated to work with modern Java 25 / Jakarta EE 11 compiling defaults)
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     implementation 'org.mapstruct:mapstruct:1.6.3'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
+
+    // OpenAPI / Swagger Documentation (Updated to v3.x series for Spring Boot 4/Spring 7 compatibility)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+    // Testing Dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'com.h2database:h2'
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9'
 }
 
 apply from: 'jacoco_excludes.gradle'
-
 
 tasks.named('test') {
     useJUnitPlatform()
