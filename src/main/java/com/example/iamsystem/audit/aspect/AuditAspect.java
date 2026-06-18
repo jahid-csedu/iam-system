@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 @Aspect
 @Component
@@ -45,7 +46,7 @@ public class AuditAspect {
         String actor = getActor();
         String target = resolveTarget(auditable.target(), joinPoint.getArgs(), signature.getParameterNames());
         Map<String, Object> commonDetails = auditService.getRequestDetails(request);
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Object principal = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getPrincipal();
         if(principal instanceof DefaultUserDetails userDetails) {
             commonDetails.put("current_user", userDetails.getUsername());
         } else {
@@ -72,7 +73,7 @@ public class AuditAspect {
 
     private String getActor() {
         try {
-            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            Object principal = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getPrincipal();
             if (principal instanceof DefaultUserDetails userDetails) {
                 return userDetails.getUsername();
             }
