@@ -7,7 +7,6 @@ import com.example.iamsystem.role.repository.RoleRepository;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.tenant.repository.TenantRepository;
-import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
@@ -32,7 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -96,8 +94,7 @@ class TenantIsolationTest {
     @DisplayName("Users of another tenant cannot be deleted or changed")
     void usersOfAnotherTenant_cannotBeChanged() throws Exception {
         perform(delete("/api/users/{id}", globexMember.getId())).andExpect(status().isNotFound());
-        perform(patch("/api/users/password").param("username", "globex-member"), new PasswordChangeDto(null, "NewPassword1!"))
-                .andExpect(status().isNotFound());
+        perform(post("/api/users/{id}/password-reset", globexMember.getId())).andExpect(status().isNotFound());
         perform(put("/api/users/roles"), roleAttachment("globex-member", globexRole.getId())).andExpect(status().isNotFound());
 
         assertTrue(userRepository.existsById(globexMember.getId()));

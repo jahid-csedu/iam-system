@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 6b (lightweight security principal).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 7a (fixed permission catalog).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -12,19 +12,32 @@ How to use the system as a developer through Swagger UI or Postman.
 | Concept | Today |
 |---|---|
 | **Tenant** | One organization. Created by **tenant signup**, which also creates the tenant's **root user**. |
-| **Root user** | Exactly one per tenant. Holds every permission. Can create users, permissions and roles. |
-| **Permission** | A pair `serviceName` + `action`, where action is one of `READ`, `WRITE`, `UPDATE`, `DELETE`. The system's own endpoints are protected by permissions of the service **`IAM`** (`IAM:READ`, `IAM:WRITE`, …). |
+| **Root user** | Exactly one per tenant. Holds every tenant permission implicitly (no role needed). |
+| **Permission** | A fixed key `<resource>:<action>`, such as `users:read`. The catalog is part of the system: nobody creates, changes or deletes permissions. New keys arrive with new features. |
 | **Role** | A named set of permissions, owned by one tenant (names are unique within the tenant). Users get permissions only through roles. |
-| **"Management" user** | Not a separate type yet (step 7). Any user holding `IAM:*` permissions through a role acts as one. |
-| **"Regular" user** | Not a separate type yet (step 7). A user without `IAM:*` permissions can log in, refresh tokens and change their own password. |
-| **Tenant isolation** | Every user and role belongs to one tenant. With the right `IAM:*` permission you see and manage your **whole tenant**, and nothing else: users and roles of other tenants answer `404`. |
-| **No self-modification** | Nobody can change their own roles, or change or delete a role they hold. Another user with the permission must do it. |
+| **"Management" user** | Not a separate type yet (step 7c). Any user holding permissions through a role acts as one. |
+| **"Regular" user** | Not a separate type yet (step 7c). A user without permissions can log in, refresh tokens and change their own password. |
+| **Tenant isolation** | Every user and role belongs to one tenant. With the right permission you see and manage your **whole tenant**, and nothing else: users and roles of other tenants answer `404`. |
+| **No self-modification** | Nobody can change their own roles, change or delete a role they hold, or reset their own password through the management API. Another user with the permission must do it. |
 
 **Important limitations today:**
-- **There are no default permissions or roles yet** (they come in step 7). After signup, the root user must create the
-  `IAM` permissions and the roles first. See the walkthrough below.
-- **Permissions are still shared by all tenants** (until step 7): every root user can create, change and delete them for everyone.
+- **No predefined roles yet** (step 7b): after signup, the root user builds the roles from the catalog.
 - **Usernames and emails are globally unique** across all tenants (until step 8).
+
+### The permission catalog
+
+| Key | Allows |
+|---|---|
+| `users:read` | List users, and find them by id, username or email |
+| `users:create` | Create users in your tenant |
+| `users:update` | Assign roles to, and remove roles from, other users |
+| `users:delete` | Delete users |
+| `users:reset-password` | Reset another user's password (the new password is emailed to that user) |
+| `roles:read` | List roles, and find them by id or name |
+| `roles:create` | Create roles |
+| `roles:update` | Rename roles, change their description, add and remove their permissions |
+| `roles:delete` | Delete roles |
+| `permissions:read` | List the catalog and view a permission |
 
 ---
 
@@ -36,8 +49,9 @@ How to use the system as a developer through Swagger UI or Postman.
 | Docker (with ELK logging) | `docker compose up --build` | app `:8080`, Kibana `:5601` |
 | Local JVM (needs MySQL on `localhost:3366`, e.g. `docker compose up db`) | `./gradlew bootRun` | `http://localhost:8080` (override with `SERVER_PORT=8081` in `.env`) |
 
-The database schema is created automatically (Flyway) on first start. Mail settings (`SPRING_MAIL_USERNAME`,
-`SPRING_MAIL_PASSWORD` in `.env`) are only needed for password reset.
+The database schema and the permission catalog are created automatically (Flyway) on first start. Mail settings
+(`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs and new passwords are only ever
+sent by email. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 
 ---
 
@@ -88,24 +102,8 @@ character** (`@#!$%^&-+=()`).
 ```
 → `200` with `access_token` (valid 5 minutes) and `refresh_token` (valid 24 hours). Use the access token as `Bearer` from now on.
 
-### Step 3: Create the IAM permissions (root, once per system)
-Permissions don't exist until someone creates them (temporary until step 7). Create each of `READ`, `WRITE`, `UPDATE`, `DELETE`:
-
-`POST /api/permissions`
-```json
-{ "serviceName": "IAM", "action": "READ", "description": "View users, roles and permissions" }
-```
-→ `200` with the permission's `id`. Creating the same `serviceName` + `action` twice gives `400`.
-`GET /api/permissions` lists them all.
-
-What each IAM permission allows:
-
-| Permission | Allows |
-|---|---|
-| `IAM:READ` | List/view users, roles and permissions |
-| `IAM:WRITE` | Create users, roles and permissions |
-| `IAM:UPDATE` | Update roles and permissions; assign/remove permissions on roles; assign/remove roles on users |
-| `IAM:DELETE` | Delete users, roles and permissions |
+### Step 3: Look up the permission ids (root)
+`GET /api/permissions` → the catalog (see section 1), each entry with its `id`, `name`, `scope` and `description`.
 
 ### Step 4: Create a role and give it permissions (root)
 `POST /api/roles`
@@ -113,27 +111,27 @@ What each IAM permission allows:
 { "name": "USER_MANAGER", "description": "Can create and view users" }
 ```
 → `201` with the role's `id`. The role belongs to your tenant; another tenant may use the same name. A name already used in your
-tenant gives `400`. Then attach permissions:
+tenant gives `400`. Then attach permissions, for example the ids of `users:read` and `users:create`:
 
 `PUT /api/roles/permissions`
 ```json
 { "roleId": 1, "permissionIds": [1, 2] }
 ```
-→ `204`. (`DELETE /api/roles/permissions` with the same body removes them.)
+→ `204`. An unknown permission id gives `404`. (`DELETE /api/roles/permissions` with the same body removes them.)
 
-### Step 5: Create a user in your tenant (needs `IAM:WRITE`)
+### Step 5: Create a user in your tenant (needs `users:create`)
 `POST /api/users`
 ```json
 { "username": "bob", "password": "Bob12345!", "fullName": "Bob Manager", "email": "bob@globex.com" }
 ```
 → `201`. The user joins the caller's tenant, and `createdBy` is the caller.
 
-### Step 6: Give the user a role (needs `IAM:UPDATE`)
+### Step 6: Give the user a role (needs `users:update`)
 `PUT /api/users/roles`
 ```json
 { "username": "bob", "roleIds": [1] }
 ```
-→ `204`. Bob now acts as a "management" user with `IAM:READ` + `IAM:WRITE`: he can create users and see every user of the tenant.
+→ `204`. Bob now acts as a "management" user with `users:read` + `users:create`: he can create users and see every user of the tenant.
 Bob can't change his own roles, or change the `USER_MANAGER` role while he holds it (`403`).
 (`DELETE /api/users/roles` with the same body removes roles.) Changing a user's roles revokes the tokens they already
 hold (`401`), so they log in again. Changing the permissions of a role applies to its users immediately, without new tokens.
@@ -148,23 +146,26 @@ change her own password, and gets `403` on every management endpoint.
 
 | What | Request | Who |
 |---|---|---|
-| Change own password | `PATCH /api/users/password` `{ "oldPassword": "...", "newPassword": "..." }` | Any logged-in user |
-| Change another user's password | `PATCH /api/users/password?username=carol` `{ "newPassword": "..." }` | Root user, for any user of its tenant |
+| Change own password | `PATCH /api/users/password` `{ "oldPassword": "...", "newPassword": "..." }` | Any logged-in user, for themselves only |
+| Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`; a new password is emailed to that user | `users:reset-password`; never your own password, never the root user's |
+| Forgot password: request an OTP | `POST /api/password/reset-request` `{ "identifier": "<username or email>" }` → the OTP is emailed | Public |
+| Forgot password: reset with the OTP | `POST /api/password/reset` `{ "identifier": "<username or email>", "otp": "123456" }` → a new password is emailed | Public |
 | Refresh tokens | `POST /api/auth/token/refresh` `{ "username": "bob", "refresh_token": "..." }` | Public (needs a valid refresh token) |
-| List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `IAM:READ` |
-| Find a user | `GET /api/users/{id}`, `/api/users/by-username?username=`, `/api/users/by-email?email=` | `IAM:READ` |
-| Delete a user | `DELETE /api/users/{id}` (users they created stay, without a creator) | `IAM:DELETE` (a root user can only delete itself) |
-| Roles | `GET /api/roles`, `GET /api/roles/{id}`, `GET /api/roles/name/{name}`, `PUT /api/roles/{id}` `{ "name", "description" }`, `DELETE /api/roles/{id}` (also removes it from its users) | `IAM:READ` / `UPDATE` / `DELETE`, never on a role you hold |
-| Role permissions | `PUT /api/roles/permissions` / `DELETE /api/roles/permissions` `{ "roleId", "permissionIds" }` | `IAM:UPDATE`, never on a role you hold |
-| Permissions | `GET /api/permissions/{id}`, `GET /api/permissions/name/{serviceName}`, `PUT /api/permissions/{id}`, `DELETE /api/permissions/{id}` | `IAM:READ` / `UPDATE` / `DELETE` |
-| Forgot password | `POST /api/password/reset-request?email=...`, then `POST /api/password/reset?otp=...&email=...` (emails a new password; needs mail settings) | Public |
+| List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `users:read` |
+| Find a user | `GET /api/users/{id}`, `/api/users/by-username?username=`, `/api/users/by-email?email=` | `users:read` |
+| Delete a user | `DELETE /api/users/{id}` (users they created stay, without a creator) | `users:delete` (a root user can only delete itself) |
+| Roles | `GET /api/roles`, `GET /api/roles/{id}`, `GET /api/roles/name/{name}` | `roles:read` |
+| Change roles | `POST /api/roles`, `PUT /api/roles/{id}` `{ "name", "description" }`, `DELETE /api/roles/{id}` (also removes it from its users) | `roles:create` / `roles:update` / `roles:delete`, never on a role you hold |
+| Role permissions | `PUT /api/roles/permissions` / `DELETE /api/roles/permissions` `{ "roleId", "permissionIds" }` | `roles:update`, never on a role you hold |
+| Permission catalog | `GET /api/permissions`, `GET /api/permissions/{id}` (read-only) | `permissions:read` |
 
 ## 7. For other applications (verifying users)
 
 | What | Request | Notes |
 |---|---|---|
 | Is this access token valid? | `POST /api/auth/token/validate` `{ "token": "..." }` → `{ "status": true }` | Public. Checks signature and expiry only (revocation in step 9). |
-| May this user do X? | `POST /api/auth/authorize` with the user's `Bearer` token, body `{ "serviceName": "BILLING", "action": "READ" }` → `{ "authorized": true }` | The service and action must exist as a permission in one of the user's roles; root is always authorized. |
+
+The IAM manages only its own permissions; other applications decide their own authorization from the verified user.
 
 ---
 
@@ -175,19 +176,23 @@ change her own password, and gets `403` on every management endpoint.
 - **Revocation:** any change to a user (roles, password, profile, lock, deactivation) revokes the access and refresh tokens
   issued before it. Permissions are checked against the database on every request, so role changes apply immediately.
 - **Password expiry:** passwords expire after 90 days; an expired password blocks login.
-- **One root per tenant**, created only by signup; a root user can't be deleted by anyone else.
+- **Password resets** (forgot-password and reset by another user) generate a new password and send it **only by email**; it never
+  appears in a response. A forgot-password OTP is valid for 5 minutes and replaces any earlier OTP of the user.
+- **One root per tenant**, created only by signup; a root user can't be deleted, or have its password reset, by anyone else.
 - **Tenant isolation:** users and roles of another tenant are reported as not found (`404`), never as forbidden.
 - **Usernames and emails** stay unique across all tenants until step 8. From then on they are unique per tenant, except
-  that a root user's username and email stay unique across all users of all tenants.
+  that a root user's username and email stay unique across all users of all tenants. The forgot-password flow then also
+  looks the user up inside the tenant of the request's `client_id`.
 
 ## 9. Status codes
 
 | Code | Meaning here |
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
-| `400` | Already exists (tenant, user, role name in your tenant, permission), bad password policy, wrong old password, invalid OTP, negative page or page size below 1 |
+| `400` | Already exists (tenant, user, role name in your tenant), bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
 | `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, or wrong username/password |
-| `403` | Logged in but missing the required permission, changing your own roles or a role you hold, or account locked or expired |
-| `404` | Not found, including users and roles of other tenants |
+| `403` | Logged in but missing the required permission; changing your own roles or a role you hold; resetting your own or the root user's password; or account locked or expired |
+| `404` | Not found, including users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
+| `405` | The HTTP method isn't supported (for example creating a permission) |
 | `412` | Invalid or expired token on refresh/validation (changes to 401 in step 9) |
 | `422` | Request body failed validation (the `errors` list shows which field) |

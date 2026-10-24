@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Set;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.PERMISSIONS_NOT_FOUND;
+import static com.example.iamsystem.permission.entity.PermissionScope.TENANT;
 
 /**
  * Attaches permissions to, and detaches them from, the roles of the current user's tenant.
@@ -39,7 +40,7 @@ public class RolePermissionService {
     @Transactional
     public void assignPermissions(RolePermissionDto request) {
         Role role = getModifiableRole(request.roleId());
-        role.getPermissions().addAll(getExistingPermissions(request.permissionIds()));
+        role.getPermissions().addAll(getTenantPermissions(request.permissionIds()));
         roleRepository.save(role);
     }
 
@@ -51,7 +52,7 @@ public class RolePermissionService {
     @Transactional
     public void removePermissions(RolePermissionDto request) {
         Role role = getModifiableRole(request.roleId());
-        getExistingPermissions(request.permissionIds()).forEach(role.getPermissions()::remove);
+        getTenantPermissions(request.permissionIds()).forEach(role.getPermissions()::remove);
         roleRepository.save(role);
     }
 
@@ -62,8 +63,11 @@ public class RolePermissionService {
         return role;
     }
 
-    private List<Permission> getExistingPermissions(Set<Long> permissionIds) {
-        List<Permission> permissions = permissionRepository.findAllById(permissionIds);
+    /**
+     * Only TENANT permissions may be put into a tenant's roles; unknown or PLATFORM permissions count as missing.
+     */
+    private List<Permission> getTenantPermissions(Set<Long> permissionIds) {
+        List<Permission> permissions = permissionRepository.findAllByIdInAndScope(permissionIds, TENANT);
         if (permissions.size() != permissionIds.size()) {
             throw new DataNotFoundException(PERMISSIONS_NOT_FOUND);
         }

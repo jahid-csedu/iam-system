@@ -1,14 +1,10 @@
 package com.example.iamsystem.auth.service;
 
-import com.example.iamsystem.auth.dto.AuthorizationRequest;
 import com.example.iamsystem.auth.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.auth.dto.JwtResponse;
 import com.example.iamsystem.auth.dto.TokenValidationRequest;
-import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.JwtException;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
-import com.example.iamsystem.security.userdetails.AuthenticatedActor;
-import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
 import com.example.iamsystem.user.dto.UserLoginDto;
@@ -29,7 +25,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 
 import java.util.List;
 
-import static com.example.iamsystem.permission.entity.PermissionAction.READ;
 import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 import static com.example.iamsystem.security.jwt.TokenType.REFRESH_TOKEN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,10 +45,6 @@ class AuthenticationServiceTest {
     private DefaultUserDetailsService userDetailsService;
     @Mock
     private JwtTokenUtil jwtTokenUtil;
-    @Mock
-    private AuthorizationService authorizationService;
-    @Mock
-    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private AuthenticationService service;
@@ -132,18 +123,6 @@ class AuthenticationServiceTest {
         assertTrue(service.validate(request).isStatus());
     }
 
-    @Test
-    @DisplayName("Authorize asks the authorization service about the current user")
-    void authorize_asksAuthorizationServiceForTheCurrentUser() {
-        AuthorizationRequest request = new AuthorizationRequest();
-        request.setServiceName("BILLING");
-        request.setAction("READ");
-        AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 100L, false);
-        when(currentUserProvider.requireCurrentActor()).thenReturn(actor);
-        when(authorizationService.hasPermission(actor, "BILLING", READ)).thenReturn(true);
-
-        assertTrue(service.authorize(request).isAuthorized());
-    }
 
     private void givenIssuedTokens() {
         when(jwtTokenUtil.generateToken(user, ACCESS_TOKEN)).thenReturn("access-token");

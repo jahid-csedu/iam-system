@@ -1,7 +1,6 @@
 package com.example.iamsystem.role.controller;
 
 import com.example.iamsystem.permission.entity.Permission;
-import com.example.iamsystem.permission.entity.PermissionAction;
 import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.role.dto.RolePermissionDto;
 import com.example.iamsystem.role.dto.RoleRequestDto;
@@ -28,7 +27,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Set;
 
-import static com.example.iamsystem.permission.PermissionConstants.IAM_SERVICE_NAME;
 import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
@@ -42,7 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * One tenant with an ADMIN (all IAM permissions) and a READ_ONLY user, each holding their own role.
+ * One tenant with an ADMIN (every roles:* permission) and a READ_ONLY user, each holding their own role.
  * The persistence context is cleared after setup, so every request starts from the database, as in production.
  * Cross-tenant behaviour is covered by {@code TenantIsolationTest}.
  */
@@ -77,10 +75,9 @@ class RoleControllerTest {
     @BeforeEach
     void setUp() {
         tenant = tenantRepository.save(new Tenant("Role Test Tenant", TenantStatus.ACTIVE));
-        readPermission = permission(PermissionAction.READ);
-        writePermission = permission(PermissionAction.WRITE);
-        adminRole = role("ADMIN", readPermission, writePermission, permission(PermissionAction.UPDATE),
-                permission(PermissionAction.DELETE));
+        readPermission = permission("roles:read");
+        writePermission = permission("roles:create");
+        adminRole = role("ADMIN", readPermission, writePermission, permission("roles:update"), permission("roles:delete"));
         readOnlyRole = role("READ_ONLY", readPermission);
         admin = user("admin", adminRole);
         readOnlyUser = user("reader", readOnlyRole);
@@ -129,7 +126,7 @@ class RoleControllerTest {
     }
 
     @Test
-    @DisplayName("Creating a role without IAM:WRITE is forbidden")
+    @DisplayName("Creating a role without roles:create is forbidden")
     void createRole_withoutWritePermission_isForbidden() throws Exception {
         perform(post("/api/roles"), readOnlyUser, new RoleRequestDto("AUDITOR", null))
                 .andExpect(status().isForbidden());
@@ -182,7 +179,7 @@ class RoleControllerTest {
     }
 
     @Test
-    @DisplayName("Updating a role without IAM:UPDATE is forbidden")
+    @DisplayName("Updating a role without roles:update is forbidden")
     void updateRole_withoutUpdatePermission_isForbidden() throws Exception {
         perform(put("/api/roles/{id}", adminRole.getId()), readOnlyUser, new RoleRequestDto("ADMIN", "x"))
                 .andExpect(status().isForbidden());
@@ -204,7 +201,7 @@ class RoleControllerTest {
     }
 
     @Test
-    @DisplayName("Deleting a role without IAM:DELETE is forbidden")
+    @DisplayName("Deleting a role without roles:delete is forbidden")
     void deleteRole_withoutDeletePermission_isForbidden() throws Exception {
         perform(delete("/api/roles/{id}", adminRole.getId()), readOnlyUser).andExpect(status().isForbidden());
     }
@@ -233,7 +230,7 @@ class RoleControllerTest {
     }
 
     @Test
-    @DisplayName("Assigning permissions without IAM:UPDATE is forbidden")
+    @DisplayName("Assigning permissions without roles:update is forbidden")
     void assignPermissions_withoutUpdatePermission_isForbidden() throws Exception {
         perform(put("/api/roles/permissions"), readOnlyUser, new RolePermissionDto(adminRole.getId(), Set.of(readPermission.getId())))
                 .andExpect(status().isForbidden());
@@ -252,7 +249,7 @@ class RoleControllerTest {
     }
 
     @Test
-    @DisplayName("Removing permissions without IAM:UPDATE is forbidden")
+    @DisplayName("Removing permissions without roles:update is forbidden")
     void removePermissions_withoutUpdatePermission_isForbidden() throws Exception {
         perform(delete("/api/roles/permissions"), readOnlyUser, new RolePermissionDto(adminRole.getId(), Set.of(readPermission.getId())))
                 .andExpect(status().isForbidden());
@@ -266,11 +263,10 @@ class RoleControllerTest {
         return perform(request.contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(body)), actor);
     }
 
-    private Permission permission(PermissionAction action) {
-        Permission permission = new Permission();
-        permission.setServiceName(IAM_SERVICE_NAME);
-        permission.setAction(action);
-        return permissionRepository.save(permission);
+    private Permission permission(String name) {
+        return permissionRepository.findAllByOrderByName().stream()
+                .filter(permission -> permission.getName().equals(name))
+                .findFirst().orElseThrow();
     }
 
     private Role role(String name, Permission... permissions) {

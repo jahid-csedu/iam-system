@@ -11,6 +11,7 @@ public enum AuditEventType {
     // User Management
     USER_CREATION,
     PASSWORD_CHANGE,
+    PASSWORD_RESET_BY_USER,
     ROLES_ASSIGNMENT,
     ROLES_REMOVAL,
     USER_DELETE,
@@ -21,11 +22,6 @@ public enum AuditEventType {
     ROLE_DELETE,
     PERMISSIONS_ASSIGNED_TO_ROLE,
     PERMISSIONS_REMOVED_FROM_ROLE,
-
-    // Permission Management
-    PERMISSION_CREATE,
-    PERMISSION_UPDATE,
-    PERMISSION_DELETE,
 
     // Password Reset
     PASSWORD_RESET_OTP_REQUEST,

@@ -86,7 +86,11 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
 - **Permissions are fixed and feature-based.** Tenants and platform users can never create permissions.
   New permissions are added to the database together with the feature or endpoint that needs them (by migration).
 - Two catalogs: **platform permissions** (e.g. `tenants:suspend`) and **tenant-management permissions**
-  (e.g. `users:create`, `roles:write`, `token-settings:update`). Platform permissions are never grantable inside a tenant.
+  (e.g. `users:create`, `roles:update`, `token-settings:update`). Platform permissions are never grantable inside a tenant.
+  Done (step 7a): keys are generic `<resource>:<action>` (`users:read` covers list and every lookup; `users:update` covers
+  assigning and removing roles), with `users:reset-password` kept separate because a reset can take over an account.
+  The `scope` column (`TENANT`/`PLATFORM`) enforces the split: only TENANT keys go into a tenant's roles, and root holds
+  every TENANT key implicitly but never a PLATFORM one.
 - **Roles are dynamic**: built from the fixed permission list. On tenant creation, a set of **predefined roles** is
   created for that tenant. Root, or a management user with role-modification permission, can modify those roles and create new ones.
   The platform tenant works the same way.
@@ -139,8 +143,11 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 ## Database schema rules
 - Flyway owns the schema: `src/main/resources/db/migration/V<n>__<description>.sql`.
 - Never edit an applied migration. Every schema change is a new `V<n+1>__...` file.
+- When the current development plan is finished, all migrations are merged into a single `V1__baseline.sql` taken from the
+  live schema; versioned migrations start from there. Each step is verified on a fresh database (`docker compose down -v`).
+- The permission catalog is reference data inserted by migrations (the only rows migrations insert).
 - Hibernate runs with `ddl-auto=validate` (app and tests), so an entity/schema mismatch fails at startup.
-- No seed data yet. The first root user is created by tenant signup.
+- No other seed data. The first root user is created by tenant signup.
 - One root per tenant is a functional unique index (`uk_users_root_per_tenant`), not visible to Hibernate validation.
 - Booleans are `BOOLEAN`, timestamps `DATETIME(6)`, and constraints get readable names (`fk_<table>_<ref>`, `uk_<table>_<col>`, `idx_<table>_<col>`).
 - Every table with a `tenant_id` has an index starting with `tenant_id` (`idx_<table>_tenant`, or a unique key such as `uk_roles_tenant_name`).
@@ -157,12 +164,14 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
   `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles, root-only rules).
   `UserValidator` (availability + password policy), `config/PasswordExpirationProperties`.
-- `passwordreset/`: OTP-by-email password reset
+- `passwordreset/`: self-service reset (OTP by email, user found by username or email) and `NewPasswordIssuer`, the one
+  place that generates a new password and emails it (used by both resets); `config/OtpExpirationProperties`
 - `role/`: tenant-owned roles. `RoleService` (CRUD), `RolePermissionService` (attach/detach permissions), `RoleAccessPolicy` (no changes to a role you hold)
-- `permission/`: global CRUD until step 7. Permission = `serviceName` + `PermissionAction` enum (READ/WRITE/UPDATE/DELETE); `permission/validation` = `@ValidAction`
+- `permission/`: the read-only catalog. `PermissionKey` enum (key + scope) mirrors the `permissions` rows (a test keeps them in sync);
+  `@RequirePermission(PermissionKey)` on every protected endpoint
 - `authorization/`: `AuthorizationService` = the only place answering "does user X hold service:action?";
   `@RequirePermission` + `AuthorizationAspect` enforce it on endpoints
-- `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, validate, authorize) and DTOs
+- `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, validate) and DTOs
 - `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`),
   `userdetails/` (`AuthenticatedActor` = the request principal; `CurrentUserProvider`, the single owner of "who is logged in"
   and of the current tenant id; `DefaultUserDetails`/`DefaultUserDetailsService` for login and refresh only), `event/` (lockout listeners)
@@ -176,12 +185,14 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - **Tenant boundary = tenant-scoped repository lookups** (`...AndTenantId`). Users and roles of other tenants are 404, never 403.
   Policies (`UserAccessPolicy`, `RoleAccessPolicy`) only decide rules inside the tenant.
 - No self-modification: nobody changes their own roles or a role they hold (403). Changing another user's password is root-only.
-- Endpoint permissions are owned by `@RequirePermission`; the access policies never check permissions. Assigning and removing user roles both need `IAM:UPDATE`.
-- `POST /api/tenants/signup` (public) creates a tenant + its root user. `POST /api/users` (`IAM:WRITE`) creates a user in the
+- Endpoint permissions are owned by `@RequirePermission`; the access policies never check permissions.
+- `POST /api/tenants/signup` (public) creates a tenant + its root user. `POST /api/users` (`users:create`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
-- Changing your own password always requires the old password, also when passing your own `username`.
+- `PATCH /api/users/password` changes only your own password (old password required). `POST /api/users/{id}/password-reset`
+  (`users:reset-password`) gives another user a new emailed password; never your own, never root's.
+- New passwords and OTPs are only ever sent by email: never in responses, logs or audit details.
 - Token revocation = JWT `version` claim vs `User.@Version` (the same column as optimistic locking), so any user change revokes tokens.
 - The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`), never the `User` entity.
   `JwtRequestFilter` finds it with one query (`UserRepository.findActor`) that only matches the current token version and an
@@ -192,20 +203,20 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- Permissions are still global (step 7): any root user (anyone can sign up a tenant) can create, change or delete
-  the permissions every tenant uses.
 - JWT secrets are hard-coded in `JwtConstant` (HMAC, so any verifier could also forge tokens). `mail.debug=true`.
-- Password reset emails a plaintext new password. OTP uses `java.util.Random`, has no attempt limit, and the endpoint reveals whether an email exists.
+- Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit, is
+  stored in plain text, and the endpoint reveals whether a username/email exists. The user lookup is global (fine while
+  usernames/emails are globally unique; step 8 must make it tenant-scoped through `client_id`).
 - `/api/auth/token/validate` ignores the token version (revoked tokens are reported as valid).
 
 Broken / drift
 - `users.username` has no DB unique key (only an app check); step 8 adds per-tenant uniqueness plus the global root rule.
 - A root user can delete itself, which leaves its tenant without a root (decide with the platform/tenant lifecycle work).
 - Refresh-token errors answer 412 instead of 401 (step 9). Audit events for failures are logged at ERROR level.
-- Deleting a permission that is assigned to a role fails (FK `fk_role_permissions_permission`, no ON DELETE rule).
+- Deleting a user with a pending password-reset OTP fails (FK `fk_password_reset_otps_user`, no ON DELETE rule).
+- `GlobalHandler` still has one-off handlers per exception (the ProblemDetail step reworks it).
 
 Design debt
-- Permission model (free-text `serviceName` + CRUD enum, created through the API) contradicts the target design (fixed, migration-defined permissions).
 
 ## Progress log
 - 2026-10-24: Codebase reviewed. CLAUDE.md created. Target design agreed (platform/tenant/regular levels, client_id, fixed permissions + dynamic roles, no self-modification, per-application token settings, management-console client per tenant).
@@ -238,4 +249,12 @@ Design debt
   filter loads it with one query that also rejects revoked tokens and inactive or locked users (bad tokens → 401, no more 500);
   `AuthorizationService` checks permissions with a DB query (changes apply immediately); unused `authorities` claim and
   Spring authorities removed; `JwtTokenUtil` slimmed; shared test helper `TestActors.actingAs`.
-  Next: step 7 (fixed permission catalog, user types, predefined roles).
+- 2026-10-25: Step 7a (fixed permission catalog). Flyway `V4__permission_catalog.sql`: `permissions` = `name` + `scope` +
+  `description`, 10 TENANT keys inserted, `services` table dropped. `PermissionKey` enum + `@RequirePermission(key)`;
+  permission endpoints read-only; root holds TENANT keys only; only TENANT keys attachable to roles; `/api/auth/authorize`
+  removed. Passwords: `PATCH /api/users/password` is self-only; new `POST /api/users/{id}/password-reset`
+  (`users:reset-password`, not self, not root); `NewPasswordIssuer` shared with the forgot-password flow, which now takes
+  a username or email in a JSON body. Fixed: OTP expiry was in days instead of minutes; OTP now from `SecureRandom`;
+  405/415/unreadable-body errors no longer become 500. Decisions: generic keys; merge all migrations into one baseline
+  after the plan.
+  Next: step 7b (predefined roles).

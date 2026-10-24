@@ -20,7 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 import java.util.Set;
 
-import static com.example.iamsystem.role.service.RoleTestData.TENANT;
+import static com.example.iamsystem.permission.entity.PermissionScope.TENANT;
 import static com.example.iamsystem.role.service.RoleTestData.role;
 import static com.example.iamsystem.role.service.RoleTestData.actor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,7 +36,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class RolePermissionServiceTest {
 
-    private static final Long TENANT_ID = TENANT.getId();
+    private static final Long TENANT_ID = RoleTestData.TENANT.getId();
 
     @Mock
     private RoleRepository roleRepository;
@@ -58,8 +59,8 @@ class RolePermissionServiceTest {
     void setUp() {
         actor = actor();
         role = role(10, "VIEWER");
-        read = permission(1);
-        write = permission(2);
+        read = permission();
+        write = permission();
         when(currentUserProvider.requireCurrentActor()).thenReturn(actor);
     }
 
@@ -67,7 +68,7 @@ class RolePermissionServiceTest {
     @DisplayName("Assigned permissions are added to the role")
     void assignPermissions_addsThemToTheRole() {
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
-        when(permissionRepository.findAllById(Set.of(1L, 2L))).thenReturn(List.of(read, write));
+        when(permissionRepository.findAllByIdInAndScope(Set.of(1L, 2L), TENANT)).thenReturn(List.of(read, write));
 
         service.assignPermissions(new RolePermissionDto(10L, Set.of(1L, 2L)));
 
@@ -81,7 +82,7 @@ class RolePermissionServiceTest {
     void removePermissions_removesOnlyTheGivenOnes() {
         role.getPermissions().addAll(Set.of(read, write));
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
-        when(permissionRepository.findAllById(Set.of(1L))).thenReturn(List.of(read));
+        when(permissionRepository.findAllByIdInAndScope(Set.of(1L), TENANT)).thenReturn(List.of(read));
 
         service.removePermissions(new RolePermissionDto(10L, Set.of(1L)));
 
@@ -90,10 +91,10 @@ class RolePermissionServiceTest {
     }
 
     @Test
-    @DisplayName("If some permissions don't exist, nothing changes")
-    void assignPermissions_whenSomePermissionsDoNotExist_changesNothing() {
+    @DisplayName("If some permissions are missing or not TENANT-scoped, nothing changes")
+    void assignPermissions_whenSomePermissionsAreMissingOrNotTenantScoped_changesNothing() {
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
-        when(permissionRepository.findAllById(Set.of(1L, 99L))).thenReturn(List.of(read));
+        when(permissionRepository.findAllByIdInAndScope(Set.of(1L, 99L), TENANT)).thenReturn(List.of(read));
 
         assertThrows(DataNotFoundException.class, () -> service.assignPermissions(new RolePermissionDto(10L, Set.of(1L, 99L))));
         assertTrue(role.getPermissions().isEmpty());
@@ -116,13 +117,11 @@ class RolePermissionServiceTest {
         doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanModify(actor, role);
 
         assertThrows(NoAccessException.class, () -> service.assignPermissions(new RolePermissionDto(10L, Set.of(1L))));
-        verify(permissionRepository, never()).findAllById(any());
+        verify(permissionRepository, never()).findAllByIdInAndScope(any(), any());
         verify(roleRepository, never()).save(any());
     }
 
-    private static Permission permission(long id) {
-        Permission permission = new Permission();
-        permission.setId(id);
-        return permission;
+    private static Permission permission() {
+        return mock(Permission.class);
     }
 }

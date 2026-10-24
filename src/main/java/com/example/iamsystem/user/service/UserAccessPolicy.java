@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.NO_PERMISSION;
+import static com.example.iamsystem.common.exception.ErrorMessage.OWN_PASSWORD_RESET;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ROLES_CHANGE;
 
 /**
@@ -28,11 +29,16 @@ public class UserAccessPolicy {
     }
 
     /**
-     * A user may change their own password; the root user may also change anyone else's password.
+     * A reset is always for someone else (your own password is changed, not reset), and never for the root user,
+     * whose access nobody else may take over.
      */
-    public void checkCanChangePassword(AuthenticatedActor actor, User target) {
-        if (!actor.isUser(target.getId()) && !actor.rootUser()) {
-            deny(actor, "change the password of", target);
+    public void checkCanResetPassword(AuthenticatedActor actor, User target) {
+        if (actor.isUser(target.getId())) {
+            log.warn("User '{}' tried to reset their own password", actor.username());
+            throw new NoAccessException(OWN_PASSWORD_RESET);
+        }
+        if (target.isRootUser()) {
+            deny(actor, "reset the password of", target);
         }
     }
 

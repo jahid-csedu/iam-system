@@ -4,18 +4,22 @@ import io.jsonwebtoken.security.SignatureException;
 import io.swagger.v3.oas.annotations.Hidden;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import static com.example.iamsystem.common.exception.ErrorMessage.UNREADABLE_REQUEST_BODY;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
@@ -41,6 +45,15 @@ public class GlobalHandler {
             response.addValidationError(fieldError.getField(), fieldError.getDefaultMessage());
         }
         return ResponseEntity.unprocessableEntity().body(response);
+    }
+
+    /**
+     * A missing or malformed request body.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(BAD_REQUEST)
+    public ResponseEntity<ExceptionResponse> unreadableBodyHandler(HttpMessageNotReadableException exception) {
+        return ResponseEntity.badRequest().body(new ExceptionResponse(BAD_REQUEST.value(), UNREADABLE_REQUEST_BODY));
     }
 
     @ExceptionHandler(UserInputNotValidException.class)
@@ -127,9 +140,16 @@ public class GlobalHandler {
         return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(response);
     }
 
+    /**
+     * Spring MVC's own errors (unsupported method or media type, unreadable body, unknown path, ...) keep their status.
+     */
     @ExceptionHandler(Exception.class)
     @ResponseStatus(INTERNAL_SERVER_ERROR)
     public ResponseEntity<ExceptionResponse> exceptionHandler(Exception exception) {
+        if (exception instanceof ErrorResponse errorResponse) {
+            HttpStatusCode status = errorResponse.getStatusCode();
+            return ResponseEntity.status(status).body(new ExceptionResponse(status.value(), exception.getMessage()));
+        }
         log.error("Unknown error occurred", exception);
         ExceptionResponse response = new ExceptionResponse(INTERNAL_SERVER_ERROR.value(), "Unknown error occurred");
         return ResponseEntity.status(INTERNAL_SERVER_ERROR).body(response);

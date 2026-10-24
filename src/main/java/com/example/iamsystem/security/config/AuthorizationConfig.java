@@ -21,13 +21,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class AuthorizationConfig {
 
-    /**
-     * Under {@code /api/auth/**} but requires a logged-in user; must be matched before the public rules.
-     */
-    private static final String[] AUTHENTICATED_AUTH_APIS = {
-            "/api/auth/authorize"
-    };
-
     private static final String[] PUBLIC_APIS = {
             "/api/tenants/signup",
             "/api/auth/**",
@@ -54,7 +47,6 @@ public class AuthorizationConfig {
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(requests -> requests
-                        .requestMatchers(AUTHENTICATED_AUTH_APIS).authenticated()
                         .requestMatchers(OPENAPI_ENDPOINTS).permitAll()
                         .requestMatchers(PUBLIC_APIS).permitAll()
                         .anyRequest().authenticated())

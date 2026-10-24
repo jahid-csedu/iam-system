@@ -1,9 +1,11 @@
 package com.example.iamsystem.user.controller;
 
+import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
+import com.example.iamsystem.user.dto.UserLoginDto;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
@@ -12,27 +14,35 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Set;
 
 import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
 import static org.hamcrest.Matchers.contains;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,9 +57,6 @@ class UserControllerTest {
     private UserRepository userRepository;
 
     @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
     private JsonMapper jsonMapper;
 
     @Autowired
@@ -57,6 +64,12 @@ class UserControllerTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private PermissionRepository permissionRepository;
+
+    @MockitoBean
+    private JavaMailSender mailSender;
 
     @BeforeEach
     void setUp() {
@@ -88,7 +101,7 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("Creating a user without IAM:WRITE is forbidden")
+    @DisplayName("Creating a user without users:create is forbidden")
     @Sql("/sql/insert_user_role.sql")
     void createUser_withoutWritePermission_isForbidden() throws Exception {
         User plainUser = userRepository.findByUsername("user").orElseThrow();
@@ -305,21 +318,16 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("Root changes another user's password")
+    @DisplayName("Changing your password without the old password fails validation")
     @Sql("/sql/insert_user_role.sql")
-    void changePassword_byRootUser_forAnotherUser_successful() throws Exception {
-        User currentRootUser = userRepository.findByUsername("root").orElseThrow();
-        User subordinateUser = userRepository.findByUsername("user").orElseThrow();
-
-        PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "NewPassword1!");
+    void changePassword_withoutOldPassword_failsValidation() throws Exception {
+        User currentUser = userRepository.findByUsername("user").orElseThrow();
 
         mockMvc.perform(patch("/api/users/password")
-                        .with(actingAs(currentRootUser))
-                        .param("username", subordinateUser.getUsername())
+                        .with(actingAs(currentUser))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonMapper.writeValueAsString(passwordChangeDto)))
-                .andExpect(status().isNoContent())
-                .andDo(print());
+                        .content(jsonMapper.writeValueAsString(new PasswordChangeDto(null, "NewPassword1!"))))
+                .andExpect(status().isUnprocessableEntity());
     }
 
     @Test
@@ -338,19 +346,71 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("A regular user cannot change another user's password")
+    @DisplayName("Root resets another user's password: it is emailed only to that user, and only the new password logs in")
     @Sql("/sql/insert_user_role.sql")
-    void changePassword_byUser_forAnotherUser_unauthorized() throws Exception {
-        User currentUser = userRepository.findByUsername("user").orElseThrow();
-        User rootUserForTest = userRepository.findByUsername("root").orElseThrow();
+    void resetPassword_byRoot_emailsANewPasswordThatLogsIn() throws Exception {
+        User root = userRepository.findByUsername("root").orElseThrow();
+        User member = userRepository.findByUsername("user").orElseThrow();
 
-        PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "NewPassword1!");
+        mockMvc.perform(post("/api/users/{id}/password-reset", member.getId()).with(actingAs(root)))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
 
-        mockMvc.perform(patch("/api/users/password")
-                        .with(actingAs(currentUser))
-                        .param("username", rootUserForTest.getUsername())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonMapper.writeValueAsString(passwordChangeDto)))
+        ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(mail.capture());
+        assertArrayEquals(new String[]{"user@test.com"}, mail.getValue().getTo());
+        String text = mail.getValue().getText();
+        String newPassword = text.substring(text.lastIndexOf(' ') + 1);
+
+        login("user", newPassword).andExpect(status().isOk());
+        login("user", "P@ssw0rd").andExpect(status().isUnauthorized());
+    }
+
+    private ResultActions login(String username, String password) throws Exception {
+        return mockMvc.perform(post("/api/auth/authenticate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(new UserLoginDto(username, password))));
+    }
+
+    @Test
+    @DisplayName("Resetting a password without users:reset-password is forbidden")
+    @Sql("/sql/insert_user_role.sql")
+    void resetPassword_withoutPermission_isForbidden() throws Exception {
+        User member = userRepository.findByUsername("user").orElseThrow();
+        User root = userRepository.findByUsername("root").orElseThrow();
+
+        mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(member)))
                 .andExpect(status().isForbidden());
+        verifyNoInteractions(mailSender);
+    }
+
+    @Test
+    @DisplayName("Even with users:reset-password, nobody can reset the root user's password")
+    @Sql("/sql/insert_user_role.sql")
+    void resetPassword_ofRoot_isForbidden() throws Exception {
+        Role resetter = roleRepository.findById(1L).orElseThrow();
+        resetter.getPermissions().add(permissionRepository.findAllByOrderByName().stream()
+                .filter(permission -> permission.getName().equals("users:reset-password"))
+                .findFirst().orElseThrow());
+        roleRepository.save(resetter);
+        User member = userRepository.findByUsername("user").orElseThrow();
+        member.addRole(resetter);
+        userRepository.save(member);
+        User root = userRepository.findByUsername("root").orElseThrow();
+
+        mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(userRepository.findByUsername("user").orElseThrow())))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(mailSender);
+    }
+
+    @Test
+    @DisplayName("Resetting your own password is forbidden; you change it instead")
+    @Sql("/sql/insert_user_role.sql")
+    void resetPassword_ofSelf_isForbidden() throws Exception {
+        User root = userRepository.findByUsername("root").orElseThrow();
+
+        mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(root)))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(mailSender);
     }
 }

@@ -2,17 +2,12 @@ package com.example.iamsystem.auth.service;
 
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
-import com.example.iamsystem.auth.dto.AuthorizationRequest;
-import com.example.iamsystem.auth.dto.AuthorizationResponse;
 import com.example.iamsystem.auth.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.auth.dto.JwtResponse;
 import com.example.iamsystem.auth.dto.TokenValidationRequest;
 import com.example.iamsystem.auth.dto.TokenValidationResponse;
-import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.JwtException;
-import com.example.iamsystem.permission.entity.PermissionAction;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
-import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
 import com.example.iamsystem.user.dto.UserLoginDto;
@@ -37,8 +32,6 @@ public class AuthenticationService {
     private final AuthenticationManager authenticationManager;
     private final DefaultUserDetailsService userDetailsService;
     private final JwtTokenUtil jwtTokenUtil;
-    private final AuthorizationService authorizationService;
-    private final CurrentUserProvider currentUserProvider;
 
     @Auditable(
             value = AuditEventType.USER_LOGIN,
@@ -64,17 +57,6 @@ public class AuthenticationService {
 
     public TokenValidationResponse validate(TokenValidationRequest request) {
         return new TokenValidationResponse(jwtTokenUtil.isValid(request.getToken(), ACCESS_TOKEN));
-    }
-
-    /**
-     * Answers, for another application, whether the calling user holds {@code serviceName:action}.
-     */
-    public AuthorizationResponse authorize(AuthorizationRequest request) {
-        boolean authorized = authorizationService.hasPermission(
-                currentUserProvider.requireCurrentActor(),
-                request.getServiceName(),
-                PermissionAction.valueOf(request.getAction()));
-        return new AuthorizationResponse(authorized);
     }
 
     /**

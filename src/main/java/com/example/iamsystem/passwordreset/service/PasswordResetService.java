@@ -4,78 +4,73 @@ import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
+import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
-import static com.example.iamsystem.common.util.DateUtil.calculateExpiryDate;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.INVALID_OTP;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.OTP_DOES_NOT_BELONG_TO_USER;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.OTP_HAS_EXPIRED;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_BODY_PREFIX;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_SUBJECT;
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_SUCCESS_BODY_PREFIX;
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_SUCCESS_SUBJECT;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.USER_NOT_FOUND;
 
+/**
+ * Self-service password reset for users who are not logged in: an OTP is emailed, and a valid OTP gets the user a new
+ * password by email. The OTP and the password are only ever sent by email.
+ * <p>
+ * Users are found by username or email across all tenants, which is unambiguous only while both are globally unique.
+ * Step 8 (per-tenant uniqueness) must look the user up inside the tenant of the request's {@code client_id}.
+ */
 @Service
 @RequiredArgsConstructor
 public class PasswordResetService {
 
-    public static final String USER_EMAIL = "user_email";
-    public static final String REASON = "reason";
-    public static final String SYSTEM = "SYSTEM";
-    public static final String OTP_GENERATED = "otp_generated";
+    private static final int OTP_BOUND = 1_000_000;
+    private static final String OTP_FORMAT = "%06d";
+
+    private final SecureRandom random = new SecureRandom();
     private final UserRepository userRepository;
     private final PasswordResetOTPRepository otpRepository;
     private final JavaMailSender mailSender;
-    private final PasswordEncoder passwordEncoder;
+    private final NewPasswordIssuer newPasswordIssuer;
+    private final OtpExpirationProperties otpExpiration;
 
-    @Value("${password.reset.otp.expiration.minutes}")
-    private int expiryTimeInMinutes;
-    @Value("${password.expiration.days}")
-    private int passwordExpiryTimeInDays;
-
-    private static final String UPPER_CASE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    private static final String LOWER_CASE_LETTERS = "abcdefghijklmnopqrstuvwxyz";
-    private static final String NUMBERS = "0123456789";
-    private static final String SPECIAL_CHARS = "@#!$%^&-+=()";
-    private static final String ALL_CHARS = UPPER_CASE_LETTERS + LOWER_CASE_LETTERS + NUMBERS + SPECIAL_CHARS;
-
+    /**
+     * Replaces any earlier OTP of the user.
+     */
     @Auditable(
             value = AuditEventType.PASSWORD_RESET_OTP_REQUEST,
-            target = "#email",
-            detailsExpression = "T(java.util.Map).of('otp_generated', #result)"
+            target = "#identifier"
     )
-    public void createPasswordResetOtpForUser(String email) {
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+    @Transactional
+    public void createPasswordResetOtp(String identifier) {
+        User user = findUser(identifier).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
 
-        // Delete any existing OTP for this user
         PasswordResetOTP existingOtp = otpRepository.findByUser(user);
         if (existingOtp != null) {
             otpRepository.delete(existingOtp);
+            otpRepository.flush();
         }
 
-        String otp = generateOTP();
-        PasswordResetOTP myOtp = new PasswordResetOTP();
-        myOtp.setUser(user);
-        myOtp.setOtp(otp);
-        myOtp.setExpiryDate(calculateExpiryDate(expiryTimeInMinutes));
-        otpRepository.save(myOtp);
+        String otp = String.format(OTP_FORMAT, random.nextInt(OTP_BOUND));
+        PasswordResetOTP resetOtp = new PasswordResetOTP();
+        resetOtp.setUser(user);
+        resetOtp.setOtp(otp);
+        resetOtp.setExpiryDate(Instant.now().plus(Duration.ofMinutes(otpExpiration.minutes())));
+        otpRepository.save(resetOtp);
 
         SimpleMailMessage emailMessage = new SimpleMailMessage();
         emailMessage.setTo(user.getEmail());
@@ -86,67 +81,33 @@ public class PasswordResetService {
 
     @Auditable(
             value = AuditEventType.PASSWORD_RESET,
-            target = "#email"
+            target = "#identifier"
     )
-    public void resetPassword(String otp, String email) {
+    @Transactional
+    public void resetPassword(String identifier, String otp) {
         PasswordResetOTP resetOtp = otpRepository.findByOtp(otp);
-        validateOtp(email, resetOtp);
-
-        User user = resetOtp.getUser();
-        String newPassword = generateSecurePassword();
-        user.setPassword(passwordEncoder.encode(newPassword));
-        user.setPasswordExpiryDate(calculateExpiryDate(passwordExpiryTimeInDays));
-        userRepository.save(user);
-
-        SimpleMailMessage emailMessage = new SimpleMailMessage();
-        emailMessage.setTo(user.getEmail());
-        emailMessage.setSubject(PASSWORD_RESET_SUCCESS_SUBJECT);
-        emailMessage.setText(PASSWORD_RESET_SUCCESS_BODY_PREFIX + newPassword);
-        mailSender.send(emailMessage);
-
+        validateOtp(identifier, resetOtp);
+        newPasswordIssuer.issueNewPassword(resetOtp.getUser());
         otpRepository.delete(resetOtp);
     }
 
-    private void validateOtp(String email, PasswordResetOTP resetOtp) {
+    /**
+     * A username match wins over an email match, so a username that looks like someone's email is still unambiguous.
+     */
+    private Optional<User> findUser(String identifier) {
+        return userRepository.findByUsername(identifier).or(() -> userRepository.findByEmail(identifier));
+    }
+
+    private static void validateOtp(String identifier, PasswordResetOTP resetOtp) {
         if (resetOtp == null) {
             throw new InvalidPasswordResetOTPException(INVALID_OTP);
         }
-
-        if (!resetOtp.getUser().getEmail().equals(email)) {
+        User owner = resetOtp.getUser();
+        if (!identifier.equals(owner.getUsername()) && !identifier.equals(owner.getEmail())) {
             throw new InvalidPasswordResetOTPException(OTP_DOES_NOT_BELONG_TO_USER);
         }
-
         if (resetOtp.getExpiryDate().isBefore(Instant.now())) {
             throw new InvalidPasswordResetOTPException(OTP_HAS_EXPIRED);
         }
     }
-
-    private String generateOTP() {
-        Random random = new Random();
-        int otp = 100000 + random.nextInt(900000); // Generates a 6-digit number
-        return String.valueOf(otp);
-    }
-
-    private String generateSecurePassword() {
-        SecureRandom random = new SecureRandom();
-        StringBuilder password = new StringBuilder();
-
-        // Ensure at least one of each required character type
-        password.append(UPPER_CASE_LETTERS.charAt(random.nextInt(UPPER_CASE_LETTERS.length())));
-        password.append(LOWER_CASE_LETTERS.charAt(random.nextInt(LOWER_CASE_LETTERS.length())));
-        password.append(NUMBERS.charAt(random.nextInt(NUMBERS.length())));
-        password.append(SPECIAL_CHARS.charAt(random.nextInt(SPECIAL_CHARS.length())));
-
-        // Fill the rest of the password with random characters
-        for (int i = 4; i < 12; i++) {
-            password.append(ALL_CHARS.charAt(random.nextInt(ALL_CHARS.length())));
-        }
-
-        // Shuffle the password to randomize the character positions
-        List<Character> passwordChars = password.chars().mapToObj(c -> (char) c).collect(Collectors.toList());
-        Collections.shuffle(passwordChars, random);
-
-        return passwordChars.stream().collect(StringBuilder::new, StringBuilder::append, StringBuilder::append).toString();
-    }
 }
-

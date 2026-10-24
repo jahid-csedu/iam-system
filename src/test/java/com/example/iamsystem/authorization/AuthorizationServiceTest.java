@@ -10,9 +10,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static com.example.iamsystem.permission.entity.PermissionAction.DELETE;
-import static com.example.iamsystem.permission.entity.PermissionAction.READ;
-import static com.example.iamsystem.permission.entity.PermissionAction.WRITE;
+import static com.example.iamsystem.permission.PermissionKey.USERS_CREATE;
+import static com.example.iamsystem.permission.PermissionKey.USERS_READ;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,33 +37,33 @@ class AuthorizationServiceTest {
     @Test
     @DisplayName("A permission granted through one of the user's roles is held")
     void hasPermission_whenGrantedThroughARole_isTrue() {
-        when(permissionRepository.isGrantedToUser(1L, "IAM", READ)).thenReturn(true);
+        when(permissionRepository.isGrantedToUser(1L, "users:read")).thenReturn(true);
 
-        assertTrue(authorizationService.hasPermission(ALICE, "IAM", READ));
+        assertTrue(authorizationService.hasPermission(ALICE, USERS_READ));
     }
 
     @Test
     @DisplayName("A permission not granted through any role is not held")
     void hasPermission_whenNotGranted_isFalse() {
-        when(permissionRepository.isGrantedToUser(1L, "IAM", WRITE)).thenReturn(false);
+        when(permissionRepository.isGrantedToUser(1L, "users:create")).thenReturn(false);
 
-        assertFalse(authorizationService.hasPermission(ALICE, "IAM", WRITE));
+        assertFalse(authorizationService.hasPermission(ALICE, USERS_CREATE));
     }
 
     @Test
-    @DisplayName("The root user always has the permission, without a database lookup")
-    void hasPermission_forRootUser_isAlwaysTrue() {
-        assertTrue(authorizationService.hasPermission(ROOT, "ANY_SERVICE", DELETE));
+    @DisplayName("The root user holds every TENANT permission, without a database lookup")
+    void hasPermission_forRootUser_holdsTenantPermissions() {
+        assertTrue(authorizationService.hasPermission(ROOT, USERS_CREATE));
         verifyNoInteractions(permissionRepository);
     }
 
     @Test
     @DisplayName("The check throws only when the permission is missing")
     void checkPermission_throwsOnlyWhenPermissionMissing() {
-        when(permissionRepository.isGrantedToUser(1L, "IAM", READ)).thenReturn(true);
-        when(permissionRepository.isGrantedToUser(1L, "IAM", WRITE)).thenReturn(false);
+        when(permissionRepository.isGrantedToUser(1L, "users:read")).thenReturn(true);
+        when(permissionRepository.isGrantedToUser(1L, "users:create")).thenReturn(false);
 
-        assertDoesNotThrow(() -> authorizationService.checkPermission(ALICE, "IAM", READ));
-        assertThrows(NoAccessException.class, () -> authorizationService.checkPermission(ALICE, "IAM", WRITE));
+        assertDoesNotThrow(() -> authorizationService.checkPermission(ALICE, USERS_READ));
+        assertThrows(NoAccessException.class, () -> authorizationService.checkPermission(ALICE, USERS_CREATE));
     }
 }

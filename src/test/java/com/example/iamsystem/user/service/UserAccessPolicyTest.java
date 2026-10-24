@@ -37,22 +37,25 @@ class UserAccessPolicyTest {
     }
 
     @Test
-    @DisplayName("Changing your own password is allowed")
-    void checkCanChangePassword_ownPassword_isAllowed() {
-        assertDoesNotThrow(() -> policy.checkCanChangePassword(actor(member), member));
+    @DisplayName("Resetting another non-root user's password is allowed")
+    void checkCanResetPassword_ofAnotherUser_isAllowed() {
+        assertDoesNotThrow(() -> policy.checkCanResetPassword(actor(manager), member));
+        assertDoesNotThrow(() -> policy.checkCanResetPassword(actor(root), manager));
     }
 
     @Test
-    @DisplayName("Root may change anyone else's password")
-    void checkCanChangePassword_rootForAnyoneElse_isAllowed() {
-        assertDoesNotThrow(() -> policy.checkCanChangePassword(actor(root), member));
+    @DisplayName("Resetting your own password is denied; you change it instead")
+    void checkCanResetPassword_ofSelf_isDenied() {
+        NoAccessException exception = assertThrows(NoAccessException.class,
+                () -> policy.checkCanResetPassword(actor(manager), manager));
+        assertEquals("Users cannot reset their own password; change it instead", exception.getMessage());
     }
 
     @Test
-    @DisplayName("A non-root user may not change someone else's password")
-    void checkCanChangePassword_nonRootForSomeoneElse_isDenied() {
-        assertThrows(NoAccessException.class, () -> policy.checkCanChangePassword(actor(manager), member));
-        assertThrows(NoAccessException.class, () -> policy.checkCanChangePassword(actor(manager), root));
+    @DisplayName("Nobody can reset the root user's password")
+    void checkCanResetPassword_ofRoot_isDenied() {
+        assertThrows(NoAccessException.class, () -> policy.checkCanResetPassword(actor(manager), root));
+        assertThrows(NoAccessException.class, () -> policy.checkCanResetPassword(actor(root), root));
     }
 
     @Test

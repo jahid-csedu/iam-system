@@ -3,6 +3,7 @@ package com.example.iamsystem.user.service;
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.common.exception.InvalidPasswordException;
+import com.example.iamsystem.passwordreset.service.NewPasswordIssuer;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.user.config.PasswordExpirationProperties;
@@ -17,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import static com.example.iamsystem.common.exception.ErrorMessage.INVALID_OLD_PASSWORD;
 import static com.example.iamsystem.common.util.DateUtil.calculateExpiryDate;
 
+/**
+ * Changing your own password, and resetting another user's password.
+ */
 @Service
 @RequiredArgsConstructor
 public class UserPasswordService {
@@ -27,37 +31,38 @@ public class UserPasswordService {
     private final CurrentUserProvider currentUserProvider;
     private final PasswordEncoder passwordEncoder;
     private final PasswordExpirationProperties passwordExpiration;
+    private final NewPasswordIssuer newPasswordIssuer;
 
     /**
-     * Changes the current user's password, or, when {@code username} is given, the password of that user in the same tenant.
-     * Changing your own password always requires the old password.
+     * Only for yourself, and always with the old password.
      */
-    @Auditable(
-            value = AuditEventType.PASSWORD_CHANGE,
-            target = "#username",
-            detailsExpression = "T(java.util.Map).of('password_change_type', (#username != null ? 'admin_initiated' : 'user_initiated'))"
-    )
+    @Auditable(AuditEventType.PASSWORD_CHANGE)
     @Transactional
-    public void changePassword(PasswordChangeDto request, String username) {
+    public void changeOwnPassword(PasswordChangeDto request) {
         AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
-        User target = username == null
-                ? userRepository.getRequiredByIdAndTenantId(actor.userId(), actor.tenantId())
-                : userRepository.getRequiredByUsernameAndTenantId(username, actor.tenantId());
-
-        accessPolicy.checkCanChangePassword(actor, target);
-        if (actor.isUser(target.getId())) {
-            verifyOldPassword(target, request.oldPassword());
+        User user = userRepository.getRequiredByIdAndTenantId(actor.userId(), actor.tenantId());
+        if (!passwordEncoder.matches(request.oldPassword(), user.getPassword())) {
+            throw new InvalidPasswordException(INVALID_OLD_PASSWORD);
         }
         userValidator.validatePasswordPolicy(request.newPassword());
 
-        target.setPassword(passwordEncoder.encode(request.newPassword()));
-        target.setPasswordExpiryDate(calculateExpiryDate(passwordExpiration.days()));
-        userRepository.save(target);
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        user.setPasswordExpiryDate(calculateExpiryDate(passwordExpiration.days()));
+        userRepository.save(user);
     }
 
-    private void verifyOldPassword(User user, String oldPassword) {
-        if (oldPassword == null || !passwordEncoder.matches(oldPassword, user.getPassword())) {
-            throw new InvalidPasswordException(INVALID_OLD_PASSWORD);
-        }
+    /**
+     * Gives another user of the tenant a new random password, sent only to that user's email address.
+     */
+    @Auditable(
+            value = AuditEventType.PASSWORD_RESET_BY_USER,
+            target = "#userId"
+    )
+    @Transactional
+    public void resetPassword(Long userId) {
+        AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
+        User target = userRepository.getRequiredByIdAndTenantId(userId, actor.tenantId());
+        accessPolicy.checkCanResetPassword(actor, target);
+        newPasswordIssuer.issueNewPassword(target);
     }
 }

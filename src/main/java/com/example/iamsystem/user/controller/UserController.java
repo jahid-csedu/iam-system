@@ -27,11 +27,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import static com.example.iamsystem.permission.PermissionConstants.IAM_SERVICE_NAME;
-import static com.example.iamsystem.permission.entity.PermissionAction.DELETE;
-import static com.example.iamsystem.permission.entity.PermissionAction.READ;
-import static com.example.iamsystem.permission.entity.PermissionAction.UPDATE;
-import static com.example.iamsystem.permission.entity.PermissionAction.WRITE;
+import static com.example.iamsystem.permission.PermissionKey.USERS_CREATE;
+import static com.example.iamsystem.permission.PermissionKey.USERS_DELETE;
+import static com.example.iamsystem.permission.PermissionKey.USERS_READ;
+import static com.example.iamsystem.permission.PermissionKey.USERS_RESET_PASSWORD;
+import static com.example.iamsystem.permission.PermissionKey.USERS_UPDATE;
 
 @RestController
 @RequestMapping("/api/users")
@@ -47,68 +47,75 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = WRITE)
-    @Operation(summary = "Create a user in the caller's tenant (Requires: IAM:WRITE)")
+    @RequirePermission(USERS_CREATE)
+    @Operation(summary = "Create a user in the caller's tenant (Requires: users:create)")
     public ResponseEntity<UserDto> createUser(@RequestBody @Valid UserCreationDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(userCreationService.createUser(request));
     }
 
     @PatchMapping("/password")
-    @Operation(summary = "Change your own password (old password required), or, as the root user, another user's password")
-    public ResponseEntity<Void> changePassword(@RequestBody @Valid PasswordChangeDto request,
-                                               @RequestParam(required = false) String username) {
-        userPasswordService.changePassword(request, username);
+    @Operation(summary = "Change your own password (old password required)")
+    public ResponseEntity<Void> changePassword(@RequestBody @Valid PasswordChangeDto request) {
+        userPasswordService.changeOwnPassword(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/password-reset")
+    @RequirePermission(USERS_RESET_PASSWORD)
+    @Operation(summary = "Reset another user's password; the new password is emailed to that user (Requires: users:reset-password)")
+    public ResponseEntity<Void> resetPassword(@PathVariable Long id) {
+        userPasswordService.resetPassword(id);
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/roles")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = UPDATE)
-    @Operation(summary = "Assign roles of your tenant to another user (Requires: IAM:UPDATE)")
+    @RequirePermission(USERS_UPDATE)
+    @Operation(summary = "Assign roles of your tenant to another user (Requires: users:update)")
     public ResponseEntity<Void> assignRoles(@RequestBody @Valid UserRoleAttachmentDto request) {
         userRoleService.assignRoles(request);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/roles")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = UPDATE)
-    @Operation(summary = "Remove roles from another user (Requires: IAM:UPDATE)")
+    @RequirePermission(USERS_UPDATE)
+    @Operation(summary = "Remove roles from another user (Requires: users:update)")
     public ResponseEntity<Void> removeRoles(@RequestBody @Valid UserRoleAttachmentDto request) {
         userRoleService.removeRoles(request);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = READ)
-    @Operation(summary = "List your tenant's users, one page at a time, ordered by id (Requires: IAM:READ)")
+    @RequirePermission(USERS_READ)
+    @Operation(summary = "List your tenant's users, one page at a time, ordered by id (Requires: users:read)")
     public ResponseEntity<PagedModel<UserDto>> getUsers(@RequestParam(defaultValue = "0") int page,
                                                         @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) int size) {
         return ResponseEntity.ok(new PagedModel<>(userService.findUsers(page, size)));
     }
 
     @GetMapping("/{id}")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = READ)
-    @Operation(summary = "Get a user by ID (Requires: IAM:READ)")
+    @RequirePermission(USERS_READ)
+    @Operation(summary = "Get a user by ID (Requires: users:read)")
     public ResponseEntity<UserDto> getUserById(@PathVariable Long id) {
         return ResponseEntity.ok(userService.findUserById(id));
     }
 
     @GetMapping("/by-username")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = READ)
-    @Operation(summary = "Get a user by username (Requires: IAM:READ)")
+    @RequirePermission(USERS_READ)
+    @Operation(summary = "Get a user by username (Requires: users:read)")
     public ResponseEntity<UserDto> getUserByUsername(@RequestParam String username) {
         return ResponseEntity.ok(userService.findUserByUsername(username));
     }
 
     @GetMapping("/by-email")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = READ)
-    @Operation(summary = "Get a user by email (Requires: IAM:READ)")
+    @RequirePermission(USERS_READ)
+    @Operation(summary = "Get a user by email (Requires: users:read)")
     public ResponseEntity<UserDto> getUserByEmail(@RequestParam String email) {
         return ResponseEntity.ok(userService.findUserByEmail(email));
     }
 
     @DeleteMapping("/{id}")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = DELETE)
-    @Operation(summary = "Delete a user by ID (Requires: IAM:DELETE)")
+    @RequirePermission(USERS_DELETE)
+    @Operation(summary = "Delete a user by ID (Requires: users:delete)")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();

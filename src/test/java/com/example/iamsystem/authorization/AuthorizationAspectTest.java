@@ -10,7 +10,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static com.example.iamsystem.permission.entity.PermissionAction.UPDATE;
+import static com.example.iamsystem.permission.PermissionKey.USERS_UPDATE;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -37,7 +37,7 @@ class AuthorizationAspectTest {
 
         aspect.checkPermission(annotationOf("protectedEndpoint"));
 
-        verify(authorizationService).checkPermission(actor, "IAM", UPDATE);
+        verify(authorizationService).checkPermission(actor, USERS_UPDATE);
     }
 
     @Test
@@ -53,7 +53,7 @@ class AuthorizationAspectTest {
     @DisplayName("A missing permission propagates the denial")
     void checkPermission_whenPermissionMissing_propagatesDenial() throws NoSuchMethodException {
         when(currentUserProvider.requireCurrentActor()).thenReturn(actor);
-        doThrow(new NoAccessException("denied")).when(authorizationService).checkPermission(actor, "IAM", UPDATE);
+        doThrow(new NoAccessException("denied")).when(authorizationService).checkPermission(actor, USERS_UPDATE);
         RequirePermission annotation = annotationOf("protectedEndpoint");
 
         assertThrows(NoAccessException.class, () -> aspect.checkPermission(annotation));
@@ -64,7 +64,7 @@ class AuthorizationAspectTest {
     }
 
     private static class Endpoints {
-        @RequirePermission(serviceName = "IAM", action = UPDATE)
+        @RequirePermission(USERS_UPDATE)
         void protectedEndpoint() {
         }
     }

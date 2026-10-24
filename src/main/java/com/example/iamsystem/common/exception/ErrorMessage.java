@@ -20,12 +20,9 @@ public class ErrorMessage {
     public static final String HELD_ROLE_CHANGE = "Users cannot change a role they hold";
     public static final String PERMISSION_NOT_FOUND = "Permission not found";
     public static final String PERMISSIONS_NOT_FOUND = "Some permissions not found";
-    public static final String PERMISSION_EXISTS = "Permission already exists";
     public static final String TENANT_EXISTS = "Tenant name not available";
     public static final String TENANT_NAME_REQUIRED = "Tenant name is required";
     public static final String ROOT_USER_REQUIRED = "Root user details are required";
-    public static final String SERVICE_NAME_REQUIRED = "Service name cannot be null or blank";
-    public static final String ACTION_NAME_REQUIRED = "Action cannot be null or blank";
     public static final String PERMISSION_LIST_NOT_EMPTY = "Permission list cannot be empty";
     public static final String ROLE_LIST_REQUIRED = "Role list cannot be null";
     public static final String ROLE_LIST_NOT_EMPTY = "Role list cannot be empty";
@@ -35,5 +32,12 @@ public class ErrorMessage {
     public static final String PASSWORD_POLICY_VIOLATION = "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
     public static final String ACCOUNT_LOCKED = "Account is locked. Please try again later.";
     public static final String INVALID_OLD_PASSWORD = "Invalid old password";
+    public static final String OLD_PASSWORD_REQUIRED = "Old password is required";
+    public static final String NEW_PASSWORD_REQUIRED = "New password is required";
+    public static final String OWN_PASSWORD_RESET = "Users cannot reset their own password; change it instead";
+    public static final String UNREADABLE_REQUEST_BODY = "Request body is missing or malformed";
+    public static final String IDENTIFIER_REQUIRED = "Username or email is required";
+    public static final String OTP_REQUIRED = "OTP is required";
+    public static final String USER_HAS_NO_EMAIL = "User has no email address to send a new password to";
 }
 

@@ -23,11 +23,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-import static com.example.iamsystem.permission.PermissionConstants.IAM_SERVICE_NAME;
-import static com.example.iamsystem.permission.entity.PermissionAction.DELETE;
-import static com.example.iamsystem.permission.entity.PermissionAction.READ;
-import static com.example.iamsystem.permission.entity.PermissionAction.UPDATE;
-import static com.example.iamsystem.permission.entity.PermissionAction.WRITE;
+import static com.example.iamsystem.permission.PermissionKey.ROLES_CREATE;
+import static com.example.iamsystem.permission.PermissionKey.ROLES_DELETE;
+import static com.example.iamsystem.permission.PermissionKey.ROLES_READ;
+import static com.example.iamsystem.permission.PermissionKey.ROLES_UPDATE;
 
 @RestController
 @RequestMapping("/api/roles")
@@ -39,59 +38,59 @@ public class RoleController {
     private final RolePermissionService rolePermissionService;
 
     @GetMapping
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = READ)
-    @Operation(summary = "List your tenant's roles (Requires: IAM:READ)")
+    @RequirePermission(ROLES_READ)
+    @Operation(summary = "List your tenant's roles (Requires: roles:read)")
     public ResponseEntity<List<RoleDto>> getAllRoles() {
         return ResponseEntity.ok(roleService.getRoles());
     }
 
     @PostMapping
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = WRITE)
-    @Operation(summary = "Create a role in your tenant (Requires: IAM:WRITE)")
+    @RequirePermission(ROLES_CREATE)
+    @Operation(summary = "Create a role in your tenant (Requires: roles:create)")
     public ResponseEntity<RoleDto> createRole(@RequestBody @Valid RoleRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(roleService.createRole(request));
     }
 
     @GetMapping("/{id}")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = READ)
-    @Operation(summary = "Get a role by ID (Requires: IAM:READ)")
+    @RequirePermission(ROLES_READ)
+    @Operation(summary = "Get a role by ID (Requires: roles:read)")
     public ResponseEntity<RoleDto> getRoleById(@PathVariable Long id) {
         return ResponseEntity.ok(roleService.getRole(id));
     }
 
     @GetMapping("/name/{name}")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = READ)
-    @Operation(summary = "Get a role by name (Requires: IAM:READ)")
+    @RequirePermission(ROLES_READ)
+    @Operation(summary = "Get a role by name (Requires: roles:read)")
     public ResponseEntity<RoleDto> getRoleByName(@PathVariable String name) {
         return ResponseEntity.ok(roleService.getRoleByName(name));
     }
 
     @PutMapping("/{id}")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = UPDATE)
-    @Operation(summary = "Update a role you don't hold (Requires: IAM:UPDATE)")
+    @RequirePermission(ROLES_UPDATE)
+    @Operation(summary = "Update a role you don't hold (Requires: roles:update)")
     public ResponseEntity<RoleDto> updateRole(@PathVariable Long id, @RequestBody @Valid RoleRequestDto request) {
         return ResponseEntity.ok(roleService.updateRole(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = DELETE)
-    @Operation(summary = "Delete a role you don't hold; it is removed from its users (Requires: IAM:DELETE)")
+    @RequirePermission(ROLES_DELETE)
+    @Operation(summary = "Delete a role you don't hold; it is removed from its users (Requires: roles:delete)")
     public ResponseEntity<Void> deleteRoleById(@PathVariable Long id) {
         roleService.deleteRole(id);
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/permissions")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = UPDATE)
-    @Operation(summary = "Assign permissions to a role you don't hold (Requires: IAM:UPDATE)")
+    @RequirePermission(ROLES_UPDATE)
+    @Operation(summary = "Assign permissions to a role you don't hold (Requires: roles:update)")
     public ResponseEntity<Void> assignPermissions(@RequestBody @Valid RolePermissionDto request) {
         rolePermissionService.assignPermissions(request);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/permissions")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = UPDATE)
-    @Operation(summary = "Remove permissions from a role you don't hold (Requires: IAM:UPDATE)")
+    @RequirePermission(ROLES_UPDATE)
+    @Operation(summary = "Remove permissions from a role you don't hold (Requires: roles:update)")
     public ResponseEntity<Void> removePermissions(@RequestBody @Valid RolePermissionDto request) {
         rolePermissionService.removePermissions(request);
         return ResponseEntity.noContent().build();

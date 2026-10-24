@@ -45,7 +45,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 5 | Tenants: `V2__tenants.sql`, `POST /api/tenants/signup` (tenant + root atomically, one root per tenant), `POST /api/users` | `c104519` |
 | 6 | Tenant isolation: `V3__tenant_isolation.sql`, tenant-scoped user/role lookups, paged user list, no self role changes, `RoleService` split | `a687558` |
 | Tests | `@DisplayName` on every test (now a rule) | `fa06792` |
-| 6b | `AuthenticatedActor` principal, one-query JWT filter (revoked/inactive/locked → 401), DB permission checks | step 6b commit |
+| 6b | `AuthenticatedActor` principal, one-query JWT filter (revoked/inactive/locked → 401), DB permission checks | `1ab8f81` |
+| 7a | Fixed permission catalog (`V4`), `PermissionKey`, read-only permission API, password change vs. reset split, forgot-password by username or email | step 7a commit |
 
 ---
 
@@ -116,30 +117,38 @@ What was built:
 - Tests: `TestActors.actingAs(user)` replaces the per-class token helpers; `JwtAuthenticationTest` covers real tokens
   end to end (valid, malformed, revoked, inactive, locked, expired lock).
 
-### Step 7: Fixed permission catalog, user types, predefined roles
+### Step 7a: Fixed permission catalog (DONE, kept for reference)
 
-**Goal:** the permission model from the target design.
+Decisions taken: step 7 split into 7a/7b/7c; **generic keys** `<resource>:<action>` (not one per endpoint), with
+`users:reset-password` separate; `/api/auth/authorize` removed (the IAM manages only its own permissions); changing a
+password is self-only, resetting is by another user with `users:reset-password` (never self, never root) and emails a
+generated password; the forgot-password flow takes a username or email.
+
+What was built: `V4__permission_catalog.sql` (catalog rows, `scope`, `services` dropped); `PermissionKey` enum + catalog
+sync test; `@RequirePermission(PermissionKey)`; root holds TENANT keys only; only TENANT permissions attachable to roles;
+`NewPasswordIssuer` shared by both resets; OTP expiry bug fixed (days → minutes); Spring MVC errors keep their status.
+
+### Step 7b: Predefined roles
+
+**Goal:** a new tenant starts with ready-made roles instead of an empty role list.
 
 Proposed design:
-- **Schema:**
-  - `permissions` redesigned: `id`, `key` (unique, e.g. `users:create`, `roles:write`, `token-settings:update`,
-    `tenants:suspend`), `scope` (`PLATFORM`/`TENANT`), `description`. Rows come **only** from migrations.
-    The `service_name`, `action`, `service_id` and `application_id` columns, the `services` table and the
-    `PermissionAction` enum go away.
-  - `users.user_type` (`MANAGEMENT`/`REGULAR`).
-  - `user_permissions` (direct grants to management users) next to `user_roles`.
-  - Predefined roles: a template (migration-seeded, e.g. `role_templates` + `role_template_permissions`) copied into each new
-    tenant on signup. Root has every tenant permission implicitly, not through a role.
-- **Code:**
-  - `@RequirePermission("users:create")` (a permission key, not service + action). `AuthorizationService` checks
-    keys: root → all TENANT-scope keys; otherwise union of role permissions + direct permissions.
-  - Permission endpoints become read-only (list the catalog). Role endpoints manage roles built from the catalog.
-  - Rules: **no self-modification** (a user can't change their own roles/permissions or edit a role they hold);
-    a grantor may grant permissions they don't hold, but never to themselves; changes apply immediately.
-  - Regular users can never hold management permissions or use management endpoints.
-- **Open decisions:** the initial permission key list and naming convention; the predefined role set
-  (e.g. Admin, User Manager, Role Manager, Viewer).
-- **Done when:** the catalog is migration-only; every rule above has a test.
+- A template defined by migration (`role_templates` + `role_template_permissions`), copied into each new tenant on signup,
+  in the same transaction. The copies are ordinary roles: root (or a user with `roles:update`) can change or delete them.
+- **Open decisions:** the predefined role set and the keys in each (e.g. Admin = all keys except `users:reset-password`?,
+  User Manager, Role Manager, Viewer); whether later template changes ever reach existing tenants (proposal: no).
+- **Done when:** signup creates the predefined roles; tests cover the copy and its independence from other tenants.
+
+### Step 7c: User types and direct permissions
+
+**Goal:** management vs. regular users from the target design.
+
+Proposed design:
+- `users.user_type` (`MANAGEMENT`/`REGULAR`); `user_permissions` (direct grants to management users) next to `user_roles`.
+- `AuthorizationService` = root → TENANT keys; otherwise union of role permissions and direct permissions.
+- Regular users can never hold management permissions or use management endpoints; no self-grants (already enforced for roles).
+- **Open decisions:** how the type is chosen at creation; whether a user can change type.
+- **Done when:** every rule above has a test.
 
 ### Step 8: Client applications (`client_id`)
 
@@ -151,6 +160,9 @@ Proposed design:
   `refresh_token_ttl_seconds`, plus a `client_token_claims` table (or JSON column) listing which user claims go into tokens.
 - Tenant signup auto-creates the tenant's **management-console client**, which only accepts management users.
 - Login request: `client_id` + username + password. The client resolves the tenant; the username is looked up inside it.
+- **Forgot-password becomes tenant-scoped:** the requests carry `client_id` + username/email, the client resolves the
+  tenant, and the user is looked up **inside that tenant only** (today's global lookup is only safe while usernames and
+  emails are globally unique). OTP and new password stay email-only.
 - Switch usernames and emails to per-tenant uniqueness (`UNIQUE(tenant_id, username)`, `UNIQUE(tenant_id, email)`, replacing
   the global `uk_users_email`; `username` becomes `NOT NULL`), as decided in steps 5 and 6. Password reset and every lookup by
   username/email become tenant-aware.
@@ -173,8 +185,8 @@ Proposed design:
   revoked), rotated on use. `POST /api/auth/logout` revokes them. This replaces the `@Version`-based revocation.
 - `POST /api/auth/introspect` (RFC 7662 style): active only if the token is valid, the user is active, and the tenant is ACTIVE.
 - Refresh-token errors answer 401 instead of 412 (access tokens already answer 401 since step 6b).
-- Rework `/token/validate` (fold into introspection) and the `/authorize` endpoint (decide whether it stays).
-- **Open decisions:** key per tenant or one platform key; access-token default TTL; whether `/authorize` survives.
+- Rework `/token/validate` (fold into introspection).
+- **Open decisions:** key per tenant or one platform key; access-token default TTL.
 
 ### Step 10: Platform tenant, super users, tenant suspension
 
@@ -201,7 +213,10 @@ Proposed design:
 | `mail.debug=true`, `logging.level.root=DEBUG`, DB credentials in `application.properties` | Small config step (profiles + env) |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
-| Deleting a permission assigned to a role fails (FK) | Step 7 (permissions become read-only) |
+| Merge all migrations into one baseline from the live schema | After the last step of this plan |
+| Deleting a permission assigned to a role fails (FK) | Done in step 7a (permissions are read-only) |
+| Forgot-password hardening: OTP attempt limit, hashed OTP, uniform response (no account enumeration); emailed plaintext password → force a password change on first login after any reset | Own step after 8 |
+| Deleting a user with a pending reset OTP fails (FK) | Small fix (ON DELETE CASCADE) |
 | A root user can delete itself, leaving its tenant without a root | Step 10 (tenant lifecycle) or a small fix earlier |
 | `README.md` out of date | After step 5, and kept current afterwards |
 

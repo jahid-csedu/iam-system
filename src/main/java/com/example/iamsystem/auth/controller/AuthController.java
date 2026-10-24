@@ -1,7 +1,5 @@
 package com.example.iamsystem.auth.controller;
 
-import com.example.iamsystem.auth.dto.AuthorizationRequest;
-import com.example.iamsystem.auth.dto.AuthorizationResponse;
 import com.example.iamsystem.auth.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.auth.dto.JwtResponse;
 import com.example.iamsystem.auth.dto.TokenValidationRequest;
@@ -40,11 +38,5 @@ public class AuthController {
     @Operation(summary = "Token validation")
     public ResponseEntity<TokenValidationResponse> validateToken(@Valid @RequestBody TokenValidationRequest request) {
         return ResponseEntity.ok(authenticationService.validate(request));
-    }
-
-    @PostMapping("/authorize")
-    @Operation(summary = "User authorization")
-    public ResponseEntity<AuthorizationResponse> authorize(@Valid @RequestBody AuthorizationRequest request) {
-        return ResponseEntity.ok(authenticationService.authorize(request));
     }
 }

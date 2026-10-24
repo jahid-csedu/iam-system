@@ -1,72 +1,49 @@
 package com.example.iamsystem.permission.entity;
 
-import com.example.iamsystem.application.entity.Application;
-import com.example.iamsystem.service.entity.Service;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.Immutable;
 
 import java.io.Serializable;
-import java.time.Instant;
-import java.util.Objects;
 
+/**
+ * A row of the fixed permission catalog. Rows are inserted only by migrations and never changed by the application.
+ */
 @Entity
 @Table(name = "permissions")
+@Immutable
 @Getter
-@Setter
-@AllArgsConstructor
 @NoArgsConstructor
 public class Permission implements Serializable {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_id") // Nullable
-    private Service service;
+    @Column(nullable = false, unique = true)
+    private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "application_id") // Nullable
-    private Application application;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PermissionScope scope;
 
-    @Column(name = "service_name") // Kept for backward compatibility
-    private String serviceName;
-
-    @Enumerated(value = EnumType.STRING)
-    private PermissionAction action;
-
+    @Column(nullable = false)
     private String description;
-
-    @CreationTimestamp
-    private Instant createdAt;
-
-    @UpdateTimestamp
-    private Instant updatedAt;
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Permission that = (Permission) o;
-        return Objects.equals(getId(), that.getId());
+        if (!(o instanceof Permission other)) return false;
+        return id != null && id.equals(other.getId());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getId());
+        return Permission.class.hashCode();
     }
 }
