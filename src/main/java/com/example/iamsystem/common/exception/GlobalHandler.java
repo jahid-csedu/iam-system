@@ -27,9 +27,9 @@ import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 @Slf4j
 @Hidden
 public class GlobalHandler {
-    @ExceptionHandler({UserAlreadyExistsException.class, PermissionAlreadyExistsException.class})
+    @ExceptionHandler(AlreadyExistsException.class)
     @ResponseStatus(BAD_REQUEST)
-    public ResponseEntity<ExceptionResponse> handleUserAndPermissionAlreadyExistsException(RuntimeException exception) {
+    public ResponseEntity<ExceptionResponse> handleAlreadyExistsException(AlreadyExistsException exception) {
         return buildExceptionResponse(exception, BAD_REQUEST);
     }
 

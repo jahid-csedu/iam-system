@@ -8,6 +8,9 @@ import com.example.iamsystem.role.dto.RolePermissionDto;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
+import com.example.iamsystem.tenant.entity.Tenant;
+import com.example.iamsystem.tenant.entity.TenantStatus;
+import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
@@ -61,11 +64,15 @@ class RoleControllerTest {
     private UserRepository userRepository;
 
     @Autowired
+    private TenantRepository tenantRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
     private EntityManager entityManager;
 
+    private Tenant tenant;
     private User testUser;
     private User readOnlyUser;
     private Role adminRole;
@@ -80,6 +87,7 @@ class RoleControllerTest {
         userRepository.deleteAll();
         roleRepository.deleteAll();
         permissionRepository.deleteAll();
+        tenant = tenantRepository.save(new Tenant("Role Test Tenant", TenantStatus.ACTIVE));
 
         // Create permissions
         readPermission = new Permission();
@@ -119,6 +127,7 @@ class RoleControllerTest {
 
         // Create a test user with admin role
         testUser = new User();
+        testUser.setTenant(tenant);
         testUser.setUsername("testuser");
         testUser.setPassword(passwordEncoder.encode("password"));
         testUser.setFullName("Test User");
@@ -137,6 +146,8 @@ class RoleControllerTest {
         readOnlyRole = roleRepository.save(readOnlyRole);
 
         readOnlyUser = new User();
+
+        readOnlyUser.setTenant(tenant);
         readOnlyUser.setUsername("readonlyuser");
         readOnlyUser.setPassword(passwordEncoder.encode("password"));
         readOnlyUser.setFullName("Read Only User");
@@ -171,11 +182,10 @@ class RoleControllerTest {
     }
 
     @Test
-    void getAllRoles_forbidden() throws Exception {
-        // No authentication
+    void getAllRoles_withoutAuthentication_isUnauthorized() throws Exception {
         mockMvc.perform(get("/api/roles")
                         .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isForbidden())
+                .andExpect(status().isUnauthorized())
                 .andDo(print());
     }
 

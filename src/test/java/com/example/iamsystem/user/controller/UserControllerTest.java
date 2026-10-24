@@ -4,7 +4,7 @@ import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
-import com.example.iamsystem.user.dto.UserRegistrationDto;
+import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
@@ -23,7 +23,6 @@ import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.util.HashSet;
 import java.util.Set;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -33,6 +32,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -73,23 +73,33 @@ class UserControllerTest {
     }
 
     @Test
-    @Sql("/sql/delete_user_role.sql")
-    void userRegistration_successful() throws Exception {
-        // No need to set security context for public registration
-        UserRegistrationDto userRegistrationDto = new UserRegistrationDto(
-                "newUser",
-                "NewUser1!",
-                null,
-                "newuser@example.com",
-                true,
-                new HashSet<>()
-        );
+    @Sql("/sql/insert_user_role.sql")
+    void createUser_byRoot_createsUserInRootsTenant() throws Exception {
+        User root = userRepository.findByUsername("root").orElseThrow();
+        UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com");
 
-        mockMvc.perform(post("/api/users/register")
+        mockMvc.perform(post("/api/users")
+                        .with(authentication(getAuthenticationToken(root)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonMapper.writeValueAsString(userRegistrationDto)))
+                        .content(jsonMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
-                .andDo(print());
+                .andExpect(jsonPath("$.username").value("newUser"))
+                .andExpect(jsonPath("$.tenantId").value(root.getTenant().getId()))
+                .andExpect(jsonPath("$.createdBy").value("root"))
+                .andExpect(jsonPath("$.rootUser").value(false));
+    }
+
+    @Test
+    @Sql("/sql/insert_user_role.sql")
+    void createUser_withoutWritePermission_isForbidden() throws Exception {
+        User plainUser = userRepository.findByUsername("user").orElseThrow();
+        UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com");
+
+        mockMvc.perform(post("/api/users")
+                        .with(authentication(getAuthenticationToken(plainUser)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
     }
 
     @Test

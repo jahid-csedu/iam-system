@@ -2,11 +2,11 @@ package com.example.iamsystem.user.controller;
 
 import com.example.iamsystem.authorization.RequirePermission;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
+import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserDto;
-import com.example.iamsystem.user.dto.UserRegistrationDto;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
+import com.example.iamsystem.user.service.UserCreationService;
 import com.example.iamsystem.user.service.UserPasswordService;
-import com.example.iamsystem.user.service.UserRegistrationService;
 import com.example.iamsystem.user.service.UserRoleService;
 import com.example.iamsystem.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,6 +32,7 @@ import static com.example.iamsystem.permission.PermissionConstants.IAM_SERVICE_N
 import static com.example.iamsystem.permission.entity.PermissionAction.DELETE;
 import static com.example.iamsystem.permission.entity.PermissionAction.READ;
 import static com.example.iamsystem.permission.entity.PermissionAction.UPDATE;
+import static com.example.iamsystem.permission.entity.PermissionAction.WRITE;
 
 @RestController
 @RequestMapping("/api/users")
@@ -39,16 +40,16 @@ import static com.example.iamsystem.permission.entity.PermissionAction.UPDATE;
 @SecurityRequirement(name = "Bearer Authentication")
 public class UserController {
 
-    private final UserRegistrationService userRegistrationService;
+    private final UserCreationService userCreationService;
     private final UserPasswordService userPasswordService;
     private final UserRoleService userRoleService;
     private final UserService userService;
 
-    @PostMapping("/register")
-    @Operation(summary = "Register a new user")
-    @SecurityRequirement(name = "")
-    public ResponseEntity<UserDto> registerUser(@RequestBody @Valid UserRegistrationDto request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(userRegistrationService.registerUser(request));
+    @PostMapping
+    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = WRITE)
+    @Operation(summary = "Create a user in the caller's tenant (Requires: IAM:WRITE)")
+    public ResponseEntity<UserDto> createUser(@RequestBody @Valid UserCreationDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(userCreationService.createUser(request));
     }
 
     @PatchMapping("/password")

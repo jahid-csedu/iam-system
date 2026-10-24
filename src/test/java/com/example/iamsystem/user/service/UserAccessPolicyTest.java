@@ -1,16 +1,11 @@
 package com.example.iamsystem.user.service;
 
-import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-import static com.example.iamsystem.permission.entity.PermissionAction.WRITE;
 import static com.example.iamsystem.user.service.UserTestData.createdBy;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static com.example.iamsystem.user.service.UserTestData.user;
@@ -18,17 +13,10 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
-@ExtendWith(MockitoExtension.class)
 class UserAccessPolicyTest {
 
-    @Mock
-    private AuthorizationService authorizationService;
-
-    private UserAccessPolicy policy;
+    private final UserAccessPolicy policy = new UserAccessPolicy();
 
     private User root;
     private User child;
@@ -37,7 +25,6 @@ class UserAccessPolicyTest {
 
     @BeforeEach
     void setUp() {
-        policy = new UserAccessPolicy(authorizationService);
         root = rootUser(1, "root");
         child = createdBy(root, 2, "child");
         grandChild = createdBy(child, 3, "grandchild");
@@ -60,20 +47,6 @@ class UserAccessPolicyTest {
     }
 
     @Test
-    void checkCanCreateUsers_requiresIamWritePermission() {
-        policy.checkCanCreateUsers(root);
-
-        verify(authorizationService).checkPermission(root, "IAM", WRITE);
-    }
-
-    @Test
-    void checkCanCreateUsers_withoutPermission_isDenied() {
-        doThrow(new NoAccessException("denied")).when(authorizationService).checkPermission(child, "IAM", WRITE);
-
-        assertThrows(NoAccessException.class, () -> policy.checkCanCreateUsers(child));
-    }
-
-    @Test
     void checkCanManageRoles_withinHierarchy_isAllowed() {
         assertDoesNotThrow(() -> policy.checkCanManageRoles(root, child));
         assertDoesNotThrow(() -> policy.checkCanManageRoles(child, grandChild));
@@ -83,7 +56,6 @@ class UserAccessPolicyTest {
     void checkCanManageRoles_outsideHierarchy_isDenied() {
         assertThrows(NoAccessException.class, () -> policy.checkCanManageRoles(child, root));
         assertThrows(NoAccessException.class, () -> policy.checkCanManageRoles(root, stranger));
-        verifyNoInteractions(authorizationService);
     }
 
     @Test

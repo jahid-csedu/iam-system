@@ -5,8 +5,11 @@ public enum AuditEventType {
     USER_LOGIN,
     TOKEN_REFRESH,
 
+    // Tenant Management
+    TENANT_SIGNUP,
+
     // User Management
-    USER_REGISTRATION,
+    USER_CREATION,
     PASSWORD_CHANGE,
     ROLES_ASSIGNMENT,
     ROLES_REMOVAL,

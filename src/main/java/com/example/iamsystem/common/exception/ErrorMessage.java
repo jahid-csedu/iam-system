@@ -9,7 +9,6 @@ public class ErrorMessage {
     public static final String USER_NOT_FOUND = "User not found";
     public static final String USER_NOT_LOGGED_IN = "No logged in user found";
     public static final String PASSWORD_REQUIRED = "Password is required";
-    public static final String PASSWORD_LENGTH = "Password should be between 6 to 15 characters";
     public static final String INVALID_EMAIL = "Email should be a valid email address";
     public static final String INVALID_TOKEN = "Invalid Token";
     public static final String REFRESH_TOKEN_REQUIRED = "Refresh token is required";
@@ -17,6 +16,9 @@ public class ErrorMessage {
     public static final String ROLES_NOT_FOUND = "Some roles not found";
     public static final String PERMISSION_NOT_FOUND = "Permission not found";
     public static final String PERMISSION_EXISTS = "Permission already exists";
+    public static final String TENANT_EXISTS = "Tenant name not available";
+    public static final String TENANT_NAME_REQUIRED = "Tenant name is required";
+    public static final String ROOT_USER_REQUIRED = "Root user details are required";
     public static final String SERVICE_NAME_REQUIRED = "Service name cannot be null or blank";
     public static final String ACTION_NAME_REQUIRED = "Action cannot be null or blank";
     public static final String PERMISSION_LIST_REQUIRED = "Permission list cannot be null";

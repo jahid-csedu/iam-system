@@ -1,7 +1,7 @@
 package com.example.iamsystem.user.entity;
 
-import com.example.iamsystem.organization.entity.Organization;
 import com.example.iamsystem.role.entity.Role;
+import com.example.iamsystem.tenant.entity.Tenant;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -14,7 +14,6 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -26,47 +25,57 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
 
 @Entity
 @Table(name = "users")
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
 public class User implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     private String username;
+
     private String password;
+
     @Column(name = "full_name")
     private String fullName;
+
     @Column(unique = true)
     private String email;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
+
+    /**
+     * The one user per tenant holding every tenant permission (enforced by a unique index).
+     */
     @Column(name = "is_root_user", nullable = false)
     private boolean isRootUser = false;
 
     @Column(name = "is_super_user", nullable = false)
     private boolean isSuperUser = false;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id")
-    private Organization organization;
-
     @Column(name = "active")
     private boolean active;
+
     @Column(name = "password_expired")
     private boolean passwordExpired;
+
     @Column(name = "password_expiry_date")
     private Instant passwordExpiryDate;
+
     @Column(name = "user_locked")
     private boolean userLocked;
+
     @Column(name = "failed_login_attempts")
     private Integer failedLoginAttempts = 0;
+
     @Column(name = "account_locked_until")
     private Instant accountLockedUntil;
 
@@ -99,13 +108,12 @@ public class User implements Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        User user = (User) o;
-        return Objects.equals(getId(), user.getId()) && Objects.equals(getUsername(), user.getUsername()) && Objects.equals(getEmail(), user.getEmail());
+        if (!(o instanceof User other)) return false;
+        return id != null && id.equals(other.getId());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getId(), getUsername(), getEmail());
+        return User.class.hashCode();
     }
 }

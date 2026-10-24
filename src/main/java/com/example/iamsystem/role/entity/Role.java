@@ -1,8 +1,7 @@
 package com.example.iamsystem.role.entity;
 
-import com.example.iamsystem.organization.entity.Organization;
 import com.example.iamsystem.permission.entity.Permission;
-import jakarta.persistence.Column;
+import com.example.iamsystem.tenant.entity.Tenant;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -13,7 +12,6 @@ import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -25,28 +23,29 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
 
 @Entity
 @Table(name = "roles")
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
 public class Role implements Serializable {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     private String name;
+
     private String description;
 
-    @Column(name = "is_global", nullable = false)
-    private boolean isGlobal = false;
-
+    /**
+     * Optional until tenant isolation makes every role tenant-owned.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id") // Nullable for Global Roles
-    private Organization organization;
+    @JoinColumn(name = "tenant_id")
+    private Tenant tenant;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -66,13 +65,12 @@ public class Role implements Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Role role = (Role) o;
-        return Objects.equals(getId(), role.getId());
+        if (!(o instanceof Role other)) return false;
+        return id != null && id.equals(other.getId());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getId());
+        return Role.class.hashCode();
     }
 }

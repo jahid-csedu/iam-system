@@ -40,6 +40,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 3 | Package-by-feature layout | `8f164f3` |
 | 4a | `UserService` split by responsibility, `UserAccessPolicy`, `CurrentUserProvider`, code standards | `98a5965` |
 | 4b | `AuthorizationService` is the single owner of permission checks; `AuthenticationService` | `9c8fe14` |
+| Docs | This plan | `d188c69` |
+| 5 | Tenants: `V2__tenants.sql`, `POST /api/tenants/signup` (tenant + root atomically, one root per tenant), `POST /api/users` | step 5 commit |
 
 ---
 
@@ -48,7 +50,10 @@ This file lets any new session pick up the work without the conversation that pr
 Order matters: each step relies on the seams the earlier ones created. Before each step, list the touched classes and their
 cleanup (working-agreement rule).
 
-### Step 5: Tenant foundation
+### Step 5: Tenant foundation (DONE, kept for reference)
+
+Decisions taken: usernames and emails stay **globally** unique until step 8; **no tenant slug** yet; endpoints
+`POST /api/tenants/signup` + `POST /api/users` (`/api/users/register` removed); the local DB was reset (no data migration).
 
 **Goal:** tenants exist as a real concept. Signing up creates a tenant and its single root user in one transaction.
 
@@ -127,6 +132,8 @@ Proposed design:
   `refresh_token_ttl_seconds`, plus a `client_token_claims` table (or JSON column) listing which user claims go into tokens.
 - Tenant signup auto-creates the tenant's **management-console client**, which only accepts management users.
 - Login request: `client_id` + username + password. The client resolves the tenant; the username is looked up inside it.
+- Switch usernames and emails to per-tenant uniqueness (`UNIQUE(tenant_id, username)`, `UNIQUE(tenant_id, email)`), as decided in
+  step 5. Password reset and every lookup by username/email become tenant-aware.
 - Management endpoints for clients (CRUD, token settings), protected by fixed permissions such as `clients:write`.
 - **Open decisions:** client secrets now or later (needed for OAuth2 confidential clients); the default token settings for new clients.
 - **Done when:** login without a valid `client_id` fails; the console client rejects regular users; TTL/refresh/claims follow the client.
@@ -164,17 +171,15 @@ Proposed design:
 
 | Item | Where it is handled |
 |---|---|
-| Public registration lets anyone become root with global power | Steps 5–6 |
+| Public registration lets anyone become root with global power | Step 5 done (signup creates an own tenant); step 6 removes the global power |
 | Hard-coded HMAC JWT secrets | Step 9 |
 | JWT filter errors → 500 instead of 401 | Step 9 (or earlier as a small fix) |
 | `/token/validate` ignores revocation | Step 9 |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
 | `mail.debug=true`, `logging.level.root=DEBUG`, DB credentials in `application.properties` | Small config step (profiles + env) |
-| Password length 6–15 in `UserRegistrationDto` conflicts with the 8+ policy | With step 5 (touches registration) |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Step 7 (roles are reworked) |
 | Deleting a permission assigned to a role fails (FK) | Step 7 (permissions become read-only) |
-| Anonymous GET permitted on roles/permissions in `AuthorizationConfig` | Step 6 or 7 |
 | `README.md` out of date | After step 5, and kept current afterwards |
 
 ---

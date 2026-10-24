@@ -13,8 +13,9 @@ It's the backbone for ensuring your company's digital assets are secure and that
 
 ## Key Features
 
+*   **Tenants:** Each organization signs up as its own tenant. The person who signs up becomes the tenant's single root user.
 *   **User Login:** Securely log in with a username and password.
-*   **User Management:** Create, view, and manage users. It supports a hierarchy, so a manager can see the activity of the employees they manage.
+*   **User Management:** Create, view, and manage users inside your tenant. It supports a hierarchy, so a manager can see the users they created.
 *   **Role Management:** Define roles (like "Admin," "Editor," or "Viewer") and assign them to users.
 *   **Permissions:** Assign specific permissions to each role (e.g., `READ`, `WRITE`, `DELETE`). This gives you fine-grained control over what users can do.
 *   **Password Reset:** Users can securely reset their passwords via email verification.
@@ -75,21 +76,24 @@ For local development, sensitive credentials like email passwords are not commit
 
 Now you can use a tool like Postman to interact with the system. Here are a few key operations you can test:
 
-#### 1. Create a User
+#### 1. Sign Up a Tenant
 
 *   **Method:** `POST`
-*   **URL:** `http://localhost:8080/api/users/register`
+*   **URL:** `http://localhost:8080/api/tenants/signup`
 *   **Body (select `raw` and `JSON`):**
     ```json
     {
-      "username": "testuser",
-      "password": "password123",
-      "fullName": "Test User",
-      "email": "test@example.com",
-      "rootUser": true
+      "tenantName": "Acme",
+      "rootUser": {
+        "username": "testuser",
+        "password": "Password123!",
+        "fullName": "Test User",
+        "email": "test@example.com"
+      }
     }
     ```
-*   **Action:** Click "Send." You should get a `201 Created` response with a `UserDto` (without the password).
+*   **Action:** Click "Send." You should get a `201 Created` response with the new tenant and its root user (without the password).
+    The password must be at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.
 
 #### 2. Log In
 
@@ -99,7 +103,7 @@ Now you can use a tool like Postman to interact with the system. Here are a few 
     ```json
     {
       "username": "testuser",
-      "password": "password123"
+      "password": "Password123!"
     }
     ```
 *   **Action:** Click "Send." The response will include an `access_token`. **Copy this token** for the next steps.
@@ -111,13 +115,20 @@ Now you can use a tool like Postman to interact with the system. Here are a few 
 *   **Headers:**
     *   Add a new header with the key `Authorization`.
     *   For the value, type `Bearer ` (with a space at the end) and then paste the `access_token` you copied.
-*   **Action:** Click "Send." You should see a list of all users in the system.
+*   **Action:** Click "Send." You should see the users you are allowed to see.
+
+As the root user you can now create more users in your tenant with `POST /api/users` (same body as `rootUser` above).
 
 ---
 
 ## Available API Endpoints
 
 Here is a list of the main operations you can perform. For protected endpoints, you must include the `Authorization` header as described above.
+
+### Tenants
+| Action | Method | URL | Protected |
+| --- | --- | --- | --- |
+| Sign Up a Tenant (creates the tenant and its root user) | `POST` | `/api/tenants/signup` | No (Returns 201 Created) |
 
 ### Authentication
 | Action | Method | URL | Protected |
@@ -130,16 +141,15 @@ Here is a list of the main operations you can perform. For protected endpoints, 
 ### User Management
 | Action                 | Method   | URL                      | Protected |
 |------------------------|----------|--------------------------| --- |
-| Create User            | `POST`   | `/api/users/register`    | No (Returns 201 Created) |
-| Change Password        | `PATCH`  | `/api/users/password`    | Yes |
+| Create User in Your Tenant | `POST` | `/api/users`         | Yes, `IAM:WRITE` (Returns 201 Created) |
+| Change Password        | `PATCH`  | `/api/users/password`    | Yes (own password, or a subordinate's as root via `?username=`) |
 | Get All Users          | `GET`    | `/api/users`             | Yes |
 | Get User by ID         | `GET`    | `/api/users/{id}`        | Yes |
 | Get User by Username   | `GET`    | `/api/users/by-username` | Yes |
 | Get User by Email      | `GET`    | `/api/users/by-email`    | Yes |
 | Delete User            | `DELETE` | `/api/users/{id}`        | Yes |
-| Assign Roles to User   | `PUT`    | `/api/users/roles`       | Yes |
-| Remove Roles from User | `DELETE` | `/api/users/roles`       | Yes |
-| Change User Password   | `PATCH`  | `/api/users/password`    | Yes |
+| Assign Roles to User   | `PUT`    | `/api/users/roles`       | Yes, `IAM:UPDATE` |
+| Remove Roles from User | `DELETE` | `/api/users/roles`       | Yes, `IAM:UPDATE` |
 
 ### Role Management
 | Action | Method | URL | Protected |

@@ -3,12 +3,9 @@ package com.example.iamsystem.security.config;
 import com.example.iamsystem.security.JwtAuthenticationEntryPoint;
 import com.example.iamsystem.security.filter.JwtRequestFilter;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -16,29 +13,29 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+/**
+ * Which endpoints need a logged-in user. Fine-grained permissions are enforced by {@code @RequirePermission}.
+ */
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
 @RequiredArgsConstructor
-@Slf4j
 public class AuthorizationConfig {
 
-    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
-    private final JwtRequestFilter jwtRequestFilter;
-
-    private static final String[] PERMITTED_GET_APIS = {
-            "/api/roles/**",
-            "/api/permissions/**"
+    /**
+     * Under {@code /api/auth/**} but requires a logged-in user; must be matched before the public rules.
+     */
+    private static final String[] AUTHENTICATED_AUTH_APIS = {
+            "/api/auth/authorize"
     };
 
-    private static final String[] PERMITTED_PUBLIC_APIS = {
-            "/api/users/register/**",
+    private static final String[] PUBLIC_APIS = {
+            "/api/tenants/signup",
             "/api/auth/**",
             "/api/password/reset-request",
-            "/api/password/reset",
+            "/api/password/reset"
     };
 
-    private static final String[] WHITELISTED_OPENAPI_ENDPOINTS = {
+    private static final String[] OPENAPI_ENDPOINTS = {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
@@ -48,38 +45,23 @@ public class AuthorizationConfig {
             "/webjars/**"
     };
 
-
-    private static final String[] SPECIAL_PRIVATE_APIS = {
-            "/api/auth/authorize"
-    };
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final JwtRequestFilter jwtRequestFilter;
 
     @Bean
     protected SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationManager authenticationManager) throws Exception {
-        log.info("Configuring Security Filter Chain...");
         http
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(request -> {
-                            request.requestMatchers(SPECIAL_PRIVATE_APIS).authenticated();
-                            log.debug("Permitting access to special private APIs: {}", String.join(", ", SPECIAL_PRIVATE_APIS));
-                            request.requestMatchers(WHITELISTED_OPENAPI_ENDPOINTS).permitAll();
-                            log.debug("Permitting access to OpenAPI endpoints: {}", String.join(", ", WHITELISTED_OPENAPI_ENDPOINTS));
-                            request.requestMatchers(PERMITTED_PUBLIC_APIS).permitAll();
-                            log.debug("Permitting access to public APIs: {}", String.join(", ", PERMITTED_PUBLIC_APIS));
-                            request.requestMatchers(HttpMethod.GET, PERMITTED_GET_APIS).permitAll();
-                            log.debug("Permitting GET access to APIs: {}", String.join(", ", PERMITTED_GET_APIS));
-                            request.anyRequest().authenticated();
-                            log.debug("All other requests require authentication.");
-                        }
-                )
+                .authorizeHttpRequests(requests -> requests
+                        .requestMatchers(AUTHENTICATED_AUTH_APIS).authenticated()
+                        .requestMatchers(OPENAPI_ENDPOINTS).permitAll()
+                        .requestMatchers(PUBLIC_APIS).permitAll()
+                        .anyRequest().authenticated())
                 .authenticationManager(authenticationManager)
-                .exceptionHandling(ex -> ex.authenticationEntryPoint(jwtAuthenticationEntryPoint))
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
-
-        http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
-
-        log.info("Security Filter Chain configured successfully.");
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+                .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
-
     }
 }

@@ -55,13 +55,14 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   This replaces the unused `is_super_user` flag.
 - **Tenant**: created by signup. The user who creates a tenant becomes its **only** root user.
   The root has every tenant-management permission inside that tenant and no access to any other tenant.
-  Proposed: an explicit tenant-signup operation that creates the tenant and root user in one transaction,
-  instead of a `rootUser` flag on user registration. Enforce one root per tenant in the database.
+  Done (step 5): public `POST /api/tenants/signup` creates the tenant and its root user in one transaction;
+  a unique index enforces one root per tenant. Other users are created with `POST /api/users` inside the caller's tenant.
 - **User types inside a tenant**:
   - *Management users*: created by root (or by a management user with permission). They use the management API
     and the future management UI: roles, regular users, token settings, UI settings.
   - *Regular users*: login/logout, get access (+ refresh) tokens, change password, set up MFA (later). No management access.
-- Every tenant-owned row has a `tenant_id`. Usernames are unique per tenant, not globally.
+- Every tenant-owned row has a `tenant_id`. Usernames (and emails) become unique per tenant in step 8, when login knows
+  the tenant through `client_id`; until then both stay globally unique. Tenants have no slug until one is needed.
   Tenant isolation replaces the current `createdBy`-chain check (`createdBy` stays for audit only).
 
 ### Tenant identification
@@ -130,7 +131,8 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 - Flyway owns the schema: `src/main/resources/db/migration/V<n>__<description>.sql`.
 - Never edit an applied migration. Every schema change is a new `V<n+1>__...` file.
 - Hibernate runs with `ddl-auto=validate` (app and tests), so an entity/schema mismatch fails at startup.
-- No seed data yet. The first root user is created through public registration.
+- No seed data yet. The first root user is created by tenant signup.
+- One root per tenant is a functional unique index (`uk_users_root_per_tenant`), not visible to Hibernate validation.
 - Booleans are `BOOLEAN`, timestamps `DATETIME(6)`, and constraints get readable names (`fk_<table>_<ref>`, `uk_<table>_<col>`).
 
 ## Current layout (`src/main/java/com/example/iamsystem`)
@@ -140,7 +142,9 @@ Package by feature. Each feature uses only the sub-packages it needs, always wit
 Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enums/` or `aspect/` packages:
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
-- `user/`: one service per responsibility: `UserRegistrationService`, `UserPasswordService`, `UserRoleService`, `UserService` (find + delete).
+- `tenant/`: `Tenant` + `TenantStatus`, `TenantSignupService` (tenant + root user in one transaction), `TenantController`
+- `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserService` (find + delete);
+  `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
   `UserAccessPolicy` is the only place deciding which users an actor may see or manage (today: creator hierarchy).
   `UserValidator` (availability + password policy), `config/PasswordExpirationProperties`.
 - `passwordreset/`: OTP-by-email password reset
@@ -151,7 +155,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`),
   `userdetails/` (incl. `CurrentUserProvider`, the single owner of "who is logged in"), `event/` (lockout listeners)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
-- `organization/`, `application/`, `service/`: entities from PR #10. **Not used by any code yet.** `organizations` is the closest thing to a tenant.
+- `application/`, `service/`: entities from PR #10, **not used by any code yet** (become clients / disappear in steps 7–8).
 - `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (mail, OpenAPI), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
@@ -159,7 +163,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - Root user (`is_root_user`) passes every permission check in `AuthorizationService`, globally (no tenant scope).
 - Endpoint permissions are owned by `@RequirePermission`; `UserAccessPolicy` only decides *which users* an actor may act on
   (exception: public registration checks `IAM:WRITE` in the policy). Assigning and removing user roles both need `IAM:UPDATE`.
-- Public registration with `rootUser: true` creates a root user but **no tenant**.
+- `POST /api/tenants/signup` (public) creates a tenant + its root user. `POST /api/users` (`IAM:WRITE`) creates a user in the
+  caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - User visibility and edit rights = walking the `createdBy` chain (`UserAccessPolicy`).
 - Changing your own password always requires the old password, also when passing your own `username`.
 - Token revocation = JWT `version` claim vs `User.@Version` (the same column as optimistic locking).
@@ -168,7 +173,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- No tenant isolation: roles and permissions are global, and any root user (anyone can self-register as root)
+- No tenant isolation yet (step 6): roles and permissions are global, and any root user (anyone can sign up a tenant)
   can modify every role and permission in the system.
 - JWT secrets are hard-coded in `JwtConstant` (HMAC, so any verifier could also forge tokens). `mail.debug=true`.
 - Password reset emails a plaintext new password. OTP uses `java.util.Random`, has no attempt limit, and the endpoint reveals whether an email exists.
@@ -182,7 +187,6 @@ Broken / drift
 
 Design debt
 - `DefaultUserDetails` still builds `service:action` authority strings for an unused JWT `authorities` claim (goes away with the token redesign).
-- `AuthorizationConfig` permits anonymous GET on `/api/roles/**` and `/api/permissions/**`, but `@RequirePermission` then denies it: confusing rules.
 - The JPA entity is used as the security principal and is reloaded on every request.
 - `findAllUsers` loads the whole table and filters in memory.
 - `RoleService` still uses `Mappers.getMapper` instead of an injected mapper.
@@ -204,4 +208,8 @@ Design debt
   `AuthController` logic moved to `AuthenticationService` (login no longer loads the user twice; bad/expired refresh
   tokens give 412 instead of 500); `AuditAspect` uses `CurrentUserProvider`. Removing user roles now needs `IAM:UPDATE`.
 - 2026-10-24: Wrote `docs/IMPLEMENTATION_PLAN.md` (full step plan for resuming in a fresh session).
-  Next: step 5 (tenant foundation). Its open decisions are listed in the plan.
+- 2026-10-24: Step 5 (tenant foundation). Flyway `V2__tenants.sql`: organizations → tenants, `tenant_id NOT NULL` on users,
+  one root per tenant (functional unique index), `roles.is_global` dropped. `POST /api/tenants/signup` (tenant + root in one
+  transaction), `POST /api/users` (`IAM:WRITE`) replaces `/api/users/register`; `UserFactory`; entities cleaned (id-based equals);
+  `AuthorizationConfig` simplified (anonymous → 401). Decisions: usernames/emails global until step 8, no tenant slug yet.
+  Next: step 6 (tenant isolation).

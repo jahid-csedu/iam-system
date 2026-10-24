@@ -2,6 +2,10 @@ delete from `user_roles`;
 delete from `roles`;
 update `users` set `created_by` = null;
 delete from `users`;
+delete from `tenants`;
+
+INSERT INTO `tenants` (`id`, `name`, `status`, `created_at`, `updated_at`)
+VALUES (1, 'Test Tenant', 'ACTIVE', '2025-06-27 14:10:14.550149', '2025-06-27 14:10:14.550149');
 
 INSERT INTO
   `roles` (
@@ -9,7 +13,6 @@ INSERT INTO
     `created_at`,
     `description`,
     `name`,
-    `is_global`,
     `updated_at`
   )
 VALUES
@@ -18,7 +21,6 @@ VALUES
     '2025-06-27 14:10:14.550149',
     'Admin User role of the system',
     'ADMIN',
-    false,
     '2025-06-27 14:10:14.550149'
   );
 
@@ -40,6 +42,7 @@ INSERT INTO
     `user_locked`,
     `username`,
     `created_by`,
+    `tenant_id`,
     `version`
   )
 VALUES
@@ -60,6 +63,7 @@ VALUES
     '0',
     'root',
     NULL,
+    1,
     0
   );
 
@@ -81,6 +85,7 @@ INSERT INTO
     `user_locked`,
     `username`,
     `created_by`,
+    `tenant_id`,
     `version`
   )
 VALUES
@@ -101,5 +106,6 @@ VALUES
     '0',
     'user',
     '1',
+    1,
     0
   );

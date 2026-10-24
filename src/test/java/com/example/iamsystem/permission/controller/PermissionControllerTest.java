@@ -7,6 +7,9 @@ import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
+import com.example.iamsystem.tenant.entity.Tenant;
+import com.example.iamsystem.tenant.entity.TenantStatus;
+import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
@@ -56,6 +59,9 @@ class PermissionControllerTest {
     private UserRepository userRepository;
 
     @Autowired
+    private TenantRepository tenantRepository;
+
+    @Autowired
     private RoleRepository roleRepository;
 
     @Autowired
@@ -64,6 +70,7 @@ class PermissionControllerTest {
     @Autowired
     private EntityManager entityManager;
 
+    private Tenant tenant;
     private User testUser;
     private Role adminRole;
     private Permission readPermission;
@@ -77,6 +84,7 @@ class PermissionControllerTest {
         userRepository.deleteAll();
         roleRepository.deleteAll();
         permissionRepository.deleteAll();
+        tenant = tenantRepository.save(new Tenant("Permission Test Tenant", TenantStatus.ACTIVE));
 
         // Create permissions
         readPermission = new Permission();
@@ -116,6 +124,7 @@ class PermissionControllerTest {
 
         // Create a test user with admin role
         testUser = new User();
+        testUser.setTenant(tenant);
         testUser.setUsername("testuser");
         testUser.setPassword(passwordEncoder.encode("password"));
         testUser.setFullName("Test User");
@@ -151,6 +160,7 @@ class PermissionControllerTest {
     void getAllPermissions_forbidden() throws Exception {
         // Create a user without any permissions
         User noPermissionUser = new User();
+        noPermissionUser.setTenant(tenant);
         noPermissionUser.setUsername("nopermission");
         noPermissionUser.setPassword(passwordEncoder.encode("password"));
         noPermissionUser.setFullName("No Permission User");
@@ -185,6 +195,7 @@ class PermissionControllerTest {
     void createPermission_forbidden() throws Exception {
         // Create a user with only READ permission
         User readOnlyUser = new User();
+        readOnlyUser.setTenant(tenant);
         readOnlyUser.setUsername("readonly");
         readOnlyUser.setPassword(passwordEncoder.encode("password"));
         readOnlyUser.setFullName("Read Only User");
@@ -227,6 +238,7 @@ class PermissionControllerTest {
     @Test
     void getPermissionById_forbidden() throws Exception {
         User noPermissionUser = new User();
+        noPermissionUser.setTenant(tenant);
         noPermissionUser.setUsername("nopermission");
         noPermissionUser.setPassword(passwordEncoder.encode("password"));
         noPermissionUser.setFullName("No Permission User");
@@ -259,6 +271,7 @@ class PermissionControllerTest {
     @Test
     void updatePermission_forbidden() throws Exception {
         User readOnlyUser = new User();
+        readOnlyUser.setTenant(tenant);
         readOnlyUser.setUsername("readonly");
         readOnlyUser.setPassword(passwordEncoder.encode("password"));
         readOnlyUser.setFullName("Read Only User");
@@ -299,6 +312,7 @@ class PermissionControllerTest {
     @Test
     void deletePermissionById_forbidden() throws Exception {
         User readOnlyUser = new User();
+        readOnlyUser.setTenant(tenant);
         readOnlyUser.setUsername("readonly");
         readOnlyUser.setPassword(passwordEncoder.encode("password"));
         readOnlyUser.setFullName("Read Only User");
@@ -336,6 +350,7 @@ class PermissionControllerTest {
     @Test
     void getPermissionByServiceName_forbidden() throws Exception {
         User noPermissionUser = new User();
+        noPermissionUser.setTenant(tenant);
         noPermissionUser.setUsername("nopermission");
         noPermissionUser.setPassword(passwordEncoder.encode("password"));
         noPermissionUser.setFullName("No Permission User");
