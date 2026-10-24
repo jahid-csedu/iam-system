@@ -1,6 +1,6 @@
 package com.example.iamsystem.security;
 
-import com.example.iamsystem.constant.JwtConstant;
+import com.example.iamsystem.security.jwt.JwtConstant;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;

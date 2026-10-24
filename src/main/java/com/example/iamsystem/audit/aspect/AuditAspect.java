@@ -3,7 +3,7 @@ package com.example.iamsystem.audit.aspect;
 import com.example.iamsystem.audit.AuditService;
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditOutcome;
-import com.example.iamsystem.security.user.DefaultUserDetails;
+import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

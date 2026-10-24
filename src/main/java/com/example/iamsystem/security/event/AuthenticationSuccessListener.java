@@ -1,6 +1,6 @@
 package com.example.iamsystem.security.event;
 
-import com.example.iamsystem.user.UserRepository;
+import com.example.iamsystem.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
