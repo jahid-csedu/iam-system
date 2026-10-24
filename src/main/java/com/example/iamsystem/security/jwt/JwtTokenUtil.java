@@ -1,8 +1,7 @@
 package com.example.iamsystem.security.jwt;
 
-import com.example.iamsystem.enums.TokenType;
-import com.example.iamsystem.security.user.DefaultUserDetails;
-import com.example.iamsystem.user.model.entity.User;
+import com.example.iamsystem.security.userdetails.DefaultUserDetails;
+import com.example.iamsystem.user.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -11,19 +10,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.SecretKey;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
+import javax.crypto.SecretKey;
 
-import static com.example.iamsystem.constant.JwtConstant.ACCESS_TOKEN_SECRET_KEY;
-import static com.example.iamsystem.constant.JwtConstant.JWT_ACCESS_TOKEN_VALIDITY;
-import static com.example.iamsystem.constant.JwtConstant.JWT_REFRESH_TOKEN_VALIDITY;
-import static com.example.iamsystem.constant.JwtConstant.REFRESH_TOKEN_SECRET;
-import static com.example.iamsystem.enums.TokenType.ACCESS_TOKEN;
+import static com.example.iamsystem.security.jwt.JwtConstant.ACCESS_TOKEN_SECRET_KEY;
+import static com.example.iamsystem.security.jwt.JwtConstant.JWT_ACCESS_TOKEN_VALIDITY;
+import static com.example.iamsystem.security.jwt.JwtConstant.JWT_REFRESH_TOKEN_VALIDITY;
+import static com.example.iamsystem.security.jwt.JwtConstant.REFRESH_TOKEN_SECRET;
+import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 
 @Component
 @Slf4j

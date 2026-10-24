@@ -1,9 +1,9 @@
 package com.example.iamsystem.security.filter;
 
-import com.example.iamsystem.constant.ErrorMessage;
-import com.example.iamsystem.constant.JwtConstant;
+import com.example.iamsystem.common.exception.ErrorMessage;
+import com.example.iamsystem.security.jwt.JwtConstant;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
-import com.example.iamsystem.security.user.DefaultUserDetailsService;
+import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,7 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Objects;
 
-import static com.example.iamsystem.enums.TokenType.ACCESS_TOKEN;
+import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 
 @Component
 @RequiredArgsConstructor
@@ -46,7 +46,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 }
             } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
                 log.error("JWT validation failed for URI {}: {}", request.getRequestURI(), e.getMessage());
-                throw new com.example.iamsystem.exception.JwtException(ErrorMessage.INVALID_TOKEN);
+                throw new com.example.iamsystem.common.exception.JwtException(ErrorMessage.INVALID_TOKEN);
             }
         } else {
             log.debug("No JWT token found in request for URI: {}", request.getRequestURI());

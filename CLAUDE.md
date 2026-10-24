@@ -113,12 +113,20 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 - Booleans are `BOOLEAN`, timestamps `DATETIME(6)`, and constraints get readable names (`fk_<table>_<ref>`, `uk_<table>_<col>`).
 
 ## Current layout (`src/main/java/com/example/iamsystem`)
-- `security/`: JWT filter, `JwtTokenUtil`, `AuthController` (`/api/auth/*`), `DefaultUserDetails(User)`, login success/failure listeners (lockout)
-- `user/`: `UserService` (registration, password change, role assignment, creator-tree visibility), `password/` (OTP reset by email)
-- `role/`, `permission/`: CRUD. Permission = `serviceName` + `PermissionAction` enum (READ/WRITE/UPDATE/DELETE)
-- `aspect/AuthorizationAspect` + `util/authorization/@RequirePermission`: endpoint permission checks (string `"IAM:READ"` etc.)
+Package by feature. Each feature uses only the sub-packages it needs, always with these names:
+`controller/`, `service/`, `dto/`, `entity/` (JPA entities + their enums), `repository/`, `mapper/` (MapStruct).
+Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enums/` or `aspect/` packages:
+constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
+
+- `user/`: `UserService` (registration, password change, role assignment, creator-tree visibility), `UserValidator`, `UserRoleAttachmentUtil`
+- `passwordreset/`: OTP-by-email password reset
+- `role/`, `permission/`: CRUD. Permission = `serviceName` + `PermissionAction` enum (READ/WRITE/UPDATE/DELETE); `permission/validation` = `@ValidAction`
+- `authorization/`: `@RequirePermission` + `AuthorizationAspect` (endpoint checks with strings like `"IAM:READ"`)
+- `auth/`: `AuthController` (`/api/auth/*`: login, refresh, validate, authorize) and its DTOs
+- `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`), `userdetails/`, `event/` (lockout listeners)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
 - `organization/`, `application/`, `service/`: entities from PR #10. **Not used by any code yet.** `organizations` is the closest thing to a tenant.
+- `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (mail, OpenAPI), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
 ## Current behaviours to remember
@@ -126,7 +134,7 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 - Public registration with `rootUser: true` creates a root user but **no tenant**.
 - User visibility and edit rights = walking the `createdBy` chain (`UserService.isUserInTree`).
 - Token revocation = JWT `version` claim vs `User.@Version` (the same column as optimistic locking).
-- Access token 5 min, refresh token 24 h; constants and secrets live in `constant/JwtConstant.java`.
+- Access token 5 min, refresh token 24 h; constants and secrets live in `security/jwt/JwtConstant.java`.
 - `is_super_user` exists in schema and entity but is never read.
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
@@ -154,4 +162,6 @@ Design debt
 - 2026-10-24: Step 1 (baseline). Dockerfile on JDK 25, `app` service in docker-compose, fixed `ddl-auto` property name.
 - 2026-10-24: Step 2 (single schema). Flyway `V1__baseline.sql` (from the entities), `ddl-auto=validate`, removed `db-init/`,
   tests on Testcontainers MySQL instead of H2, `.env` no longer passed to the test JVM.
+- 2026-10-24: Step 3 (package by feature). Moved every class into feature packages with consistent sub-packages;
+  no class renamed, no logic changed. Updated jacoco exclusions to the new paths.
   Next: to be chosen by the owner.
