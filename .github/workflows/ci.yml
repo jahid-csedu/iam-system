@@ -52,23 +52,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '25'
-
-      - name: Grant execute permission for Gradle Wrapper
-        run: chmod +x ./gradlew
-
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
       - name: Extract Project Version
         id: project-version
         run: echo "VERSION=$(grep "version =" build.gradle | awk -F"'" '{print $2}')" >> $GITHUB_ENV
@@ -88,9 +71,7 @@ jobs:
           echo "VERSION: ${{ env.VERSION }}"
           echo "Full Image Name Attempt: ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
       - name: Build Docker image
-        run: |
-          ./gradlew bootBuildImage --imageName ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
-          docker tag ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+        run: docker build -t ${{ vars.DOCKER_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} .
 
       # Step 7: Push the Docker image
       - name: Push Docker image
