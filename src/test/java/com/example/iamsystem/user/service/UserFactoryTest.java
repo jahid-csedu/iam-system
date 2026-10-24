@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -71,20 +72,36 @@ class UserFactoryTest {
     }
 
     @Test
-    @DisplayName("A taken username is rejected")
-    void newUser_whenUsernameTaken_isRejected() {
-        doThrow(new UserAlreadyExistsException("Username not available")).when(userValidator).validateUsernameAvailable("alice");
+    @DisplayName("A username or email that isn't available in the tenant is rejected")
+    void newUser_whenNotAvailableInTheTenant_isRejected() {
+        doThrow(new UserAlreadyExistsException("Username not available"))
+                .when(userValidator).validateAvailable("alice", "alice@example.com", TENANT.getId());
 
         assertThrows(UserAlreadyExistsException.class, () -> factory.newUser(request, TENANT, UserType.MANAGEMENT));
         verifyNoInteractions(passwordEncoder);
     }
 
     @Test
-    @DisplayName("A taken email is rejected")
-    void newUser_whenEmailTaken_isRejected() {
-        doThrow(new UserAlreadyExistsException("Email not available")).when(userValidator).validateEmailAvailable("alice@example.com");
+    @DisplayName("A root user is a management user whose username and email are checked across all tenants")
+    void newRootUser_isCheckedGloballyAndIsManagement() {
+        when(passwordEncoder.encode("Password1!")).thenReturn("encoded");
 
-        assertThrows(UserAlreadyExistsException.class, () -> factory.newUser(request, TENANT, UserType.MANAGEMENT));
+        User root = factory.newRootUser(request, TENANT);
+
+        verify(userValidator).validateAvailableForRoot("alice", "alice@example.com");
+        assertTrue(root.isRootUser());
+        assertEquals(UserType.MANAGEMENT, root.getUserType());
+        assertSame(TENANT, root.getTenant());
+    }
+
+    @Test
+    @DisplayName("A root user with a username or email used anywhere is rejected")
+    void newRootUser_whenNotAvailableAnywhere_isRejected() {
+        doThrow(new UserAlreadyExistsException("Email not available"))
+                .when(userValidator).validateAvailableForRoot("alice", "alice@example.com");
+
+        assertThrows(UserAlreadyExistsException.class, () -> factory.newRootUser(request, TENANT));
+        verifyNoInteractions(passwordEncoder);
     }
 
     @Test

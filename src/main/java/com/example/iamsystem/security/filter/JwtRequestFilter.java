@@ -60,23 +60,25 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     }
 
     private Optional<AuthenticatedActor> findActor(String token) {
-        Claims claims;
+        Long userId;
+        Integer version;
         try {
-            claims = tokenUtil.parseClaims(token, ACCESS_TOKEN);
+            Claims claims = tokenUtil.parseClaims(token, ACCESS_TOKEN);
+            userId = tokenUtil.userIdOf(claims);
+            version = tokenUtil.versionOf(claims);
         } catch (ExpiredJwtException e) {
-            log.debug("Ignoring an expired access token of '{}'", e.getClaims().getSubject());
+            log.debug("Ignoring an expired access token of user {}", e.getClaims().getSubject());
             return Optional.empty();
         } catch (JwtException | IllegalArgumentException e) {
             log.warn("Ignoring an invalid access token: {}", e.getMessage());
             return Optional.empty();
         }
 
-        Integer version = tokenUtil.versionOf(claims);
         Optional<AuthenticatedActor> actor = version == null
                 ? Optional.empty()
-                : userRepository.findActor(claims.getSubject(), version, Instant.now());
+                : userRepository.findActor(userId, version, Instant.now());
         if (actor.isEmpty()) {
-            log.warn("Rejected the access token of '{}': revoked, or the account is inactive or locked", claims.getSubject());
+            log.warn("Rejected the access token of user {}: revoked, or the account is inactive or locked", userId);
         }
         return actor;
     }

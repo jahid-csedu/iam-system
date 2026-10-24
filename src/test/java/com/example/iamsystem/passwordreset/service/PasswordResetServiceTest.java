@@ -1,10 +1,14 @@
 package com.example.iamsystem.passwordreset.service;
 
+import com.example.iamsystem.client.entity.Client;
+import com.example.iamsystem.client.service.ClientResolver;
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
+import com.example.iamsystem.tenant.entity.Tenant;
+import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -35,6 +40,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PasswordResetServiceTest {
 
+    private static final String CLIENT_ID = "app-client-id-0000000001";
+    private static final Long TENANT_ID = 100L;
+
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -43,6 +51,8 @@ class PasswordResetServiceTest {
     private JavaMailSender mailSender;
     @Mock
     private NewPasswordIssuer newPasswordIssuer;
+    @Mock
+    private ClientResolver clientResolver;
 
     private PasswordResetService service;
     private User user;
@@ -50,10 +60,18 @@ class PasswordResetServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PasswordResetService(userRepository, otpRepository, mailSender, newPasswordIssuer,
+        service = new PasswordResetService(userRepository, otpRepository, mailSender, newPasswordIssuer, clientResolver,
                 new OtpExpirationProperties(5));
+        Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
+        tenant.setId(TENANT_ID);
+        Client client = new Client();
+        client.setClientId(CLIENT_ID);
+        client.setTenant(tenant);
+        lenient().when(clientResolver.resolve(CLIENT_ID)).thenReturn(client);
+
         user = new User();
         user.setId(1L);
+        user.setTenant(tenant);
         user.setUsername("alice");
         user.setEmail("alice@example.com");
 
@@ -64,11 +82,11 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    @DisplayName("Requesting a reset by username saves a six-digit OTP valid for the configured minutes and emails it")
+    @DisplayName("Requesting a reset by username in the client's tenant saves a six-digit OTP valid for the configured minutes and emails it")
     void createPasswordResetOtp_byUsername_savesAndEmailsTheOtp() {
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
 
-        service.createPasswordResetOtp("alice");
+        service.createPasswordResetOtp(CLIENT_ID, "alice");
 
         ArgumentCaptor<PasswordResetOTP> saved = ArgumentCaptor.forClass(PasswordResetOTP.class);
         verify(otpRepository).save(saved.capture());
@@ -85,10 +103,10 @@ class PasswordResetServiceTest {
     @Test
     @DisplayName("Requesting a reset by email finds the user when no username matches")
     void createPasswordResetOtp_byEmail_findsTheUser() {
-        when(userRepository.findByUsername("alice@example.com")).thenReturn(Optional.empty());
-        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameAndTenantId("alice@example.com", TENANT_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByEmailAndTenantId("alice@example.com", TENANT_ID)).thenReturn(Optional.of(user));
 
-        service.createPasswordResetOtp("alice@example.com");
+        service.createPasswordResetOtp(CLIENT_ID, "alice@example.com");
 
         verify(otpRepository).save(any(PasswordResetOTP.class));
     }
@@ -96,20 +114,20 @@ class PasswordResetServiceTest {
     @Test
     @DisplayName("Requesting a reset for an unknown username or email is rejected and sends nothing")
     void createPasswordResetOtp_unknownIdentifier_isRejected() {
-        when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
-        when(userRepository.findByEmail("ghost")).thenReturn(Optional.empty());
+        when(userRepository.findByUsernameAndTenantId("ghost", TENANT_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByEmailAndTenantId("ghost", TENANT_ID)).thenReturn(Optional.empty());
 
-        assertThrows(DataNotFoundException.class, () -> service.createPasswordResetOtp("ghost"));
+        assertThrows(DataNotFoundException.class, () -> service.createPasswordResetOtp(CLIENT_ID, "ghost"));
         verifyNoInteractions(otpRepository, mailSender);
     }
 
     @Test
     @DisplayName("Requesting a reset replaces the user's existing OTP")
     void createPasswordResetOtp_replacesTheExistingOtp() {
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
         when(otpRepository.findByUser(user)).thenReturn(resetOtp);
 
-        service.createPasswordResetOtp("alice");
+        service.createPasswordResetOtp(CLIENT_ID, "alice");
 
         verify(otpRepository).delete(resetOtp);
         verify(otpRepository).save(any(PasswordResetOTP.class));
@@ -120,8 +138,8 @@ class PasswordResetServiceTest {
     void resetPassword_validOtp_issuesANewPassword() {
         when(otpRepository.findByOtp("123456")).thenReturn(resetOtp);
 
-        service.resetPassword("alice", "123456");
-        service.resetPassword("alice@example.com", "123456");
+        service.resetPassword(CLIENT_ID, "alice", "123456");
+        service.resetPassword(CLIENT_ID, "alice@example.com", "123456");
 
         verify(newPasswordIssuer, times(2)).issueNewPassword(user);
         verify(otpRepository, times(2)).delete(resetOtp);
@@ -133,7 +151,7 @@ class PasswordResetServiceTest {
         when(otpRepository.findByOtp("000000")).thenReturn(null);
 
         InvalidPasswordResetOTPException exception = assertThrows(InvalidPasswordResetOTPException.class,
-                () -> service.resetPassword("alice", "000000"));
+                () -> service.resetPassword(CLIENT_ID, "alice", "000000"));
         assertEquals("Invalid OTP", exception.getMessage());
         verifyNoInteractions(newPasswordIssuer);
     }
@@ -143,9 +161,21 @@ class PasswordResetServiceTest {
     void resetPassword_otpOfAnotherUser_isRejected() {
         when(otpRepository.findByOtp("123456")).thenReturn(resetOtp);
 
-        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword("bob", "123456"));
+        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword(CLIENT_ID, "bob", "123456"));
         verifyNoInteractions(newPasswordIssuer);
         verify(otpRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("An OTP of a user in another tenant is rejected")
+    void resetPassword_otpOfAnotherTenantsUser_isRejected() {
+        Tenant otherTenant = new Tenant("Globex", TenantStatus.ACTIVE);
+        otherTenant.setId(200L);
+        user.setTenant(otherTenant);
+        when(otpRepository.findByOtp("123456")).thenReturn(resetOtp);
+
+        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword(CLIENT_ID, "alice", "123456"));
+        verifyNoInteractions(newPasswordIssuer);
     }
 
     @Test
@@ -154,7 +184,7 @@ class PasswordResetServiceTest {
         resetOtp.setExpiryDate(Instant.now().minusSeconds(1));
         when(otpRepository.findByOtp("123456")).thenReturn(resetOtp);
 
-        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword("alice", "123456"));
+        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword(CLIENT_ID, "alice", "123456"));
         verifyNoInteractions(newPasswordIssuer);
     }
 }

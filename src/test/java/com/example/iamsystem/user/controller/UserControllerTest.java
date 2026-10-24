@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
+import static com.example.iamsystem.user.repository.TestUserLookup.findByUsername;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -54,6 +55,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class UserControllerTest {
+
+    /**
+     * The management console client of the fixture tenant ({@code insert_user_role.sql}).
+     */
+    private static final String FIXTURE_CONSOLE_CLIENT_ID = "test-console-client-0001";
 
     @Autowired
     private MockMvc mockMvc;
@@ -91,7 +97,7 @@ class UserControllerTest {
     @DisplayName("Root creates a user in its own tenant")
     @Sql("/sql/insert_user_role.sql")
     void createUser_byRoot_createsUserInRootsTenant() throws Exception {
-        User root = userRepository.findByUsername("root").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
         UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com", null);
 
         mockMvc.perform(post("/api/users")
@@ -109,7 +115,7 @@ class UserControllerTest {
     @DisplayName("Creating a user without users:create is forbidden")
     @Sql("/sql/insert_user_role.sql")
     void createUser_withoutWritePermission_isForbidden() throws Exception {
-        User plainUser = userRepository.findByUsername("user").orElseThrow();
+        User plainUser = findByUsername(userRepository, "user").orElseThrow();
         UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com", null);
 
         mockMvc.perform(post("/api/users")
@@ -123,7 +129,7 @@ class UserControllerTest {
     @DisplayName("Root creates a management user when userType is MANAGEMENT")
     @Sql("/sql/insert_user_role.sql")
     void createUser_management_byRoot_isCreated() throws Exception {
-        User root = userRepository.findByUsername("root").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
 
         createUser(root, "manager", UserType.MANAGEMENT)
                 .andExpect(status().isCreated())
@@ -135,20 +141,20 @@ class UserControllerTest {
     @Sql("/sql/insert_user_role.sql")
     void createUser_management_needsTheManagementKey() throws Exception {
         grantThroughRole("user", "users:create");
-        User creator = userRepository.findByUsername("user").orElseThrow();
+        User creator = findByUsername(userRepository, "user").orElseThrow();
 
         createUser(creator, "regular", null)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.userType").value("REGULAR"));
         createUser(creator, "manager", UserType.MANAGEMENT).andExpect(status().isForbidden());
-        assertTrue(userRepository.findByUsername("manager").isEmpty());
+        assertTrue(findByUsername(userRepository, "manager").isEmpty());
     }
 
     @Test
     @DisplayName("A regular user cannot be given roles")
     @Sql("/sql/insert_user_role.sql")
     void assignRoles_toRegularUser_isBadRequest() throws Exception {
-        User root = userRepository.findByUsername("root").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
         createUser(root, "carol", UserType.REGULAR).andExpect(status().isCreated());
 
         attach(put("/api/users/roles"), root, Map.of("username", "carol", "roleIds", Set.of(1L)))
@@ -159,14 +165,14 @@ class UserControllerTest {
     @DisplayName("A permission granted directly takes effect at once, and removing it takes it away")
     @Sql("/sql/insert_user_role.sql")
     void directPermissions_areGrantedAndRemoved() throws Exception {
-        User root = userRepository.findByUsername("root").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
         Map<String, Object> usersRead = Map.of("username", "user", "permissionIds", Set.of(catalogEntry("users:read").getId()));
 
-        mockMvc.perform(get("/api/users").with(actingAs(userRepository.findByUsername("user").orElseThrow())))
+        mockMvc.perform(get("/api/users").with(actingAs(findByUsername(userRepository, "user").orElseThrow())))
                 .andExpect(status().isForbidden());
 
         attach(put("/api/users/permissions"), root, usersRead).andExpect(status().isNoContent());
-        User member = userRepository.findByUsername("user").orElseThrow();
+        User member = findByUsername(userRepository, "user").orElseThrow();
         mockMvc.perform(get("/api/users").with(actingAs(member)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[1].permissionIds[0]").value(catalogEntry("users:read").getId()));
@@ -179,7 +185,7 @@ class UserControllerTest {
     @DisplayName("Nobody grants permissions to themselves, and regular users get none")
     @Sql("/sql/insert_user_role.sql")
     void directPermissions_toSelfOrRegularUser_areRefused() throws Exception {
-        User root = userRepository.findByUsername("root").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
         Set<Long> usersRead = Set.of(catalogEntry("users:read").getId());
         createUser(root, "carol", UserType.REGULAR).andExpect(status().isCreated());
 
@@ -193,7 +199,7 @@ class UserControllerTest {
     @DisplayName("Root assigns a role to another user")
     @Sql("/sql/insert_user_role.sql")
     void assignRoles_successful() throws Exception {
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
 
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("user");
@@ -211,7 +217,7 @@ class UserControllerTest {
     @DisplayName("Assigning roles to yourself is forbidden")
     @Sql("/sql/insert_user_role.sql")
     void assignRoles_toSelf_isForbidden() throws Exception {
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
 
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("root");
@@ -228,7 +234,7 @@ class UserControllerTest {
     @DisplayName("Root removes a role from another user")
     @Sql("/sql/insert_user_role.sql")
     void removeRoles_successful() throws Exception {
-        User user = userRepository.findByUsername("user").orElseThrow();
+        User user = findByUsername(userRepository, "user").orElseThrow();
         Role testRole = roleRepository.findById(1L).orElseThrow();
 
         // Assign the role first so it can be removed
@@ -236,7 +242,7 @@ class UserControllerTest {
         userRepository.save(user);
         entityManager.detach(user);
 
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
 
         UserRoleAttachmentDto userRoleAttachmentDto = new UserRoleAttachmentDto();
         userRoleAttachmentDto.setUsername("user");
@@ -254,7 +260,7 @@ class UserControllerTest {
     @DisplayName("Lists the tenant's users with paging information")
     @Sql("/sql/insert_user_role.sql")
     void getAllUsers_returnsTheTenantsUsers() throws Exception {
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
 
         mockMvc.perform(get("/api/users")
                         .with(actingAs(currentUser))
@@ -268,7 +274,7 @@ class UserControllerTest {
     @DisplayName("Returns the requested page of users")
     @Sql("/sql/insert_user_role.sql")
     void getAllUsers_returnsTheRequestedPage() throws Exception {
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
 
         mockMvc.perform(get("/api/users")
                         .with(actingAs(currentUser))
@@ -283,7 +289,7 @@ class UserControllerTest {
     @DisplayName("A negative page is a bad request")
     @Sql("/sql/insert_user_role.sql")
     void getAllUsers_withNegativePage_isBadRequest() throws Exception {
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
 
         mockMvc.perform(get("/api/users")
                         .with(actingAs(currentUser))
@@ -295,8 +301,8 @@ class UserControllerTest {
     @DisplayName("A user is found by id")
     @Sql("/sql/insert_user_role.sql")
     void getUserById_successful() throws Exception {
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
-        User targetUser = userRepository.findByUsername("user").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
+        User targetUser = findByUsername(userRepository, "user").orElseThrow();
 
         mockMvc.perform(get("/api/users/{id}", targetUser.getId())
                         .with(actingAs(currentUser))
@@ -309,7 +315,7 @@ class UserControllerTest {
     @DisplayName("A user is found by username")
     @Sql("/sql/insert_user_role.sql")
     void getUserByUsername_successful() throws Exception {
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
 
         mockMvc.perform(get("/api/users/by-username")
                         .with(actingAs(currentUser))
@@ -322,7 +328,7 @@ class UserControllerTest {
     @DisplayName("A user is found by email")
     @Sql("/sql/insert_user_role.sql")
     void getUserByEmail_successful() throws Exception {
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
 
         mockMvc.perform(get("/api/users/by-email")
                         .with(actingAs(currentUser))
@@ -335,8 +341,8 @@ class UserControllerTest {
     @DisplayName("Root deletes another user")
     @Sql("/sql/insert_user_role.sql")
     void deleteUser_successful() throws Exception {
-        User currentUser = userRepository.findByUsername("root").orElseThrow();
-        User targetUser = userRepository.findByUsername("user").orElseThrow();
+        User currentUser = findByUsername(userRepository, "root").orElseThrow();
+        User targetUser = findByUsername(userRepository, "user").orElseThrow();
 
         mockMvc.perform(delete("/api/users/{id}", targetUser.getId())
                         .with(actingAs(currentUser)))
@@ -348,8 +354,8 @@ class UserControllerTest {
     @DisplayName("Deleting a user keeps the users they created")
     @Sql("/sql/insert_user_role.sql")
     void deleteUser_whoCreatedOthers_keepsThoseUsers() throws Exception {
-        User root = userRepository.findByUsername("root").orElseThrow();
-        User creator = userRepository.findByUsername("user").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
+        User creator = findByUsername(userRepository, "user").orElseThrow();
         User created = new User();
         created.setUsername("created");
         created.setEmail("created@test.com");
@@ -361,15 +367,15 @@ class UserControllerTest {
                         .with(actingAs(root)))
                 .andExpect(status().isNoContent());
 
-        assertNull(userRepository.findByUsername("created").orElseThrow().getCreatedBy());
+        assertNull(findByUsername(userRepository, "created").orElseThrow().getCreatedBy());
     }
 
     @Test
     @DisplayName("Another user cannot delete the root user")
     @Sql("/sql/insert_user_role.sql")
     void deleteUser_rootByAnotherUser_isForbidden() throws Exception {
-        User currentUser = userRepository.findByUsername("user").orElseThrow();
-        User root = userRepository.findByUsername("root").orElseThrow();
+        User currentUser = findByUsername(userRepository, "user").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
 
         mockMvc.perform(delete("/api/users/{id}", root.getId())
                         .with(actingAs(currentUser)))
@@ -380,7 +386,7 @@ class UserControllerTest {
     @DisplayName("A user changes their own password")
     @Sql("/sql/insert_user_role.sql")
     void changePassword_byUser_successful() throws Exception {
-        User currentUser = userRepository.findByUsername("user").orElseThrow();
+        User currentUser = findByUsername(userRepository, "user").orElseThrow();
 
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("P@ssw0rd", "NewPassword1!");
 
@@ -396,7 +402,7 @@ class UserControllerTest {
     @DisplayName("Changing your password without the old password fails validation")
     @Sql("/sql/insert_user_role.sql")
     void changePassword_withoutOldPassword_failsValidation() throws Exception {
-        User currentUser = userRepository.findByUsername("user").orElseThrow();
+        User currentUser = findByUsername(userRepository, "user").orElseThrow();
 
         mockMvc.perform(patch("/api/users/password")
                         .with(actingAs(currentUser))
@@ -409,7 +415,7 @@ class UserControllerTest {
     @DisplayName("A wrong old password is a bad request")
     @Sql("/sql/insert_user_role.sql")
     void changePassword_byUser_invalidOldPassword() throws Exception {
-        User currentUser = userRepository.findByUsername("user").orElseThrow();
+        User currentUser = findByUsername(userRepository, "user").orElseThrow();
 
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("wrongPassword", "NewPassword1!");
 
@@ -424,8 +430,8 @@ class UserControllerTest {
     @DisplayName("Root resets another user's password: it is emailed only to that user, and only the new password logs in")
     @Sql("/sql/insert_user_role.sql")
     void resetPassword_byRoot_emailsANewPasswordThatLogsIn() throws Exception {
-        User root = userRepository.findByUsername("root").orElseThrow();
-        User member = userRepository.findByUsername("user").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
+        User member = findByUsername(userRepository, "user").orElseThrow();
 
         mockMvc.perform(post("/api/users/{id}/password-reset", member.getId()).with(actingAs(root)))
                 .andExpect(status().isNoContent())
@@ -469,7 +475,7 @@ class UserControllerTest {
         Role role = roleRepository.findById(1L).orElseThrow();
         role.getPermissions().add(catalogEntry(permissionName));
         roleRepository.save(role);
-        User user = userRepository.findByUsername(username).orElseThrow();
+        User user = findByUsername(userRepository, username).orElseThrow();
         user.addRole(role);
         userRepository.save(user);
     }
@@ -477,15 +483,15 @@ class UserControllerTest {
     private ResultActions login(String username, String password) throws Exception {
         return mockMvc.perform(post("/api/auth/authenticate")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonMapper.writeValueAsString(new UserLoginDto(username, password))));
+                .content(jsonMapper.writeValueAsString(new UserLoginDto(FIXTURE_CONSOLE_CLIENT_ID, username, password))));
     }
 
     @Test
     @DisplayName("Resetting a password without users:reset-password is forbidden")
     @Sql("/sql/insert_user_role.sql")
     void resetPassword_withoutPermission_isForbidden() throws Exception {
-        User member = userRepository.findByUsername("user").orElseThrow();
-        User root = userRepository.findByUsername("root").orElseThrow();
+        User member = findByUsername(userRepository, "user").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
 
         mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(member)))
                 .andExpect(status().isForbidden());
@@ -501,12 +507,12 @@ class UserControllerTest {
                 .filter(permission -> permission.getName().equals("users:reset-password"))
                 .findFirst().orElseThrow());
         roleRepository.save(resetter);
-        User member = userRepository.findByUsername("user").orElseThrow();
+        User member = findByUsername(userRepository, "user").orElseThrow();
         member.addRole(resetter);
         userRepository.save(member);
-        User root = userRepository.findByUsername("root").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
 
-        mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(userRepository.findByUsername("user").orElseThrow())))
+        mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(findByUsername(userRepository, "user").orElseThrow())))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(mailSender);
     }
@@ -515,7 +521,7 @@ class UserControllerTest {
     @DisplayName("Resetting your own password is forbidden; you change it instead")
     @Sql("/sql/insert_user_role.sql")
     void resetPassword_ofSelf_isForbidden() throws Exception {
-        User root = userRepository.findByUsername("root").orElseThrow();
+        User root = findByUsername(userRepository, "root").orElseThrow();
 
         mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(root)))
                 .andExpect(status().isForbidden());

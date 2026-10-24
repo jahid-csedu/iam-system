@@ -1,5 +1,8 @@
 package com.example.iamsystem.tenant.service;
 
+import com.example.iamsystem.client.dto.ClientDto;
+import com.example.iamsystem.client.entity.ClientType;
+import com.example.iamsystem.client.service.ClientService;
 import com.example.iamsystem.common.exception.TenantAlreadyExistsException;
 import com.example.iamsystem.role.service.PredefinedRoleService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
@@ -10,7 +13,6 @@ import com.example.iamsystem.tenant.mapper.TenantMapper;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.entity.User;
-import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.mapper.UserMapper;
 import com.example.iamsystem.user.repository.UserRepository;
 import com.example.iamsystem.user.service.UserFactory;
@@ -27,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -44,6 +45,8 @@ class TenantSignupServiceTest {
     private UserFactory userFactory;
     @Mock
     private PredefinedRoleService predefinedRoleService;
+    @Mock
+    private ClientService clientService;
 
     private TenantSignupService service;
     private UserCreationDto rootDetails;
@@ -51,14 +54,14 @@ class TenantSignupServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TenantSignupService(tenantRepository, userRepository, userFactory, predefinedRoleService,
+        service = new TenantSignupService(tenantRepository, userRepository, userFactory, predefinedRoleService, clientService,
                 Mappers.getMapper(TenantMapper.class), Mappers.getMapper(UserMapper.class));
         rootDetails = new UserCreationDto("root", "Password1!", "Root", "root@acme.com", null);
         request = new TenantSignupDto("Acme", rootDetails);
     }
 
     @Test
-    @DisplayName("Signup creates an active tenant, its root user and its predefined roles")
+    @DisplayName("Signup creates an active tenant, its root user, its predefined roles and its management console")
     void signup_createsActiveTenantAndItsRootUser() {
         when(tenantRepository.existsByName("Acme")).thenReturn(false);
         when(tenantRepository.save(any(Tenant.class))).thenAnswer(invocation -> {
@@ -66,12 +69,15 @@ class TenantSignupServiceTest {
             tenant.setId(7L);
             return tenant;
         });
-        when(userFactory.newUser(any(UserCreationDto.class), any(Tenant.class), eq(UserType.MANAGEMENT))).thenAnswer(invocation -> {
+        when(userFactory.newRootUser(any(UserCreationDto.class), any(Tenant.class))).thenAnswer(invocation -> {
             User user = new User();
             user.setUsername("root");
+            user.setRootUser(true);
             user.setTenant(invocation.getArgument(1));
             return user;
         });
+        ClientDto console = new ClientDto(1L, "console-client-id-000001", "Management Console", ClientType.MANAGEMENT_CONSOLE);
+        when(clientService.createManagementConsole(any(Tenant.class))).thenReturn(console);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         TenantSignupResultDto result = service.signup(request);
@@ -82,8 +88,9 @@ class TenantSignupServiceTest {
         assertEquals(7L, result.tenant().id());
         assertTrue(result.rootUser().isRootUser());
         assertEquals(7L, result.rootUser().getTenantId());
-        verify(userFactory).newUser(rootDetails, tenant, UserType.MANAGEMENT);
+        verify(userFactory).newRootUser(rootDetails, tenant);
         verify(predefinedRoleService).createPredefinedRoles(tenant);
+        assertEquals(console, result.managementConsole());
     }
 
     @Test
@@ -93,7 +100,7 @@ class TenantSignupServiceTest {
 
         assertThrows(TenantAlreadyExistsException.class, () -> service.signup(request));
         verify(tenantRepository, never()).save(any());
-        verifyNoInteractions(userFactory, userRepository, predefinedRoleService);
+        verifyNoInteractions(userFactory, userRepository, predefinedRoleService, clientService);
     }
 
     private Tenant savedTenant() {

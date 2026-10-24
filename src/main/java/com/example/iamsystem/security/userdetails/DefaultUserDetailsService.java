@@ -1,34 +1,37 @@
 package com.example.iamsystem.security.userdetails;
 
+import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authentication.LockedException;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.authentication.AccountStatusUserDetailsChecker;
 import org.springframework.stereotype.Service;
 
-import static com.example.iamsystem.common.exception.ErrorMessage.ACCOUNT_LOCKED;
+import java.util.Optional;
+
+import static com.example.iamsystem.common.exception.ErrorMessage.USER_NOT_FOUND;
 
 /**
- * Loads users for login and token refresh. A locked account is rejected here, so refresh is blocked as well as login.
+ * Loads users for login (by username inside the client's tenant) and for token refresh (by id).
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
-public class DefaultUserDetailsService implements UserDetailsService {
+public class DefaultUserDetailsService {
 
-    private final UserRepository repository;
+    private final AccountStatusUserDetailsChecker accountStatusChecker = new AccountStatusUserDetailsChecker();
+    private final UserRepository userRepository;
 
-    @Override
-    public DefaultUserDetails loadUserByUsername(String username) {
-        DefaultUserDetails userDetails = repository.findByUsername(username)
+    public Optional<DefaultUserDetails> findInTenant(String username, Long tenantId) {
+        return userRepository.findByUsernameAndTenantId(username, tenantId).map(DefaultUserDetails::new);
+    }
+
+    /**
+     * The user behind a refresh token, rejected while locked, disabled or with an expired password.
+     */
+    public DefaultUserDetails requireUsableUser(Long userId) {
+        DefaultUserDetails userDetails = userRepository.findById(userId)
                 .map(DefaultUserDetails::new)
-                .orElseThrow(() -> new UsernameNotFoundException("User doesn't exist"));
-        if (!userDetails.isAccountNonLocked()) {
-            log.warn("Account of user '{}' is locked until {}", username, userDetails.user().getAccountLockedUntil());
-            throw new LockedException(ACCOUNT_LOCKED);
-        }
+                .orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+        accountStatusChecker.check(userDetails);
         return userDetails;
     }
 }

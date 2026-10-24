@@ -7,48 +7,56 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static com.example.iamsystem.common.exception.ErrorMessage.EMAIL_NOT_AVAILABLE;
 import static com.example.iamsystem.common.exception.ErrorMessage.PASSWORD_POLICY_VIOLATION;
+import static com.example.iamsystem.common.exception.ErrorMessage.USERNAME_NOT_AVAILABLE;
 
+/**
+ * Username/email availability and the password policy.
+ * <p>
+ * Usernames and emails are unique per tenant, with one exception: a root user's username and email are unique across
+ * all users of all tenants. So a new user may not reuse any root's username or email, and a new root may not reuse
+ * anyone's.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class UserValidator {
+
+    private static final Pattern PASSWORD_POLICY =
+            Pattern.compile("^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#!$%^&-+=()])(?=\\S+$).{8,}$");
+
     private final UserRepository userRepository;
 
-    private static final String PASSWORD_PATTERN = "^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#!$%^&-+=()])(?=\\S+$).{8,}$";
-    private static final Pattern pattern = Pattern.compile(PASSWORD_PATTERN);
-
-    public void validateEmailAvailable(String email) {
-        if(emailExists(email)) {
-            log.error("Email already exists: {}", email);
-            throw new UserAlreadyExistsException("Email not available");
+    public void validateAvailable(String username, String email, Long tenantId) {
+        if (userRepository.existsByUsernameAndTenantId(username, tenantId) || userRepository.existsByUsernameAndIsRootUserTrue(username)) {
+            reject(USERNAME_NOT_AVAILABLE, username);
+        }
+        if (email != null
+                && (userRepository.existsByEmailAndTenantId(email, tenantId) || userRepository.existsByEmailAndIsRootUserTrue(email))) {
+            reject(EMAIL_NOT_AVAILABLE, email);
         }
     }
 
-    public void validateUsernameAvailable(String username) {
-        if(userExists(username)){
-            log.error("Username already exists: {}", username);
-            throw new UserAlreadyExistsException("Username not available");
+    public void validateAvailableForRoot(String username, String email) {
+        if (userRepository.existsByUsername(username)) {
+            reject(USERNAME_NOT_AVAILABLE, username);
+        }
+        if (email != null && userRepository.existsByEmail(email)) {
+            reject(EMAIL_NOT_AVAILABLE, email);
         }
     }
 
     public void validatePasswordPolicy(String password) {
-        Matcher matcher = pattern.matcher(password);
-        if (!matcher.matches()) {
-            log.warn("Password policy violation: {}", PASSWORD_POLICY_VIOLATION);
+        if (!PASSWORD_POLICY.matcher(password).matches()) {
             throw new UserInputNotValidException(PASSWORD_POLICY_VIOLATION);
         }
-        log.debug("Password policy validated successfully.");
     }
 
-    private boolean userExists(String username) {
-        return userRepository.findByUsername(username).isPresent();
-    }
-
-    private boolean emailExists(String email) {
-        return userRepository.findByEmail(email).isPresent();
+    private static void reject(String message, String value) {
+        log.warn("{}: {}", message, value);
+        throw new UserAlreadyExistsException(message);
     }
 }

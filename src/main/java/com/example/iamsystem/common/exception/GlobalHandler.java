@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import static com.example.iamsystem.common.exception.ErrorMessage.ACCOUNT_DISABLED;
 import static com.example.iamsystem.common.exception.ErrorMessage.UNREADABLE_REQUEST_BODY;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
@@ -68,6 +70,12 @@ public class GlobalHandler {
         return buildExceptionResponse(exception, HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(InvalidClientException.class)
+    @ResponseStatus(UNAUTHORIZED)
+    public ResponseEntity<ExceptionResponse> invalidClientHandler(InvalidClientException exception) {
+        return buildExceptionResponse(exception, UNAUTHORIZED);
+    }
+
     @ExceptionHandler(NoAccessException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ExceptionResponse> noAccessExceptionHandler(NoAccessException exception) {
@@ -104,6 +112,12 @@ public class GlobalHandler {
     public ResponseEntity<ExceptionResponse> handleLockedException(LockedException exception) {
         log.warn("Account locked: {}", exception.getMessage());
         return buildExceptionResponse(exception, FORBIDDEN);
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    @ResponseStatus(FORBIDDEN)
+    public ResponseEntity<ExceptionResponse> handleDisabledException(DisabledException exception) {
+        return ResponseEntity.status(FORBIDDEN).body(new ExceptionResponse(FORBIDDEN.value(), ACCOUNT_DISABLED));
     }
 
     @ExceptionHandler(AccountExpiredException.class)

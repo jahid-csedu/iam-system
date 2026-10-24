@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.function.Consumer;
 
 import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
+import static com.example.iamsystem.user.repository.TestUserLookup.findByUsername;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -47,17 +48,21 @@ class JwtAuthenticationTest {
     @Autowired
     private JwtTokenUtil tokenUtil;
 
+    private String consoleClientId;
     private String accessToken;
 
     @BeforeEach
     void setUp() throws Exception {
         TenantSignupDto signup = new TenantSignupDto("Acme",
                 new UserCreationDto("acme-root", "Password1!", "Acme Root", "root@acme.com", null));
-        mockMvc.perform(post("/api/tenants/signup").contentType(MediaType.APPLICATION_JSON)
-                .content(jsonMapper.writeValueAsString(signup))).andExpect(status().isCreated());
+        String signupResponse = mockMvc.perform(post("/api/tenants/signup").contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(signup)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        consoleClientId = jsonMapper.readTree(signupResponse).get("managementConsole").get("client_id").asString();
 
         String login = mockMvc.perform(post("/api/auth/authenticate").contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonMapper.writeValueAsString(new UserLoginDto("acme-root", "Password1!"))))
+                        .content(jsonMapper.writeValueAsString(new UserLoginDto(consoleClientId, "acme-root", "Password1!"))))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         accessToken = jsonMapper.readTree(login).get("access_token").asString();
@@ -115,7 +120,7 @@ class JwtAuthenticationTest {
      * Changes the root user directly in the database; every save bumps the user's version.
      */
     private void updateRoot(Consumer<User> change) {
-        User root = userRepository.findByUsername("acme-root").orElseThrow();
+        User root = findByUsername(userRepository, "acme-root").orElseThrow();
         change.accept(root);
         userRepository.save(root);
     }
@@ -124,7 +129,7 @@ class JwtAuthenticationTest {
      * A token for the root user's current version, issued by the same code login uses.
      */
     private String freshToken() {
-        return tokenUtil.generateToken(userRepository.findByUsername("acme-root").orElseThrow(), ACCESS_TOKEN);
+        return tokenUtil.generateToken(findByUsername(userRepository, "acme-root").orElseThrow(), consoleClientId, ACCESS_TOKEN);
     }
 
     private String lockRootAndIssueToken(Instant lockedUntil) {

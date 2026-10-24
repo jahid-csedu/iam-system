@@ -3,10 +3,15 @@ delete from `user_roles`;
 delete from `roles`;
 update `users` set `created_by` = null;
 delete from `users`;
+delete from `clients`;
 delete from `tenants`;
 
 INSERT INTO `tenants` (`id`, `name`, `status`, `created_at`, `updated_at`)
 VALUES (1, 'Test Tenant', 'ACTIVE', '2025-06-27 14:10:14.550149', '2025-06-27 14:10:14.550149');
+
+INSERT INTO `clients` (`id`, `tenant_id`, `client_id`, `name`, `type`, `created_at`, `updated_at`)
+VALUES (1, 1, 'test-console-client-0001', 'Management Console', 'MANAGEMENT_CONSOLE',
+        '2025-06-27 14:10:14.550149', '2025-06-27 14:10:14.550149');
 
 INSERT INTO
   `roles` (

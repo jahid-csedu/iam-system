@@ -27,6 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.Set;
 
 import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
+import static com.example.iamsystem.user.repository.TestUserLookup.findByUsername;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -106,7 +107,7 @@ class TenantIsolationTest {
     void rolesOfAnotherTenant_cannotBeAssigned() throws Exception {
         perform(put("/api/users/roles"), roleAttachment("acme-member", globexRole.getId())).andExpect(status().isNotFound());
 
-        assertTrue(userRepository.findByUsername("acme-member").orElseThrow().getRoles().isEmpty());
+        assertTrue(findByUsername(userRepository, "acme-member").orElseThrow().getRoles().isEmpty());
     }
 
     @Test

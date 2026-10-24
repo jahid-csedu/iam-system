@@ -1,8 +1,10 @@
-package com.example.iamsystem.application.entity;
+package com.example.iamsystem.client.entity;
 
 import com.example.iamsystem.tenant.entity.Tenant;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -16,44 +18,55 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.io.Serializable;
 import java.time.Instant;
 
+/**
+ * An application of a tenant that users log in through. The public {@code clientId} identifies the tenant at login.
+ */
 @Entity
-@Table(name = "applications")
+@Table(name = "clients")
 @Getter
 @Setter
 @NoArgsConstructor
-public class Application implements Serializable {
+public class Client {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "application_name", nullable = false)
-    private String applicationName;
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "tenant_id")
+    @JoinColumn(name = "tenant_id", nullable = false, updatable = false)
     private Tenant tenant;
 
+    @Column(name = "client_id", nullable = false, unique = true, updatable = false)
+    private String clientId;
+
+    @Column(nullable = false)
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false)
+    private ClientType type;
+
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @UpdateTimestamp
-    @Column(name = "updated_at")
     private Instant updatedAt;
+
+    public boolean isManagementConsole() {
+        return type == ClientType.MANAGEMENT_CONSOLE;
+    }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Application other)) return false;
+        if (!(o instanceof Client other)) return false;
         return id != null && id.equals(other.getId());
     }
 
     @Override
     public int hashCode() {
-        return Application.class.hashCode();
+        return Client.class.hashCode();
     }
 }

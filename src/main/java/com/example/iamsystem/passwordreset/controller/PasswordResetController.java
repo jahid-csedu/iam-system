@@ -26,16 +26,16 @@ public class PasswordResetController {
     private final PasswordResetService passwordResetService;
 
     @PostMapping("/reset-request")
-    @Operation(summary = "Email a password-reset OTP to the user with this username or email (public)")
+    @Operation(summary = "Email a password-reset OTP to the user with this username or email in the client's tenant (public)")
     public ResponseEntity<String> requestPasswordReset(@RequestBody @Valid PasswordResetRequestDto request) {
-        passwordResetService.createPasswordResetOtp(request.identifier());
+        passwordResetService.createPasswordResetOtp(request.clientId(), request.identifier());
         return ResponseEntity.ok(OTP_SENT_SUCCESS);
     }
 
     @PostMapping("/reset")
     @Operation(summary = "With a valid OTP, email the user a new password (public)")
     public ResponseEntity<String> resetPassword(@RequestBody @Valid PasswordResetDto request) {
-        passwordResetService.resetPassword(request.identifier(), request.otp());
+        passwordResetService.resetPassword(request.clientId(), request.identifier(), request.otp());
         return ResponseEntity.ok(PASSWORD_RESET_SUCCESS);
     }
 }

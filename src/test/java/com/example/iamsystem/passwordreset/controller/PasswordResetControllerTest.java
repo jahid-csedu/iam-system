@@ -51,30 +51,35 @@ class PasswordResetControllerTest {
     @MockitoBean
     private JavaMailSender mailSender;
 
+    private String clientId;
+
     @BeforeEach
     void setUp() throws Exception {
         TenantSignupDto signup = new TenantSignupDto("Acme",
                 new UserCreationDto("acme-root", "Password1!", "Acme Root", "root@acme.com", null));
-        postJson("/api/tenants/signup", signup).andExpect(status().isCreated());
+        String response = postJson("/api/tenants/signup", signup)
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        clientId = jsonMapper.readTree(response).get("managementConsole").get("client_id").asString();
     }
 
     @Test
     @DisplayName("Reset by username: the OTP and then the new password are emailed, and the new password logs in")
     void resetByUsername_emailsOtpThenAWorkingPassword() throws Exception {
-        postJson("/api/password/reset-request", new PasswordResetRequestDto("acme-root")).andExpect(status().isOk());
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
         String otp = lastEmailedSecret();
 
-        postJson("/api/password/reset", new PasswordResetDto("acme-root", otp)).andExpect(status().isOk());
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp)).andExpect(status().isOk());
         String newPassword = lastEmailedSecret();
 
-        postJson("/api/auth/authenticate", new UserLoginDto("acme-root", newPassword)).andExpect(status().isOk());
-        postJson("/api/auth/authenticate", new UserLoginDto("acme-root", "Password1!")).andExpect(status().isUnauthorized());
+        postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", newPassword)).andExpect(status().isOk());
+        postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", "Password1!")).andExpect(status().isUnauthorized());
     }
 
     @Test
     @DisplayName("Reset by email works the same way")
     void resetByEmail_emailsTheOtp() throws Exception {
-        postJson("/api/password/reset-request", new PasswordResetRequestDto("root@acme.com")).andExpect(status().isOk());
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "root@acme.com")).andExpect(status().isOk());
 
         ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(mail.capture());
@@ -84,18 +89,18 @@ class PasswordResetControllerTest {
     @Test
     @DisplayName("An OTP used with another user's identifier is rejected")
     void reset_withWrongIdentifier_isRejected() throws Exception {
-        postJson("/api/password/reset-request", new PasswordResetRequestDto("acme-root")).andExpect(status().isOk());
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
         String otp = lastEmailedSecret();
         clearInvocations(mailSender);
 
-        postJson("/api/password/reset", new PasswordResetDto("someone-else", otp)).andExpect(status().isBadRequest());
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "someone-else", otp)).andExpect(status().isBadRequest());
         verifyNoInteractions(mailSender);
     }
 
     @Test
     @DisplayName("A request without a username or email fails validation and sends nothing")
     void resetRequest_withoutIdentifier_failsValidation() throws Exception {
-        postJson("/api/password/reset-request", new PasswordResetRequestDto(" ")).andExpect(status().isUnprocessableEntity());
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, " ")).andExpect(status().isUnprocessableEntity());
         verifyNoInteractions(mailSender);
     }
 
@@ -109,10 +114,10 @@ class PasswordResetControllerTest {
     @Test
     @DisplayName("The OTP and the new password never appear in a response")
     void responses_neverContainSecrets() throws Exception {
-        String requestResponse = postJson("/api/password/reset-request", new PasswordResetRequestDto("acme-root"))
+        String requestResponse = postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root"))
                 .andReturn().getResponse().getContentAsString();
         String otp = lastEmailedSecret();
-        String resetResponse = postJson("/api/password/reset", new PasswordResetDto("acme-root", otp))
+        String resetResponse = postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp))
                 .andReturn().getResponse().getContentAsString();
 
         assertFalse(requestResponse.contains(otp));

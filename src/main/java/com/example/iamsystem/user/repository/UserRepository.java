@@ -17,14 +17,10 @@ import java.util.Optional;
 import static com.example.iamsystem.common.exception.ErrorMessage.USER_NOT_FOUND;
 
 /**
- * Lookups on behalf of a tenant's users are always tenant-scoped; a user of another tenant is simply not found.
- * The unscoped lookups serve login, availability checks and password reset.
+ * Users are always looked up inside one tenant (usernames and emails are unique per tenant); a user of another tenant
+ * is simply not found. The cross-tenant {@code exists...} checks guard the global uniqueness of root users.
  */
 public interface UserRepository extends JpaRepository<User, Long> {
-
-    Optional<User> findByUsername(String username);
-
-    Optional<User> findByEmail(String email);
 
     Page<User> findAllByTenantId(Long tenantId, Pageable pageable);
 
@@ -34,16 +30,28 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByEmailAndTenantId(String email, Long tenantId);
 
+    boolean existsByUsernameAndTenantId(String username, Long tenantId);
+
+    boolean existsByEmailAndTenantId(String email, Long tenantId);
+
+    boolean existsByUsername(String username);
+
+    boolean existsByEmail(String email);
+
+    boolean existsByUsernameAndIsRootUserTrue(String username);
+
+    boolean existsByEmailAndIsRootUserTrue(String email);
+
     /**
      * The actor behind an access token: found only while the token's version is current and the user is active and unlocked.
      */
     @Query("""
             SELECT new com.example.iamsystem.security.userdetails.AuthenticatedActor(u.id, u.username, u.tenant.id, u.isRootUser)
             FROM User u
-            WHERE u.username = :username AND u.version = :version AND u.active = true
+            WHERE u.id = :userId AND u.version = :version AND u.active = true
               AND (u.userLocked = false OR u.accountLockedUntil < :now)
             """)
-    Optional<AuthenticatedActor> findActor(@Param("username") String username,
+    Optional<AuthenticatedActor> findActor(@Param("userId") Long userId,
                                            @Param("version") int version,
                                            @Param("now") Instant now);
 
@@ -61,13 +69,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
         return findByEmailAndTenantId(email, tenantId).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
     }
 
+    /**
+     * Lockout bookkeeping; deliberately skips the {@code @Version} bump, so it doesn't revoke the user's tokens.
+     */
     @Modifying
     @Transactional
-    @Query("UPDATE User u SET u.failedLoginAttempts = :attempts WHERE u.username = :username")
-    void updateFailedLoginAttempts(@Param("username") String username, @Param("attempts") int attempts);
+    @Query("UPDATE User u SET u.failedLoginAttempts = :attempts WHERE u.id = :userId")
+    void updateFailedLoginAttempts(@Param("userId") Long userId, @Param("attempts") int attempts);
 
     @Modifying
     @Transactional
-    @Query("UPDATE User u SET u.userLocked = :locked, u.accountLockedUntil = :lockedUntil WHERE u.username = :username")
-    void updateAccountLockStatus(@Param("username") String username, @Param("locked") boolean locked, @Param("lockedUntil") Instant lockedUntil);
+    @Query("UPDATE User u SET u.userLocked = :locked, u.accountLockedUntil = :lockedUntil WHERE u.id = :userId")
+    void updateAccountLockStatus(@Param("userId") Long userId, @Param("locked") boolean locked, @Param("lockedUntil") Instant lockedUntil);
 }

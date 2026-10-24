@@ -25,6 +25,11 @@ public enum AuditEventType {
     PERMISSIONS_ASSIGNED_TO_ROLE,
     PERMISSIONS_REMOVED_FROM_ROLE,
 
+    // Client Management
+    CLIENT_CREATION,
+    CLIENT_UPDATE,
+    CLIENT_DELETE,
+
     // Password Reset
     PASSWORD_RESET_OTP_REQUEST,
     PASSWORD_RESET

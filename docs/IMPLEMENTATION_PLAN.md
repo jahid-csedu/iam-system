@@ -48,7 +48,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 6b | `AuthenticatedActor` principal, one-query JWT filter (revoked/inactive/locked → 401), DB permission checks | `1ab8f81` |
 | 7a | Fixed permission catalog (`V4`), `PermissionKey`, read-only permission API, password change vs. reset split, forgot-password by username or email | `1f4f5e2` |
 | 7b | Predefined roles (`V5`): `ADMIN`, `USER_MANAGER`, `VIEWER` templates copied into each new tenant at signup | `24b07c8` |
-| 7c | User types (`V6`): `MANAGEMENT`/`REGULAR`, `users:create-management`, direct user permissions | step 7c commit |
+| 7c | User types (`V6`): `MANAGEMENT`/`REGULAR`, `users:create-management`, direct user permissions | `b7dc4e1` |
+| 8a | Clients (`V7`): `client_id` login/refresh/forgot-password, console client per tenant, per-tenant usernames/emails | step 8a commit |
 
 ---
 
@@ -150,28 +151,29 @@ What was built: `V6__user_types.sql` (`users.user_type`, `user_permissions`, the
 with `PUT`/`DELETE /api/users/permissions` (`users:update`, never yourself); permission check = role permissions ∪ direct
 permissions; `UserDto` shows `userType` and `permissionIds`.
 
-### Step 8: Client applications (`client_id`)
+### Step 8a: Client applications and `client_id` (DONE, kept for reference)
 
-**Goal:** every login goes through a registered client; token settings per client.
+Decisions taken: 8 split into 8a/8b; `client_id` = 24 random URL-safe characters; client secrets later (OAuth2/OIDC);
+the console client accepts management users only, application clients accept all users of the tenant; tokens use the
+user id as `sub`.
+
+What was built: `V7__clients.sql` (`clients`, one console per tenant, per-tenant username/email uniqueness, `clients:*` keys);
+`client/` feature (CRUD, `ClientResolver`); signup returns the console client; `TenantAuthenticationProvider` looks the
+username up inside the client's tenant; refresh only through the issuing client; forgot-password tenant-scoped; root
+username/email unique across all tenants (application check); lockout listeners by user id.
+
+### Step 8b: Per-client token settings
+
+**Goal:** each client decides its tokens.
 
 Proposed design:
-- **Schema:** `applications` evolves into `clients`: `id`, `tenant_id`, `client_id` (public, unique, random),
-  `name`, `type` (`MANAGEMENT_CONSOLE`/`APPLICATION`), `access_token_ttl_seconds`, `refresh_token_enabled`,
-  `refresh_token_ttl_seconds`, plus a `client_token_claims` table (or JSON column) listing which user claims go into tokens.
-- Tenant signup auto-creates the tenant's **management-console client**, which only accepts management users.
-- Login request: `client_id` + username + password. The client resolves the tenant; the username is looked up inside it.
-- **Forgot-password becomes tenant-scoped:** the requests carry `client_id` + username/email, the client resolves the
-  tenant, and the user is looked up **inside that tenant only** (today's global lookup is only safe while usernames and
-  emails are globally unique). OTP and new password stay email-only.
-- Switch usernames and emails to per-tenant uniqueness (`UNIQUE(tenant_id, username)`, `UNIQUE(tenant_id, email)`, replacing
-  the global `uk_users_email`; `username` becomes `NOT NULL`), as decided in steps 5 and 6. Password reset and every lookup by
-  username/email become tenant-aware.
-- **Root exception (decided in step 6):** a root user's username and email are unique across **all users of all tenants**.
-  No user anywhere may share them, so the check runs both when a root is created (signup) and when any user is created or renamed.
-  It is enforced in application code (MySQL can't express it as one constraint).
-- Management endpoints for clients (CRUD, token settings), protected by fixed permissions such as `clients:write`.
-- **Open decisions:** client secrets now or later (needed for OAuth2 confidential clients); the default token settings for new clients.
-- **Done when:** login without a valid `client_id` fails; the console client rejects regular users; TTL/refresh/claims follow the client.
+- `clients` gains `access_token_ttl_seconds`, `refresh_token_enabled`, `refresh_token_ttl_seconds`, plus the user claims to put
+  into tokens (a `client_token_claims` table or a column), with defaults for new clients (today's 5 min / 24 h).
+- `PUT /api/clients/{id}/token-settings` (a new key such as `clients:update-token-settings` or under `clients:update`).
+- Login and refresh read the settings of the client; no refresh token when the client disables it.
+- **Open decisions:** the default values; which user claims are selectable (id, username, email, full name, user type, tenant);
+  whether the console client's settings can be changed.
+- **Done when:** TTL, refresh and claims follow the client; the hard-coded validity constants are gone.
 
 ### Step 9: Token redesign (asymmetric signing, JWKS, refresh-token store, introspection)
 

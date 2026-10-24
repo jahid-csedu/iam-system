@@ -1,18 +1,14 @@
 package com.example.iamsystem.auth.dto;
 
-import com.example.iamsystem.common.exception.ErrorMessage;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
-@Getter
-@RequiredArgsConstructor
-public class JwtRefreshTokenDto {
-    @NotBlank(message = ErrorMessage.USERNAME_REQUIRED)
-    private final String username;
+import static com.example.iamsystem.common.exception.ErrorMessage.CLIENT_ID_REQUIRED;
+import static com.example.iamsystem.common.exception.ErrorMessage.REFRESH_TOKEN_REQUIRED;
 
-    @NotBlank(message = ErrorMessage.REFRESH_TOKEN_REQUIRED)
-    @JsonProperty("refresh_token")
-    private final String refreshToken;
+/**
+ * A refresh token and the client it was issued through.
+ */
+public record JwtRefreshTokenDto(@JsonProperty("client_id") @NotBlank(message = CLIENT_ID_REQUIRED) String clientId,
+                                 @JsonProperty("refresh_token") @NotBlank(message = REFRESH_TOKEN_REQUIRED) String refreshToken) {
 }

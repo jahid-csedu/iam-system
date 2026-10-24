@@ -2,6 +2,7 @@ package com.example.iamsystem.passwordreset.service;
 
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
+import com.example.iamsystem.client.service.ClientResolver;
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
@@ -31,8 +32,8 @@ import static com.example.iamsystem.passwordreset.PasswordResetConstants.USER_NO
  * Self-service password reset for users who are not logged in: an OTP is emailed, and a valid OTP gets the user a new
  * password by email. The OTP and the password are only ever sent by email.
  * <p>
- * Users are found by username or email across all tenants, which is unambiguous only while both are globally unique.
- * Step 8 (per-tenant uniqueness) must look the user up inside the tenant of the request's {@code client_id}.
+ * The request's {@code client_id} decides the tenant, and the user is found by username or email inside that tenant only
+ * (both are unique per tenant).
  */
 @Service
 @RequiredArgsConstructor
@@ -46,6 +47,7 @@ public class PasswordResetService {
     private final PasswordResetOTPRepository otpRepository;
     private final JavaMailSender mailSender;
     private final NewPasswordIssuer newPasswordIssuer;
+    private final ClientResolver clientResolver;
     private final OtpExpirationProperties otpExpiration;
 
     /**
@@ -53,11 +55,13 @@ public class PasswordResetService {
      */
     @Auditable(
             value = AuditEventType.PASSWORD_RESET_OTP_REQUEST,
-            target = "#identifier"
+            target = "#identifier",
+            detailsExpression = "T(java.util.Map).of('client_id', #clientId)"
     )
     @Transactional
-    public void createPasswordResetOtp(String identifier) {
-        User user = findUser(identifier).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+    public void createPasswordResetOtp(String clientId, String identifier) {
+        Long tenantId = clientResolver.resolve(clientId).getTenant().getId();
+        User user = findUser(identifier, tenantId).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
 
         PasswordResetOTP existingOtp = otpRepository.findByUser(user);
         if (existingOtp != null) {
@@ -81,12 +85,14 @@ public class PasswordResetService {
 
     @Auditable(
             value = AuditEventType.PASSWORD_RESET,
-            target = "#identifier"
+            target = "#identifier",
+            detailsExpression = "T(java.util.Map).of('client_id', #clientId)"
     )
     @Transactional
-    public void resetPassword(String identifier, String otp) {
+    public void resetPassword(String clientId, String identifier, String otp) {
+        Long tenantId = clientResolver.resolve(clientId).getTenant().getId();
         PasswordResetOTP resetOtp = otpRepository.findByOtp(otp);
-        validateOtp(identifier, resetOtp);
+        validateOtp(identifier, tenantId, resetOtp);
         newPasswordIssuer.issueNewPassword(resetOtp.getUser());
         otpRepository.delete(resetOtp);
     }
@@ -94,16 +100,21 @@ public class PasswordResetService {
     /**
      * A username match wins over an email match, so a username that looks like someone's email is still unambiguous.
      */
-    private Optional<User> findUser(String identifier) {
-        return userRepository.findByUsername(identifier).or(() -> userRepository.findByEmail(identifier));
+    private Optional<User> findUser(String identifier, Long tenantId) {
+        return userRepository.findByUsernameAndTenantId(identifier, tenantId)
+                .or(() -> userRepository.findByEmailAndTenantId(identifier, tenantId));
     }
 
-    private static void validateOtp(String identifier, PasswordResetOTP resetOtp) {
+    /**
+     * The OTP must belong to the user named by the identifier, inside the client's tenant.
+     */
+    private static void validateOtp(String identifier, Long tenantId, PasswordResetOTP resetOtp) {
         if (resetOtp == null) {
             throw new InvalidPasswordResetOTPException(INVALID_OTP);
         }
         User owner = resetOtp.getUser();
-        if (!identifier.equals(owner.getUsername()) && !identifier.equals(owner.getEmail())) {
+        boolean identifierMatches = identifier.equals(owner.getUsername()) || identifier.equals(owner.getEmail());
+        if (!identifierMatches || !tenantId.equals(owner.getTenant().getId())) {
             throw new InvalidPasswordResetOTPException(OTP_DOES_NOT_BELONG_TO_USER);
         }
         if (resetOtp.getExpiryDate().isBefore(Instant.now())) {

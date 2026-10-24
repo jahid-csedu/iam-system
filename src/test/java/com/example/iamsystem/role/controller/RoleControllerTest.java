@@ -29,6 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.Set;
 
 import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
+import static com.example.iamsystem.user.repository.TestUserLookup.findByUsername;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -192,7 +193,7 @@ class RoleControllerTest {
         perform(delete("/api/roles/{id}", readOnlyRole.getId()), admin).andExpect(status().isNoContent());
 
         assertFalse(roleRepository.existsById(readOnlyRole.getId()));
-        assertEquals(Set.of(), userRepository.findByUsername("reader").orElseThrow().getRoles());
+        assertEquals(Set.of(), findByUsername(userRepository, "reader").orElseThrow().getRoles());
     }
 
     @Test

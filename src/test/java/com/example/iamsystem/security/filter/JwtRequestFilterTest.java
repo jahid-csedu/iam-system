@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,6 +54,7 @@ class JwtRequestFilterTest {
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
         user = new User();
+        user.setId(1L);
         user.setUsername("alice");
         user.setVersion(2);
     }
@@ -66,8 +67,8 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A valid access token of a current user authenticates the request as that actor")
     void validToken_authenticatesTheActor() throws Exception {
-        bearer(tokenUtil.generateToken(user, ACCESS_TOKEN));
-        when(userRepository.findActor(eq("alice"), eq(2), any(Instant.class))).thenReturn(Optional.of(actor));
+        bearer(tokenUtil.generateToken(user, "app-client", ACCESS_TOKEN));
+        when(userRepository.findActor(eq(1L), eq(2), any(Instant.class))).thenReturn(Optional.of(actor));
 
         filter.doFilter(request, response, filterChain);
 
@@ -78,8 +79,8 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A revoked token, or one of an inactive or locked user, leaves the request unauthenticated")
     void tokenWithoutCurrentActor_leavesRequestUnauthenticated() throws Exception {
-        bearer(tokenUtil.generateToken(user, ACCESS_TOKEN));
-        when(userRepository.findActor(eq("alice"), eq(2), any(Instant.class))).thenReturn(Optional.empty());
+        bearer(tokenUtil.generateToken(user, "app-client", ACCESS_TOKEN));
+        when(userRepository.findActor(eq(1L), eq(2), any(Instant.class))).thenReturn(Optional.empty());
 
         filter.doFilter(request, response, filterChain);
 
@@ -102,7 +103,7 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A refresh token is not accepted as an access token")
     void refreshToken_isNotAnAccessToken() throws Exception {
-        bearer(tokenUtil.generateToken(user, REFRESH_TOKEN));
+        bearer(tokenUtil.generateToken(user, "app-client", REFRESH_TOKEN));
 
         filter.doFilter(request, response, filterChain);
 
@@ -118,7 +119,7 @@ class JwtRequestFilterTest {
         filter.doFilter(request, response, filterChain);
 
         assertNull(SecurityContextHolder.getContext().getAuthentication());
-        verify(userRepository, never()).findActor(anyString(), anyInt(), any());
+        verify(userRepository, never()).findActor(anyLong(), anyInt(), any());
         verify(filterChain).doFilter(request, response);
     }
 

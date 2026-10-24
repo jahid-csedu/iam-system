@@ -20,6 +20,10 @@ public enum PermissionKey {
     ROLES_CREATE("roles:create", TENANT),
     ROLES_UPDATE("roles:update", TENANT),
     ROLES_DELETE("roles:delete", TENANT),
+    CLIENTS_READ("clients:read", TENANT),
+    CLIENTS_CREATE("clients:create", TENANT),
+    CLIENTS_UPDATE("clients:update", TENANT),
+    CLIENTS_DELETE("clients:delete", TENANT),
     PERMISSIONS_READ("permissions:read", TENANT);
 
     private final String key;

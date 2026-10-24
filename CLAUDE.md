@@ -66,9 +66,8 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   - *Management users*: created by root (or by a management user with permission). They use the management API
     and the future management UI: roles, regular users, token settings, UI settings.
   - *Regular users*: login/logout, get access (+ refresh) tokens, change password, set up MFA (later). No management access.
-- Every tenant-owned row has a `tenant_id`. Usernames (and emails) become unique per tenant in step 8, when login knows
-  the tenant through `client_id`; until then both stay globally unique (app check; only email has a DB unique key).
-  Exception, from step 8 on: a **root user's username and email are unique across all users of all tenants**
+- Every tenant-owned row has a `tenant_id`. Usernames and emails are unique per tenant (done in step 8a).
+  Exception: a **root user's username and email are unique across all users of all tenants**
   (no other user anywhere may share them; enforced in application code, MySQL can't express it as one constraint).
   Tenants have no slug until one is needed.
   Done (step 6): tenant isolation. Every user and role lookup is tenant-scoped, anything of another tenant is 404,
@@ -81,6 +80,9 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   **management-console client** is auto-created for that tenant. Management users log in through it.
   It only accepts management users and has its own token settings like any other client.
   The platform tenant gets its own console client for super users in the same way.
+- Done (step 8a): `clients` with a random 24-character URL-safe `client_id`; signup creates the console client; login,
+  refresh and forgot-password carry `client_id`; application clients accept all users of the tenant; tokens use the
+  user id as `sub` and carry the `client_id`. No client secrets yet (all clients are public, until OAuth2/OIDC work).
 
 ### Permissions and roles
 - **Permissions are fixed and feature-based.** Tenants and platform users can never create permissions.
@@ -170,7 +172,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles/permissions, only
   management users receive access, password-reset rules).
   `UserValidator` (availability + password policy), `config/PasswordExpirationProperties`.
-- `passwordreset/`: self-service reset (OTP by email, user found by username or email) and `NewPasswordIssuer`, the one
+- `client/`: client applications. `ClientService` (CRUD in the caller's tenant, creates each tenant's console),
+  `ClientResolver` (public `client_id` → client and tenant), `ClientIdGenerator`
+- `passwordreset/`: self-service reset (OTP by email, user found by username or email in the client's tenant) and `NewPasswordIssuer`, the one
   place that generates a new password and emails it (used by both resets); `config/OtpExpirationProperties`
 - `role/`: tenant-owned roles. `RoleService` (CRUD), `RolePermissionService` (attach/detach permissions), `RoleAccessPolicy` (no changes to a role you hold),
   `PredefinedRoleService` (copies the `RoleTemplate`s into a new tenant during signup)
@@ -181,9 +185,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, validate) and DTOs
 - `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`),
   `userdetails/` (`AuthenticatedActor` = the request principal; `CurrentUserProvider`, the single owner of "who is logged in"
-  and of the current tenant id; `DefaultUserDetails`/`DefaultUserDetailsService` for login and refresh only), `event/` (lockout listeners)
+  and of the current tenant id; `TenantAuthenticationProvider` = login inside the client's tenant; `DefaultUserDetails`/
+  `DefaultUserDetailsService` for login and refresh only), `event/` (lockout listeners, by user id), `config/LockoutProperties`
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
-- `application/`, `service/`: entities from PR #10, **not used by any code yet** (become clients / disappear in steps 7–8).
 - `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (mail, OpenAPI), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
@@ -191,13 +195,16 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - Root user (`is_root_user`) passes every permission check in `AuthorizationService`; what it can reach is still limited to its tenant.
 - **Tenant boundary = tenant-scoped repository lookups** (`...AndTenantId`). Users and roles of other tenants are 404, never 403.
   Policies (`UserAccessPolicy`, `RoleAccessPolicy`) only decide rules inside the tenant.
-- No self-modification: nobody changes their own roles or a role they hold (403). Changing another user's password is root-only.
+- No self-modification: nobody changes their own roles or permissions, or a role they hold (403).
 - Endpoint permissions are owned by `@RequirePermission`; the access policies never check permissions. One data-dependent
   check: creating a `MANAGEMENT` user also needs `users:create-management`, checked by `UserCreationService` through
   `AuthorizationService`.
 - Users are `MANAGEMENT` or `REGULAR` (default), fixed at creation. Only management users hold roles and direct permissions
   (`user_permissions`); a user's permissions are the union of both. Root is `MANAGEMENT` and holds every TENANT key implicitly.
-- `POST /api/tenants/signup` (public) creates a tenant + its root user. `POST /api/users` (`users:create`) creates a user in the
+- Login: `POST /api/auth/authenticate` `{ client_id, username, password }`. The client's tenant id travels as the
+  authentication details to `TenantAuthenticationProvider`; the console client refuses regular users (403).
+  Refresh: `{ client_id, refresh_token }`, only through the issuing client.
+- `POST /api/tenants/signup` (public) creates a tenant + its root user + predefined roles + management console (its `client_id` is in the response). `POST /api/users` (`users:create`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
@@ -216,12 +223,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 Security
 - JWT secrets are hard-coded in `JwtConstant` (HMAC, so any verifier could also forge tokens). `mail.debug=true`.
 - Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit, is
-  stored in plain text, and the endpoint reveals whether a username/email exists. The user lookup is global (fine while
-  usernames/emails are globally unique; step 8 must make it tenant-scoped through `client_id`).
+  stored in plain text, and the endpoint reveals whether a username/email exists.
 - `/api/auth/token/validate` ignores the token version (revoked tokens are reported as valid).
 
 Broken / drift
-- `users.username` has no DB unique key (only an app check); step 8 adds per-tenant uniqueness plus the global root rule.
 - A root user can delete itself, which leaves its tenant without a root (decide with the platform/tenant lifecycle work).
 - Refresh-token errors answer 412 instead of 401 (step 9). Audit events for failures are logged at ERROR level.
 - Deleting a user with a pending password-reset OTP fails (FK `fk_password_reset_otps_user`, no ON DELETE rule).
@@ -277,4 +282,9 @@ Design debt
   `PUT`/`DELETE /api/users/permissions` (`users:update`); regular users can't receive roles or permissions (400); permission
   check = roles ∪ direct permissions. `PermissionRepository.getRequiredTenantPermissions` shared by roles and users.
   Decisions: type never changes (create a new user instead); management creation needs its own key.
-  Next: step 8 (client applications, `client_id`).
+- 2026-10-25: Step 8a (clients). Flyway `V7__clients.sql`: `applications` → `clients` (one `MANAGEMENT_CONSOLE` per tenant,
+  functional unique index), usernames/emails unique per tenant, `clients:*` keys (ADMIN; `clients:read` also VIEWER).
+  Login/refresh/forgot-password carry `client_id`; `TenantAuthenticationProvider` replaces `DaoAuthenticationProvider`;
+  tokens: `sub` = user id + `client_id` claim; lockout listeners by user id; `LockoutProperties`; deactivated accounts → 403.
+  Decisions: 24-char URL-safe ids, secrets later, console = management users only, applications = all users.
+  Next: step 8b (per-client token settings).

@@ -24,16 +24,19 @@ class JwtTokenUtilTest {
     @BeforeEach
     void setUp() {
         user = new User();
+        user.setId(7L);
         user.setUsername("alice");
         user.setVersion(3);
     }
 
     @Test
-    @DisplayName("A generated token carries the username and the user's version")
-    void generateToken_carriesUsernameAndVersion() {
-        Claims claims = tokenUtil.parseClaims(tokenUtil.generateToken(user, ACCESS_TOKEN), ACCESS_TOKEN);
+    @DisplayName("A generated token carries the user id as subject, the client and the user's version")
+    void generateToken_carriesUserIdClientAndVersion() {
+        Claims claims = tokenUtil.parseClaims(tokenUtil.generateToken(user, "app-client", ACCESS_TOKEN), ACCESS_TOKEN);
 
-        assertEquals("alice", claims.getSubject());
+        assertEquals("7", claims.getSubject());
+        assertEquals(7L, tokenUtil.userIdOf(claims));
+        assertEquals("app-client", tokenUtil.clientIdOf(claims));
         assertEquals(3, tokenUtil.versionOf(claims));
         assertFalse(claims.containsKey("authorities"));
     }
@@ -41,7 +44,7 @@ class JwtTokenUtilTest {
     @Test
     @DisplayName("Access and refresh tokens are signed with different keys")
     void tokens_cannotBeUsedAsTheOtherType() {
-        String refreshToken = tokenUtil.generateToken(user, REFRESH_TOKEN);
+        String refreshToken = tokenUtil.generateToken(user, "app-client", REFRESH_TOKEN);
 
         assertThrows(JwtException.class, () -> tokenUtil.parseClaims(refreshToken, ACCESS_TOKEN));
         assertFalse(tokenUtil.isValid(refreshToken, ACCESS_TOKEN));
@@ -58,16 +61,22 @@ class JwtTokenUtilTest {
     @Test
     @DisplayName("A token is issued for the user only while the user's version is unchanged")
     void isIssuedFor_requiresSameUserAndVersion() {
-        Claims claims = tokenUtil.parseClaims(tokenUtil.generateToken(user, REFRESH_TOKEN), REFRESH_TOKEN);
+        Claims claims = tokenUtil.parseClaims(tokenUtil.generateToken(user, "app-client", REFRESH_TOKEN), REFRESH_TOKEN);
         assertTrue(tokenUtil.isIssuedFor(claims, user));
 
         user.setVersion(4);
         assertFalse(tokenUtil.isIssuedFor(claims, user));
 
         User other = new User();
-        other.setUsername("bob");
+        other.setId(8L);
         other.setVersion(3);
         assertFalse(tokenUtil.isIssuedFor(claims, other));
+    }
+
+    @Test
+    @DisplayName("A subject that isn't a user id is rejected")
+    void userIdOf_nonNumericSubject_isRejected() {
+        assertThrows(IllegalArgumentException.class, () -> tokenUtil.userIdOf(Jwts.claims().subject("alice").build()));
     }
 
     @Test

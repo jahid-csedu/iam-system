@@ -18,20 +18,23 @@ import static com.example.iamsystem.security.jwt.JwtConstant.REFRESH_TOKEN_SECRE
 import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 
 /**
- * Issues and reads the signed tokens. Access and refresh tokens use different keys. Both carry the user's
- * {@code version}, so any change to the user (roles, password) invalidates the tokens issued before it.
+ * Issues and reads the signed tokens. Access and refresh tokens use different keys. The subject is the user id (usernames
+ * are only unique per tenant); {@code client_id} names the client the user logged in through; {@code version} is the
+ * user's version, so any change to the user (roles, password) invalidates the tokens issued before it.
  */
 @Component
 public class JwtTokenUtil {
 
     static final String VERSION = "version";
+    static final String CLIENT_ID = "client_id";
 
-    public String generateToken(User user, TokenType tokenType) {
+    public String generateToken(User user, String clientId, TokenType tokenType) {
         long validitySeconds = tokenType == ACCESS_TOKEN ? JWT_ACCESS_TOKEN_VALIDITY : JWT_REFRESH_TOKEN_VALIDITY;
         long now = System.currentTimeMillis();
         return Jwts.builder()
-                .subject(user.getUsername())
+                .subject(String.valueOf(user.getId()))
                 .claim(VERSION, user.getVersion())
+                .claim(CLIENT_ID, clientId)
                 .issuedAt(new Date(now))
                 .expiration(new Date(now + validitySeconds * 1000))
                 .signWith(secretKey(tokenType))
@@ -53,6 +56,17 @@ public class JwtTokenUtil {
     }
 
     /**
+     * @throws IllegalArgumentException if the subject isn't a user id
+     */
+    public Long userIdOf(Claims claims) {
+        return Long.valueOf(claims.getSubject());
+    }
+
+    public String clientIdOf(Claims claims) {
+        return claims.get(CLIENT_ID, String.class);
+    }
+
+    /**
      * The user version the token was issued for, or {@code null} if the token carries none.
      */
     public Integer versionOf(Claims claims) {
@@ -63,7 +77,7 @@ public class JwtTokenUtil {
      * Whether verified claims were issued for this user and its current version (not revoked since).
      */
     public boolean isIssuedFor(Claims claims, User user) {
-        return user.getUsername().equals(claims.getSubject())
+        return String.valueOf(user.getId()).equals(claims.getSubject())
                 && Integer.valueOf(user.getVersion()).equals(versionOf(claims));
     }
 

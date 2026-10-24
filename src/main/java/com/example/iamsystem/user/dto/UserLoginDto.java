@@ -1,19 +1,16 @@
 package com.example.iamsystem.user.dto;
 
-import com.example.iamsystem.common.exception.ErrorMessage;
-import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.NotBlank;
 
-@Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
-public class UserLoginDto {
-    @NotNull(message = ErrorMessage.USERNAME_REQUIRED)
-    private String username;
-    @NotNull(message = ErrorMessage.PASSWORD_REQUIRED)
-    private String password;
+import static com.example.iamsystem.common.exception.ErrorMessage.CLIENT_ID_REQUIRED;
+import static com.example.iamsystem.common.exception.ErrorMessage.PASSWORD_REQUIRED;
+import static com.example.iamsystem.common.exception.ErrorMessage.USERNAME_REQUIRED;
+
+/**
+ * A login through a client of the tenant; the client decides which tenant the username belongs to.
+ */
+public record UserLoginDto(@JsonProperty("client_id") @NotBlank(message = CLIENT_ID_REQUIRED) String clientId,
+                           @NotBlank(message = USERNAME_REQUIRED) String username,
+                           @NotBlank(message = PASSWORD_REQUIRED) String password) {
 }

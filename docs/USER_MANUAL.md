@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 7c (user types and direct permissions).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 8a (client applications and `client_id`).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -11,7 +11,10 @@ How to use the system as a developer through Swagger UI or Postman.
 
 | Concept | Today |
 |---|---|
-| **Tenant** | One organization. Created by **tenant signup**, which also creates the tenant's **root user**. |
+| **Tenant** | One organization. Created by **tenant signup**, which also creates the tenant's **root user** and its **management console** client. |
+| **Client** | An application of a tenant that users log in through, identified by a public 24-character **`client_id`**. Every login, token refresh and forgot-password request names its client, and the client decides which tenant the user belongs to. |
+| **Management console** | The one built-in client of each tenant (`type: MANAGEMENT_CONSOLE`): only management users log in through it, and it can't be deleted. |
+| **Application client** | A client the tenant registers (`type: APPLICATION`): all users of the tenant can log in through it. |
 | **Root user** | Exactly one per tenant. Holds every tenant permission implicitly (no role needed). |
 | **Permission** | A fixed key `<resource>:<action>`, such as `users:read`. The catalog is part of the system: nobody creates, changes or deletes permissions. New keys arrive with new features. |
 | **Role** | A named set of permissions, owned by one tenant (names are unique within the tenant). |
@@ -22,7 +25,7 @@ How to use the system as a developer through Swagger UI or Postman.
 | **No self-modification** | Nobody can change their own roles, change or delete a role they hold, or reset their own password through the management API. Another user with the permission must do it. |
 
 **Important limitations today:**
-- **Usernames and emails are globally unique** across all tenants (until step 8).
+- **Token lifetimes are the same for every client** (5 minutes / 24 hours) until per-client token settings arrive (step 8b).
 
 ### The permission catalog
 
@@ -38,6 +41,10 @@ How to use the system as a developer through Swagger UI or Postman.
 | `roles:create` | Create roles |
 | `roles:update` | Rename roles, change their description, add and remove their permissions |
 | `roles:delete` | Delete roles |
+| `clients:read` | List clients and view a client |
+| `clients:create` | Register application clients |
+| `clients:update` | Rename clients |
+| `clients:delete` | Delete application clients (never the management console) |
 | `permissions:read` | List the catalog and view a permission |
 
 ### Predefined roles
@@ -49,7 +56,7 @@ them, delete them, or create more. Later changes to the predefined set never aff
 |---|---|
 | `ADMIN` | every key in the catalog |
 | `USER_MANAGER` | `users:read`, `users:create`, `users:update`, `users:delete` |
-| `VIEWER` | `users:read`, `roles:read`, `permissions:read` |
+| `VIEWER` | `users:read`, `roles:read`, `clients:read`, `permissions:read` |
 
 ---
 
@@ -70,13 +77,14 @@ sent by email. Each development step starts from a fresh database: `docker compo
 ## 3. Using Swagger UI
 
 1. Open **`http://localhost:8080/swagger-ui.html`**.
-2. Call `POST /api/tenants/signup`, then `POST /api/auth/authenticate`, and copy the `access_token` from the response.
+2. Call `POST /api/tenants/signup` and note `managementConsole.client_id` from the response. Call `POST /api/auth/authenticate`
+   with that `client_id`, and copy the `access_token` from the response.
 3. Click **Authorize** (top right) and paste the token **without** the `Bearer ` prefix. Swagger adds it.
 4. All protected endpoints now send the token. Access tokens expire after **5 minutes**: log in again (or refresh) and re-authorize.
 
 ## 4. Using Postman
 
-1. Create an environment with `baseUrl = http://localhost:8080`, `accessToken`, `refreshToken`.
+1. Create an environment with `baseUrl = http://localhost:8080`, `clientId`, `accessToken`, `refreshToken`.
 2. In the login request's **Scripts → Post-response** tab, store the tokens automatically:
    ```js
    const body = pm.response.json();
@@ -105,14 +113,21 @@ character** (`@#!$%^&-+=()`).
   }
 }
 ```
-→ `201 Created` with the tenant and its root user. A taken tenant name, username or email gives `400`.
+→ `201 Created` with the tenant, its root user and its management console:
+```json
+{ "tenant": { ... }, "rootUser": { ... },
+  "managementConsole": { "id": 1, "client_id": "pipHcOj4eVaEOqgMCeTJygKC", "name": "Management Console", "type": "MANAGEMENT_CONSOLE" } }
+```
+Keep the console's `client_id`: management users log in with it. A taken tenant name gives `400`, and so does a root username
+or email that any user of any tenant already uses.
 
-### Step 2: Log in as root (public)
+### Step 2: Log in as root through the management console (public)
 `POST /api/auth/authenticate`
 ```json
-{ "username": "globex-root", "password": "Root1234!" }
+{ "client_id": "pipHcOj4eVaEOqgMCeTJygKC", "username": "globex-root", "password": "Root1234!" }
 ```
 → `200` with `access_token` (valid 5 minutes) and `refresh_token` (valid 24 hours). Use the access token as `Bearer` from now on.
+An unknown `client_id`, or a username that doesn't exist in the client's tenant, gives `401`.
 
 ### Step 3: Look at your roles (root)
 `GET /api/roles` → the predefined `ADMIN`, `USER_MANAGER` and `VIEWER` roles of your tenant, each with its `id` and
@@ -151,9 +166,16 @@ Bob can't change his own roles, or change the `USER_MANAGER` role while he holds
 (`DELETE /api/users/roles` with the same body removes roles.) Changing a user's roles revokes the tokens they already
 hold (`401`), so they log in again. Changing the permissions of a role applies to its users immediately, without new tokens.
 
-### Step 7: Create a regular user
-Log in as Bob and `POST /api/users` again (e.g. `carol`) without `userType`. Carol is a regular user: she can log in, refresh
-her tokens and change her own password, and gets `403` on every management endpoint.
+### Step 7: Register an application and create a regular user
+Regular users can't log in through the management console (`403`), so register the application they use (needs `clients:create`):
+
+`POST /api/clients`
+```json
+{ "name": "Shop" }
+```
+→ `201` with the new client's generated `client_id`. Then log in as Bob and `POST /api/users` again (e.g. `carol`) without
+`userType`. Carol is a regular user: she logs in through the Shop client, refreshes her tokens and changes her own password,
+and gets `403` on every management endpoint.
 
 ### Step 8 (optional): Grant a single permission directly (needs `users:update`)
 `PUT /api/users/permissions`
@@ -171,9 +193,10 @@ her tokens and change her own password, and gets `403` on every management endpo
 |---|---|---|
 | Change own password | `PATCH /api/users/password` `{ "oldPassword": "...", "newPassword": "..." }` | Any logged-in user, for themselves only |
 | Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`; a new password is emailed to that user | `users:reset-password`; never your own password, never the root user's |
-| Forgot password: request an OTP | `POST /api/password/reset-request` `{ "identifier": "<username or email>" }` → the OTP is emailed | Public |
-| Forgot password: reset with the OTP | `POST /api/password/reset` `{ "identifier": "<username or email>", "otp": "123456" }` → a new password is emailed | Public |
-| Refresh tokens | `POST /api/auth/token/refresh` `{ "username": "bob", "refresh_token": "..." }` | Public (needs a valid refresh token) |
+| Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → the OTP is emailed | Public |
+| Forgot password: reset with the OTP | `POST /api/password/reset` `{ "client_id": "...", "identifier": "<username or email>", "otp": "123456" }` → a new password is emailed | Public |
+| Refresh tokens | `POST /api/auth/token/refresh` `{ "client_id": "...", "refresh_token": "..." }` (the client the token was issued through) | Public (needs a valid refresh token) |
+| Clients | `GET /api/clients`, `GET /api/clients/{id}`, `POST /api/clients` `{ "name" }`, `PUT /api/clients/{id}` `{ "name" }` (rename), `DELETE /api/clients/{id}` (never the console) | `clients:read` / `create` / `update` / `delete` |
 | List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `users:read` |
 | Direct permissions | `PUT` / `DELETE /api/users/permissions` `{ "username", "permissionIds" }` (management users only, never yourself) | `users:update` |
 | Find a user | `GET /api/users/{id}`, `/api/users/by-username?username=`, `/api/users/by-email?email=` | `users:read` |
@@ -204,18 +227,20 @@ The IAM manages only its own permissions; other applications decide their own au
   appears in a response. A forgot-password OTP is valid for 5 minutes and replaces any earlier OTP of the user.
 - **One root per tenant**, created only by signup; a root user can't be deleted, or have its password reset, by anyone else.
 - **Tenant isolation:** users and roles of another tenant are reported as not found (`404`), never as forbidden.
-- **Usernames and emails** stay unique across all tenants until step 8. From then on they are unique per tenant, except
-  that a root user's username and email stay unique across all users of all tenants. The forgot-password flow then also
-  looks the user up inside the tenant of the request's `client_id`.
+- **Usernames and emails** are unique per tenant: two tenants may both have a `bob`. Exception: a root user's username and
+  email are unique across all users of all tenants. Login and forgot-password look the user up only inside the tenant of
+  the request's `client_id`.
+- **Tokens** carry the user id as `sub`, the `client_id` they were issued through, and the user's `version`. A refresh token
+  only works through the client it was issued through.
 
 ## 9. Status codes
 
 | Code | Meaning here |
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
-| `400` | Already exists (tenant, user, role name in your tenant), roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
-| `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, or wrong username/password |
-| `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; or account locked or expired |
+| `400` | Already exists (tenant, user, role or client name in your tenant), deleting the management console, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
+| `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, wrong username/password, or an unknown `client_id` |
+| `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; or account locked, deactivated or expired |
 | `404` | Not found, including users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
 | `412` | Invalid or expired token on refresh/validation (changes to 401 in step 9) |

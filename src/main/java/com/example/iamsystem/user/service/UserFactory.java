@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import static com.example.iamsystem.common.util.DateUtil.calculateExpiryDate;
 
 /**
- * Builds a new, validated, active user inside a tenant. Used for root users at tenant signup and for every other user.
+ * Builds new, validated, active users: the root user of a new tenant, and every other user inside a tenant.
  */
 @Component
 @RequiredArgsConstructor
@@ -25,8 +25,21 @@ public class UserFactory {
     private final PasswordExpirationProperties passwordExpiration;
 
     public User newUser(UserCreationDto request, Tenant tenant, UserType userType) {
-        userValidator.validateUsernameAvailable(request.username());
-        userValidator.validateEmailAvailable(request.email());
+        userValidator.validateAvailable(request.username(), request.email(), tenant.getId());
+        return build(request, tenant, userType);
+    }
+
+    /**
+     * The root user's username and email must be unused across all tenants. The root is a management user.
+     */
+    public User newRootUser(UserCreationDto request, Tenant tenant) {
+        userValidator.validateAvailableForRoot(request.username(), request.email());
+        User root = build(request, tenant, UserType.MANAGEMENT);
+        root.setRootUser(true);
+        return root;
+    }
+
+    private User build(UserCreationDto request, Tenant tenant, UserType userType) {
         userValidator.validatePasswordPolicy(request.password());
 
         User user = userMapper.toEntity(request);
