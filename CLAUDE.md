@@ -2,6 +2,7 @@
 
 > **Resuming work?** Read this file, then `docs/IMPLEMENTATION_PLAN.md` (step-by-step plan and how to resume).
 > This file = rules, agreed decisions, current state. The plan file = proposed technical design per remaining step.
+> `docs/USER_MANUAL.md` = how to use the system today (Swagger/Postman flows).
 
 ## Working agreement
 - The project owner makes the design decisions. Propose, explain trade-offs, then wait for a go-ahead.
@@ -13,6 +14,8 @@
 - Check every change against the "Target design" section below.
 - Update this file when a step changes the architecture, commands, design or known issues.
   When a step finishes, also update `docs/IMPLEMENTATION_PLAN.md` (move it to "Done", adjust later steps if needed).
+- **Keep `docs/USER_MANUAL.md` in sync:** every step that changes endpoints, request bodies, permissions or the setup flow
+  updates the manual in the same commit, with the flows verified against the running app.
 
 ## Code standards
 What "clean" means for every class a step touches:
@@ -212,4 +215,5 @@ Design debt
   one root per tenant (functional unique index), `roles.is_global` dropped. `POST /api/tenants/signup` (tenant + root in one
   transaction), `POST /api/users` (`IAM:WRITE`) replaces `/api/users/register`; `UserFactory`; entities cleaned (id-based equals);
   `AuthorizationConfig` simplified (anonymous → 401). Decisions: usernames/emails global until step 8, no tenant slug yet.
+  Added `docs/USER_MANUAL.md`.
   Next: step 6 (tenant isolation).

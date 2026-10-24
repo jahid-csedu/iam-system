@@ -123,6 +123,8 @@ As the root user you can now create more users in your tenant with `POST /api/us
 
 ## Available API Endpoints
 
+For the full step-by-step developer flow (Swagger/Postman, setting up permissions and roles), see **[docs/USER_MANUAL.md](docs/USER_MANUAL.md)**.
+
 Here is a list of the main operations you can perform. For protected endpoints, you must include the `Authorization` header as described above.
 
 ### Tenants

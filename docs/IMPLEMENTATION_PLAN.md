@@ -17,7 +17,7 @@ This file lets any new session pick up the work without the conversation that pr
 4. Find the next step in section 4 of this file. Present its plan to the owner: touched classes, cleanup per class, migration, and the
    open decisions as questions. **Wait for the go-ahead.**
 5. Implement → `./gradlew clean test` → smoke-test in Docker (`docker compose up --build app db`, app on port 8080)
-   → update `CLAUDE.md` and this file → show the
+   → update `CLAUDE.md`, this file and `docs/USER_MANUAL.md` (if usage changed) → show the
    result and propose a one-line commit message → commit/push **only** after explicit approval.
 
 ## 2. Working rules (summary; full text in `CLAUDE.md`)
@@ -40,7 +40,7 @@ This file lets any new session pick up the work without the conversation that pr
 | 3 | Package-by-feature layout | `8f164f3` |
 | 4a | `UserService` split by responsibility, `UserAccessPolicy`, `CurrentUserProvider`, code standards | `98a5965` |
 | 4b | `AuthorizationService` is the single owner of permission checks; `AuthenticationService` | `9c8fe14` |
-| Docs | This plan | `d188c69` |
+| Docs | This plan; user manual (`docs/USER_MANUAL.md`) | `d188c69`, step 5 commit |
 | 5 | Tenants: `V2__tenants.sql`, `POST /api/tenants/signup` (tenant + root atomically, one root per tenant), `POST /api/users` | step 5 commit |
 
 ---
