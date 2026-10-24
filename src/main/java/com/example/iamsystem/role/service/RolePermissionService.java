@@ -2,8 +2,6 @@ package com.example.iamsystem.role.service;
 
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
-import com.example.iamsystem.common.exception.DataNotFoundException;
-import com.example.iamsystem.permission.entity.Permission;
 import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.role.dto.RolePermissionDto;
 import com.example.iamsystem.role.entity.Role;
@@ -14,11 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Set;
-
-import static com.example.iamsystem.common.exception.ErrorMessage.PERMISSIONS_NOT_FOUND;
-import static com.example.iamsystem.permission.entity.PermissionScope.TENANT;
 
 /**
  * Attaches permissions to, and detaches them from, the roles of the current user's tenant.
@@ -40,7 +33,7 @@ public class RolePermissionService {
     @Transactional
     public void assignPermissions(RolePermissionDto request) {
         Role role = getModifiableRole(request.roleId());
-        role.getPermissions().addAll(getTenantPermissions(request.permissionIds()));
+        role.getPermissions().addAll(permissionRepository.getRequiredTenantPermissions(request.permissionIds()));
         roleRepository.save(role);
     }
 
@@ -52,7 +45,7 @@ public class RolePermissionService {
     @Transactional
     public void removePermissions(RolePermissionDto request) {
         Role role = getModifiableRole(request.roleId());
-        getTenantPermissions(request.permissionIds()).forEach(role.getPermissions()::remove);
+        permissionRepository.getRequiredTenantPermissions(request.permissionIds()).forEach(role.getPermissions()::remove);
         roleRepository.save(role);
     }
 
@@ -61,16 +54,5 @@ public class RolePermissionService {
         Role role = roleRepository.getRequiredByIdAndTenantId(roleId, actor.tenantId());
         accessPolicy.checkCanModify(actor, role);
         return role;
-    }
-
-    /**
-     * Only TENANT permissions may be put into a tenant's roles; unknown or PLATFORM permissions count as missing.
-     */
-    private List<Permission> getTenantPermissions(Set<Long> permissionIds) {
-        List<Permission> permissions = permissionRepository.findAllByIdInAndScope(permissionIds, TENANT);
-        if (permissions.size() != permissionIds.size()) {
-            throw new DataNotFoundException(PERMISSIONS_NOT_FOUND);
-        }
-        return permissions;
     }
 }

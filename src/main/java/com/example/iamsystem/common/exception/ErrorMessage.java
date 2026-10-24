@@ -16,7 +16,8 @@ public class ErrorMessage {
     public static final String ROLES_NOT_FOUND = "Some roles not found";
     public static final String ROLE_EXISTS = "Role name already exists";
     public static final String ROLE_ID_REQUIRED = "Role id is required";
-    public static final String OWN_ROLES_CHANGE = "Users cannot change their own roles";
+    public static final String OWN_ACCESS_CHANGE = "Users cannot change their own roles or permissions";
+    public static final String REGULAR_USER_ACCESS = "Regular users cannot hold roles or permissions";
     public static final String HELD_ROLE_CHANGE = "Users cannot change a role they hold";
     public static final String PERMISSION_NOT_FOUND = "Permission not found";
     public static final String PERMISSIONS_NOT_FOUND = "Some permissions not found";

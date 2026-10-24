@@ -10,6 +10,7 @@ import com.example.iamsystem.tenant.mapper.TenantMapper;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.mapper.UserMapper;
 import com.example.iamsystem.user.repository.UserRepository;
 import com.example.iamsystem.user.service.UserFactory;
@@ -26,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -51,7 +53,7 @@ class TenantSignupServiceTest {
     void setUp() {
         service = new TenantSignupService(tenantRepository, userRepository, userFactory, predefinedRoleService,
                 Mappers.getMapper(TenantMapper.class), Mappers.getMapper(UserMapper.class));
-        rootDetails = new UserCreationDto("root", "Password1!", "Root", "root@acme.com");
+        rootDetails = new UserCreationDto("root", "Password1!", "Root", "root@acme.com", null);
         request = new TenantSignupDto("Acme", rootDetails);
     }
 
@@ -64,7 +66,7 @@ class TenantSignupServiceTest {
             tenant.setId(7L);
             return tenant;
         });
-        when(userFactory.newUser(any(UserCreationDto.class), any(Tenant.class))).thenAnswer(invocation -> {
+        when(userFactory.newUser(any(UserCreationDto.class), any(Tenant.class), eq(UserType.MANAGEMENT))).thenAnswer(invocation -> {
             User user = new User();
             user.setUsername("root");
             user.setTenant(invocation.getArgument(1));
@@ -80,7 +82,7 @@ class TenantSignupServiceTest {
         assertEquals(7L, result.tenant().id());
         assertTrue(result.rootUser().isRootUser());
         assertEquals(7L, result.rootUser().getTenantId());
-        verify(userFactory).newUser(rootDetails, tenant);
+        verify(userFactory).newUser(rootDetails, tenant, UserType.MANAGEMENT);
         verify(predefinedRoleService).createPredefinedRoles(tenant);
     }
 

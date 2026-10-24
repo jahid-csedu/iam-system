@@ -40,6 +40,7 @@ public class UserRoleService {
     public void assignRoles(UserRoleAttachmentDto request) {
         AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User user = getManageableUser(actor, request.getUsername());
+        accessPolicy.checkCanReceiveAccess(user);
         user.getRoles().addAll(getTenantRoles(request.getRoleIds(), actor.tenantId()));
         userRepository.save(user);
     }
@@ -59,7 +60,7 @@ public class UserRoleService {
 
     private User getManageableUser(AuthenticatedActor actor, String username) {
         User user = userRepository.getRequiredByUsernameAndTenantId(username, actor.tenantId());
-        accessPolicy.checkCanManageRoles(actor, user);
+        accessPolicy.checkCanManageAccess(actor, user);
         return user;
     }
 

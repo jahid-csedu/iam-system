@@ -52,7 +52,7 @@ class JwtAuthenticationTest {
     @BeforeEach
     void setUp() throws Exception {
         TenantSignupDto signup = new TenantSignupDto("Acme",
-                new UserCreationDto("acme-root", "Password1!", "Acme Root", "root@acme.com"));
+                new UserCreationDto("acme-root", "Password1!", "Acme Root", "root@acme.com", null));
         mockMvc.perform(post("/api/tenants/signup").contentType(MediaType.APPLICATION_JSON)
                 .content(jsonMapper.writeValueAsString(signup))).andExpect(status().isCreated());
 

@@ -12,6 +12,7 @@ public enum PermissionKey {
 
     USERS_READ("users:read", TENANT),
     USERS_CREATE("users:create", TENANT),
+    USERS_CREATE_MANAGEMENT("users:create-management", TENANT),
     USERS_UPDATE("users:update", TENANT),
     USERS_DELETE("users:delete", TENANT),
     USERS_RESET_PASSWORD("users:reset-password", TENANT),

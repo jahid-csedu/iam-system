@@ -62,7 +62,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   The root has every tenant-management permission inside that tenant and no access to any other tenant.
   Done (step 5): public `POST /api/tenants/signup` creates the tenant and its root user in one transaction;
   a unique index enforces one root per tenant. Other users are created with `POST /api/users` inside the caller's tenant.
-- **User types inside a tenant**:
+- **User types inside a tenant** (done in step 7c: `users.user_type`, set at creation and never changed):
   - *Management users*: created by root (or by a management user with permission). They use the management API
     and the future management UI: roles, regular users, token settings, UI settings.
   - *Regular users*: login/logout, get access (+ refresh) tokens, change password, set up MFA (later). No management access.
@@ -164,9 +164,11 @@ Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enum
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
 - `tenant/`: `Tenant` + `TenantStatus`, `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
-- `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserService` (paged list, find, delete);
+- `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
+  (direct permissions), `UserService` (paged list, find, delete);
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
-  `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles, root-only rules).
+  `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles/permissions, only
+  management users receive access, password-reset rules).
   `UserValidator` (availability + password policy), `config/PasswordExpirationProperties`.
 - `passwordreset/`: self-service reset (OTP by email, user found by username or email) and `NewPasswordIssuer`, the one
   place that generates a new password and emails it (used by both resets); `config/OtpExpirationProperties`
@@ -190,7 +192,11 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - **Tenant boundary = tenant-scoped repository lookups** (`...AndTenantId`). Users and roles of other tenants are 404, never 403.
   Policies (`UserAccessPolicy`, `RoleAccessPolicy`) only decide rules inside the tenant.
 - No self-modification: nobody changes their own roles or a role they hold (403). Changing another user's password is root-only.
-- Endpoint permissions are owned by `@RequirePermission`; the access policies never check permissions.
+- Endpoint permissions are owned by `@RequirePermission`; the access policies never check permissions. One data-dependent
+  check: creating a `MANAGEMENT` user also needs `users:create-management`, checked by `UserCreationService` through
+  `AuthorizationService`.
+- Users are `MANAGEMENT` or `REGULAR` (default), fixed at creation. Only management users hold roles and direct permissions
+  (`user_permissions`); a user's permissions are the union of both. Root is `MANAGEMENT` and holds every TENANT key implicitly.
 - `POST /api/tenants/signup` (public) creates a tenant + its root user. `POST /api/users` (`users:create`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
@@ -266,4 +272,9 @@ Design debt
   (`ADMIN` = every key, `USER_MANAGER` = users read/create/update/delete, `VIEWER` = read keys). Signup copies them into the
   new tenant in the same transaction (`PredefinedRoleService`). Decisions: no role-manager role; template changes never
   reach existing tenants.
-  Next: step 7c (user types and direct permissions).
+- 2026-10-25: Step 7c (user types). Flyway `V6__user_types.sql`: `users.user_type` (`MANAGEMENT`/`REGULAR`, not updatable),
+  `user_permissions`, new key `users:create-management` (ADMIN template). `POST /api/users` takes `userType` (default REGULAR);
+  `PUT`/`DELETE /api/users/permissions` (`users:update`); regular users can't receive roles or permissions (400); permission
+  check = roles ∪ direct permissions. `PermissionRepository.getRequiredTenantPermissions` shared by roles and users.
+  Decisions: type never changes (create a new user instead); management creation needs its own key.
+  Next: step 8 (client applications, `client_id`).

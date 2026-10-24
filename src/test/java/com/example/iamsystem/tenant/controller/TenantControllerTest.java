@@ -181,7 +181,7 @@ class TenantControllerTest {
 
     private ResultActions signup(String tenantName, String username, String email) throws Exception {
         TenantSignupDto request = new TenantSignupDto(tenantName,
-                new UserCreationDto(username, "Password1!", "Root User", email));
+                new UserCreationDto(username, "Password1!", "Root User", email, null));
         return mockMvc.perform(post("/api/tenants/signup")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(jsonMapper.writeValueAsString(request)));

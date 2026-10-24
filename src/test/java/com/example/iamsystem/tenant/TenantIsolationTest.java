@@ -9,6 +9,7 @@ import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -151,6 +152,7 @@ class TenantIsolationTest {
         user.setUsername(username);
         user.setEmail(username + "@example.com");
         user.setActive(true);
+        user.setUserType(UserType.MANAGEMENT);
         user.setRootUser(root);
         return userRepository.save(user);
     }

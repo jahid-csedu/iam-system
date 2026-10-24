@@ -9,6 +9,7 @@ import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -142,6 +143,7 @@ class PermissionControllerTest {
         user.setUsername(username);
         user.setEmail(username + "@example.com");
         user.setActive(true);
+        user.setUserType(UserType.MANAGEMENT);
         user.setRootUser(rootUser);
         return userRepository.save(user);
     }

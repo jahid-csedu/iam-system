@@ -4,6 +4,7 @@ import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.user.config.PasswordExpirationProperties;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,13 +24,14 @@ public class UserFactory {
     private final UserMapper userMapper;
     private final PasswordExpirationProperties passwordExpiration;
 
-    public User newUser(UserCreationDto request, Tenant tenant) {
+    public User newUser(UserCreationDto request, Tenant tenant, UserType userType) {
         userValidator.validateUsernameAvailable(request.username());
         userValidator.validateEmailAvailable(request.email());
         userValidator.validatePasswordPolicy(request.password());
 
         User user = userMapper.toEntity(request);
         user.setTenant(tenant);
+        user.setUserType(userType);
         user.setActive(true);
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setPasswordExpiryDate(calculateExpiryDate(passwordExpiration.days()));

@@ -1,14 +1,17 @@
 package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.user.entity.UserType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.NO_PERMISSION;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_PASSWORD_RESET;
-import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ROLES_CHANGE;
+import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ACCESS_CHANGE;
+import static com.example.iamsystem.common.exception.ErrorMessage.REGULAR_USER_ACCESS;
 
 /**
  * Decides what an actor may do to another user of the same tenant. Endpoint permissions are checked separately by
@@ -19,12 +22,21 @@ import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ROLES_CHAN
 public class UserAccessPolicy {
 
     /**
-     * Nobody changes their own roles; another user with the permission has to do it.
+     * Nobody changes their own roles or direct permissions; another user with the permission has to do it.
      */
-    public void checkCanManageRoles(AuthenticatedActor actor, User target) {
+    public void checkCanManageAccess(AuthenticatedActor actor, User target) {
         if (actor.isUser(target.getId())) {
-            log.warn("User '{}' tried to change their own roles", actor.username());
-            throw new NoAccessException(OWN_ROLES_CHANGE);
+            log.warn("User '{}' tried to change their own roles or permissions", actor.username());
+            throw new NoAccessException(OWN_ACCESS_CHANGE);
+        }
+    }
+
+    /**
+     * Only management users hold roles and permissions; regular users never do.
+     */
+    public void checkCanReceiveAccess(User target) {
+        if (target.getUserType() != UserType.MANAGEMENT) {
+            throw new UserInputNotValidException(REGULAR_USER_ACCESS);
         }
     }
 

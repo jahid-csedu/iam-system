@@ -1,7 +1,9 @@
 package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.user.entity.UserType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -21,19 +23,30 @@ class UserAccessPolicyTest {
     private final User member = user(3, "member");
 
     @Test
-    @DisplayName("Managing another user's roles is allowed")
-    void checkCanManageRoles_ofAnotherUser_isAllowed() {
-        assertDoesNotThrow(() -> policy.checkCanManageRoles(actor(manager), member));
-        assertDoesNotThrow(() -> policy.checkCanManageRoles(actor(member), manager));
-        assertDoesNotThrow(() -> policy.checkCanManageRoles(actor(root), manager));
+    @DisplayName("Managing another user's roles and permissions is allowed")
+    void checkCanManageAccess_ofAnotherUser_isAllowed() {
+        assertDoesNotThrow(() -> policy.checkCanManageAccess(actor(manager), member));
+        assertDoesNotThrow(() -> policy.checkCanManageAccess(actor(member), manager));
+        assertDoesNotThrow(() -> policy.checkCanManageAccess(actor(root), manager));
     }
 
     @Test
-    @DisplayName("Managing your own roles is denied")
-    void checkCanManageRoles_ofSelf_isDenied() {
-        NoAccessException exception = assertThrows(NoAccessException.class, () -> policy.checkCanManageRoles(actor(manager), manager));
-        assertEquals("Users cannot change their own roles", exception.getMessage());
-        assertThrows(NoAccessException.class, () -> policy.checkCanManageRoles(actor(root), root));
+    @DisplayName("Managing your own roles and permissions is denied")
+    void checkCanManageAccess_ofSelf_isDenied() {
+        NoAccessException exception = assertThrows(NoAccessException.class, () -> policy.checkCanManageAccess(actor(manager), manager));
+        assertEquals("Users cannot change their own roles or permissions", exception.getMessage());
+        assertThrows(NoAccessException.class, () -> policy.checkCanManageAccess(actor(root), root));
+    }
+
+    @Test
+    @DisplayName("Only management users can receive roles or permissions")
+    void checkCanReceiveAccess_onlyForManagementUsers() {
+        manager.setUserType(UserType.MANAGEMENT);
+
+        assertDoesNotThrow(() -> policy.checkCanReceiveAccess(manager));
+        UserInputNotValidException exception = assertThrows(UserInputNotValidException.class,
+                () -> policy.checkCanReceiveAccess(member));
+        assertEquals("Regular users cannot hold roles or permissions", exception.getMessage());
     }
 
     @Test

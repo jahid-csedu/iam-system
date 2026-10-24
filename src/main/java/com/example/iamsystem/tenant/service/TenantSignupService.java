@@ -11,6 +11,7 @@ import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.tenant.mapper.TenantMapper;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.mapper.UserMapper;
 import com.example.iamsystem.user.repository.UserRepository;
 import com.example.iamsystem.user.service.UserFactory;
@@ -48,7 +49,7 @@ public class TenantSignupService {
         Tenant tenant = tenantRepository.save(new Tenant(request.tenantName(), TenantStatus.ACTIVE));
         predefinedRoleService.createPredefinedRoles(tenant);
 
-        User root = userFactory.newUser(request.rootUser(), tenant);
+        User root = userFactory.newUser(request.rootUser(), tenant, UserType.MANAGEMENT);
         root.setRootUser(true);
         User savedRoot = userRepository.save(root);
 

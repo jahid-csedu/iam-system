@@ -47,7 +47,8 @@ This file lets any new session pick up the work without the conversation that pr
 | Tests | `@DisplayName` on every test (now a rule) | `fa06792` |
 | 6b | `AuthenticatedActor` principal, one-query JWT filter (revoked/inactive/locked → 401), DB permission checks | `1ab8f81` |
 | 7a | Fixed permission catalog (`V4`), `PermissionKey`, read-only permission API, password change vs. reset split, forgot-password by username or email | `1f4f5e2` |
-| 7b | Predefined roles (`V5`): `ADMIN`, `USER_MANAGER`, `VIEWER` templates copied into each new tenant at signup | step 7b commit |
+| 7b | Predefined roles (`V5`): `ADMIN`, `USER_MANAGER`, `VIEWER` templates copied into each new tenant at signup | `24b07c8` |
+| 7c | User types (`V6`): `MANAGEMENT`/`REGULAR`, `users:create-management`, direct user permissions | step 7c commit |
 
 ---
 
@@ -139,16 +140,15 @@ What was built: `V5__predefined_roles.sql` (`role_templates`, `role_template_per
 `PredefinedRoleService` (mandatory transaction) called by `TenantSignupService`; tests for the copy, per-tenant independence,
 rollback, and "the ADMIN template holds every key".
 
-### Step 7c: User types and direct permissions
+### Step 7c: User types and direct permissions (DONE, kept for reference)
 
-**Goal:** management vs. regular users from the target design.
+Decisions taken: the type comes from `userType` in `POST /api/users` (default `REGULAR`) and never changes (create a new
+user instead); creating a `MANAGEMENT` user needs the new key `users:create-management` (ADMIN template only); regular
+users never hold roles or permissions (400); later, platform users will hold them too.
 
-Proposed design:
-- `users.user_type` (`MANAGEMENT`/`REGULAR`); `user_permissions` (direct grants to management users) next to `user_roles`.
-- `AuthorizationService` = root → TENANT keys; otherwise union of role permissions and direct permissions.
-- Regular users can never hold management permissions or use management endpoints; no self-grants (already enforced for roles).
-- **Open decisions:** how the type is chosen at creation; whether a user can change type.
-- **Done when:** every rule above has a test.
+What was built: `V6__user_types.sql` (`users.user_type`, `user_permissions`, the new key); `UserType`; `UserPermissionService`
+with `PUT`/`DELETE /api/users/permissions` (`users:update`, never yourself); permission check = role permissions ∪ direct
+permissions; `UserDto` shows `userType` and `permissionIds`.
 
 ### Step 8: Client applications (`client_id`)
 

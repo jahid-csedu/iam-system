@@ -1,5 +1,6 @@
 package com.example.iamsystem.user.dto;
 
+import com.example.iamsystem.user.entity.UserType;
 import lombok.Data;
 
 import java.util.Set;
@@ -12,6 +13,8 @@ public class UserDto {
     private String fullName;
     private String email;
     private boolean rootUser;
+    private UserType userType;
     private String createdBy;
     private Set<Long> roleIds;
+    private Set<Long> permissionIds;
 }

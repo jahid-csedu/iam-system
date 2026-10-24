@@ -1,9 +1,12 @@
 package com.example.iamsystem.user.entity;
 
+import com.example.iamsystem.permission.entity.Permission;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.tenant.entity.Tenant;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -48,6 +51,13 @@ public class User implements Serializable {
     @Column(unique = true)
     private String email;
 
+    /**
+     * Set by {@code UserFactory} at creation and never updated.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "user_type", nullable = false, updatable = false)
+    private UserType userType = UserType.REGULAR;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
@@ -87,6 +97,18 @@ public class User implements Serializable {
     )
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<Role> roles = new HashSet<>();
+
+    /**
+     * Permissions granted to a management user directly, next to the ones from roles.
+     */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "user_permissions",
+            joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"),
+            inverseJoinColumns = @JoinColumn(name = "permission_id", referencedColumnName = "id")
+    )
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    private Set<Permission> permissions = new HashSet<>();
 
     @ManyToOne
     @JoinColumn(name = "created_by")

@@ -70,7 +70,8 @@ class UserRoleServiceTest {
 
         service.assignRoles(request(10L, 11L));
 
-        verify(accessPolicy).checkCanManageRoles(actor(root), child);
+        verify(accessPolicy).checkCanManageAccess(actor(root), child);
+        verify(accessPolicy).checkCanReceiveAccess(child);
         assertEquals(Set.of(admin, viewer), child.getRoles());
         verify(userRepository).save(child);
     }
@@ -113,7 +114,7 @@ class UserRoleServiceTest {
     void assignRoles_whenNotAllowed_isDenied() {
         when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenReturn(child);
-        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanManageRoles(actor(root), child);
+        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanManageAccess(actor(root), child);
 
         assertThrows(NoAccessException.class, () -> service.assignRoles(request(10L)));
         verify(roleRepository, never()).findAllByIdInAndTenantId(any(), any());

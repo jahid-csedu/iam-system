@@ -1,5 +1,6 @@
 package com.example.iamsystem.user.controller;
 
+import com.example.iamsystem.permission.entity.Permission;
 import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
@@ -8,6 +9,7 @@ import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
@@ -26,14 +28,17 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.Map;
 import java.util.Set;
 
 import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -87,7 +92,7 @@ class UserControllerTest {
     @Sql("/sql/insert_user_role.sql")
     void createUser_byRoot_createsUserInRootsTenant() throws Exception {
         User root = userRepository.findByUsername("root").orElseThrow();
-        UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com");
+        UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com", null);
 
         mockMvc.perform(post("/api/users")
                         .with(actingAs(root))
@@ -105,13 +110,83 @@ class UserControllerTest {
     @Sql("/sql/insert_user_role.sql")
     void createUser_withoutWritePermission_isForbidden() throws Exception {
         User plainUser = userRepository.findByUsername("user").orElseThrow();
-        UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com");
+        UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com", null);
 
         mockMvc.perform(post("/api/users")
                         .with(actingAs(plainUser))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Root creates a management user when userType is MANAGEMENT")
+    @Sql("/sql/insert_user_role.sql")
+    void createUser_management_byRoot_isCreated() throws Exception {
+        User root = userRepository.findByUsername("root").orElseThrow();
+
+        createUser(root, "manager", UserType.MANAGEMENT)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userType").value("MANAGEMENT"));
+    }
+
+    @Test
+    @DisplayName("users:create creates regular users only; a management user also needs users:create-management")
+    @Sql("/sql/insert_user_role.sql")
+    void createUser_management_needsTheManagementKey() throws Exception {
+        grantThroughRole("user", "users:create");
+        User creator = userRepository.findByUsername("user").orElseThrow();
+
+        createUser(creator, "regular", null)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userType").value("REGULAR"));
+        createUser(creator, "manager", UserType.MANAGEMENT).andExpect(status().isForbidden());
+        assertTrue(userRepository.findByUsername("manager").isEmpty());
+    }
+
+    @Test
+    @DisplayName("A regular user cannot be given roles")
+    @Sql("/sql/insert_user_role.sql")
+    void assignRoles_toRegularUser_isBadRequest() throws Exception {
+        User root = userRepository.findByUsername("root").orElseThrow();
+        createUser(root, "carol", UserType.REGULAR).andExpect(status().isCreated());
+
+        attach(put("/api/users/roles"), root, Map.of("username", "carol", "roleIds", Set.of(1L)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("A permission granted directly takes effect at once, and removing it takes it away")
+    @Sql("/sql/insert_user_role.sql")
+    void directPermissions_areGrantedAndRemoved() throws Exception {
+        User root = userRepository.findByUsername("root").orElseThrow();
+        Map<String, Object> usersRead = Map.of("username", "user", "permissionIds", Set.of(catalogEntry("users:read").getId()));
+
+        mockMvc.perform(get("/api/users").with(actingAs(userRepository.findByUsername("user").orElseThrow())))
+                .andExpect(status().isForbidden());
+
+        attach(put("/api/users/permissions"), root, usersRead).andExpect(status().isNoContent());
+        User member = userRepository.findByUsername("user").orElseThrow();
+        mockMvc.perform(get("/api/users").with(actingAs(member)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[1].permissionIds[0]").value(catalogEntry("users:read").getId()));
+
+        attach(delete("/api/users/permissions"), root, usersRead).andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/users").with(actingAs(member))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Nobody grants permissions to themselves, and regular users get none")
+    @Sql("/sql/insert_user_role.sql")
+    void directPermissions_toSelfOrRegularUser_areRefused() throws Exception {
+        User root = userRepository.findByUsername("root").orElseThrow();
+        Set<Long> usersRead = Set.of(catalogEntry("users:read").getId());
+        createUser(root, "carol", UserType.REGULAR).andExpect(status().isCreated());
+
+        attach(put("/api/users/permissions"), root, Map.of("username", "root", "permissionIds", usersRead))
+                .andExpect(status().isForbidden());
+        attach(put("/api/users/permissions"), root, Map.of("username", "carol", "permissionIds", usersRead))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -364,6 +439,39 @@ class UserControllerTest {
 
         login("user", newPassword).andExpect(status().isOk());
         login("user", "P@ssw0rd").andExpect(status().isUnauthorized());
+    }
+
+    private ResultActions createUser(User creator, String username, UserType userType) throws Exception {
+        UserCreationDto request = new UserCreationDto(username, "NewUser1!", "New User", username + "@example.com", userType);
+        return mockMvc.perform(post("/api/users")
+                .with(actingAs(creator))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(request)));
+    }
+
+    private ResultActions attach(MockHttpServletRequestBuilder request, User actor, Object body) throws Exception {
+        return mockMvc.perform(request
+                .with(actingAs(actor))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(body)));
+    }
+
+    private Permission catalogEntry(String name) {
+        return permissionRepository.findAllByOrderByName().stream()
+                .filter(permission -> permission.getName().equals(name))
+                .findFirst().orElseThrow();
+    }
+
+    /**
+     * Gives the fixture role (id 1) the permission and assigns the role to the user.
+     */
+    private void grantThroughRole(String username, String permissionName) {
+        Role role = roleRepository.findById(1L).orElseThrow();
+        role.getPermissions().add(catalogEntry(permissionName));
+        roleRepository.save(role);
+        User user = userRepository.findByUsername(username).orElseThrow();
+        user.addRole(role);
+        userRepository.save(user);
     }
 
     private ResultActions login(String username, String password) throws Exception {

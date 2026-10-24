@@ -54,7 +54,7 @@ class PasswordResetControllerTest {
     @BeforeEach
     void setUp() throws Exception {
         TenantSignupDto signup = new TenantSignupDto("Acme",
-                new UserCreationDto("acme-root", "Password1!", "Acme Root", "root@acme.com"));
+                new UserCreationDto("acme-root", "Password1!", "Acme Root", "root@acme.com", null));
         postJson("/api/tenants/signup", signup).andExpect(status().isCreated());
     }
 

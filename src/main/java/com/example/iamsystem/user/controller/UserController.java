@@ -4,9 +4,11 @@ import com.example.iamsystem.authorization.RequirePermission;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserDto;
+import com.example.iamsystem.user.dto.UserPermissionAttachmentDto;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.service.UserCreationService;
 import com.example.iamsystem.user.service.UserPasswordService;
+import com.example.iamsystem.user.service.UserPermissionService;
 import com.example.iamsystem.user.service.UserRoleService;
 import com.example.iamsystem.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,11 +46,12 @@ public class UserController {
     private final UserCreationService userCreationService;
     private final UserPasswordService userPasswordService;
     private final UserRoleService userRoleService;
+    private final UserPermissionService userPermissionService;
     private final UserService userService;
 
     @PostMapping
     @RequirePermission(USERS_CREATE)
-    @Operation(summary = "Create a user in the caller's tenant (Requires: users:create)")
+    @Operation(summary = "Create a user in the caller's tenant; REGULAR unless userType is MANAGEMENT (Requires: users:create, and users:create-management for a management user)")
     public ResponseEntity<UserDto> createUser(@RequestBody @Valid UserCreationDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(userCreationService.createUser(request));
     }
@@ -70,7 +73,7 @@ public class UserController {
 
     @PutMapping("/roles")
     @RequirePermission(USERS_UPDATE)
-    @Operation(summary = "Assign roles of your tenant to another user (Requires: users:update)")
+    @Operation(summary = "Assign roles of your tenant to another management user (Requires: users:update)")
     public ResponseEntity<Void> assignRoles(@RequestBody @Valid UserRoleAttachmentDto request) {
         userRoleService.assignRoles(request);
         return ResponseEntity.noContent().build();
@@ -81,6 +84,22 @@ public class UserController {
     @Operation(summary = "Remove roles from another user (Requires: users:update)")
     public ResponseEntity<Void> removeRoles(@RequestBody @Valid UserRoleAttachmentDto request) {
         userRoleService.removeRoles(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/permissions")
+    @RequirePermission(USERS_UPDATE)
+    @Operation(summary = "Grant permissions directly to another management user (Requires: users:update)")
+    public ResponseEntity<Void> assignPermissions(@RequestBody @Valid UserPermissionAttachmentDto request) {
+        userPermissionService.assignPermissions(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/permissions")
+    @RequirePermission(USERS_UPDATE)
+    @Operation(summary = "Take directly granted permissions from another user (Requires: users:update)")
+    public ResponseEntity<Void> removePermissions(@RequestBody @Valid UserPermissionAttachmentDto request) {
+        userPermissionService.removePermissions(request);
         return ResponseEntity.noContent().build();
     }
 

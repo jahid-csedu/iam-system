@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 7b (predefined roles).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 7c (user types and direct permissions).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -14,9 +14,10 @@ How to use the system as a developer through Swagger UI or Postman.
 | **Tenant** | One organization. Created by **tenant signup**, which also creates the tenant's **root user**. |
 | **Root user** | Exactly one per tenant. Holds every tenant permission implicitly (no role needed). |
 | **Permission** | A fixed key `<resource>:<action>`, such as `users:read`. The catalog is part of the system: nobody creates, changes or deletes permissions. New keys arrive with new features. |
-| **Role** | A named set of permissions, owned by one tenant (names are unique within the tenant). Users get permissions only through roles. |
-| **"Management" user** | Not a separate type yet (step 7c). Any user holding permissions through a role acts as one. |
-| **"Regular" user** | Not a separate type yet (step 7c). A user without permissions can log in, refresh tokens and change their own password. |
+| **Role** | A named set of permissions, owned by one tenant (names are unique within the tenant). |
+| **User type** | Chosen when the user is created and never changed (create a new user instead). |
+| **Management user** | `userType: MANAGEMENT`. Uses the management API through roles and/or permissions granted directly. The root user is a management user. |
+| **Regular user** | `userType: REGULAR` (the default). Logs in, refreshes tokens and manages their own password; never holds roles or permissions. |
 | **Tenant isolation** | Every user and role belongs to one tenant. With the right permission you see and manage your **whole tenant**, and nothing else: users and roles of other tenants answer `404`. |
 | **No self-modification** | Nobody can change their own roles, change or delete a role they hold, or reset their own password through the management API. Another user with the permission must do it. |
 
@@ -28,8 +29,9 @@ How to use the system as a developer through Swagger UI or Postman.
 | Key | Allows |
 |---|---|
 | `users:read` | List users, and find them by id, username or email |
-| `users:create` | Create users in your tenant |
-| `users:update` | Assign roles to, and remove roles from, other users |
+| `users:create` | Create regular users in your tenant |
+| `users:create-management` | Also create management users (needed on top of `users:create`) |
+| `users:update` | Assign and remove the roles and direct permissions of other management users |
 | `users:delete` | Delete users |
 | `users:reset-password` | Reset another user's password (the new password is emailed to that user) |
 | `roles:read` | List roles, and find them by id or name |
@@ -130,26 +132,36 @@ tenant gives `400`. Then attach permissions by id (from `GET /api/permissions`):
 ```
 → `204`. An unknown permission id gives `404`. (`DELETE /api/roles/permissions` with the same body removes them.)
 
-### Step 5: Create a user in your tenant (needs `users:create`)
+### Step 5: Create a management user (needs `users:create` and `users:create-management`)
 `POST /api/users`
 ```json
-{ "username": "bob", "password": "Bob12345!", "fullName": "Bob Manager", "email": "bob@globex.com" }
+{ "username": "bob", "password": "Bob12345!", "fullName": "Bob Manager", "email": "bob@globex.com", "userType": "MANAGEMENT" }
 ```
-→ `201`. The user joins the caller's tenant, and `createdBy` is the caller.
+→ `201` with `"userType": "MANAGEMENT"`. The user joins the caller's tenant, and `createdBy` is the caller.
+Without `userType` the user is `REGULAR`; creating a `MANAGEMENT` user without `users:create-management` gives `403`.
 
 ### Step 6: Give the user a role (needs `users:update`)
 `PUT /api/users/roles`
 ```json
 { "username": "bob", "roleIds": [2] }
 ```
-(using the id of `USER_MANAGER`) → `204`. Bob now acts as a "management" user: he can see, create, update and delete the users of the tenant.
+(using the id of `USER_MANAGER`) → `204`. Bob can now see, create (regular users only), update and delete the users of the tenant.
+Roles and permissions can only be given to management users: for a regular user the request gives `400`.
 Bob can't change his own roles, or change the `USER_MANAGER` role while he holds it (`403`).
 (`DELETE /api/users/roles` with the same body removes roles.) Changing a user's roles revokes the tokens they already
 hold (`401`), so they log in again. Changing the permissions of a role applies to its users immediately, without new tokens.
 
-### Step 7: Create a "regular" user
-Log in as Bob and `POST /api/users` again (e.g. `carol`), without assigning roles. Carol can log in, refresh her tokens and
-change her own password, and gets `403` on every management endpoint.
+### Step 7: Create a regular user
+Log in as Bob and `POST /api/users` again (e.g. `carol`) without `userType`. Carol is a regular user: she can log in, refresh
+her tokens and change her own password, and gets `403` on every management endpoint.
+
+### Step 8 (optional): Grant a single permission directly (needs `users:update`)
+`PUT /api/users/permissions`
+```json
+{ "username": "bob", "permissionIds": [6] }
+```
+(the id of `roles:read`) → `204`. Bob's permissions are now his roles' permissions plus the direct ones.
+`DELETE /api/users/permissions` with the same body takes them away. Nobody can change their own permissions (`403`).
 
 ---
 
@@ -163,6 +175,7 @@ change her own password, and gets `403` on every management endpoint.
 | Forgot password: reset with the OTP | `POST /api/password/reset` `{ "identifier": "<username or email>", "otp": "123456" }` → a new password is emailed | Public |
 | Refresh tokens | `POST /api/auth/token/refresh` `{ "username": "bob", "refresh_token": "..." }` | Public (needs a valid refresh token) |
 | List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `users:read` |
+| Direct permissions | `PUT` / `DELETE /api/users/permissions` `{ "username", "permissionIds" }` (management users only, never yourself) | `users:update` |
 | Find a user | `GET /api/users/{id}`, `/api/users/by-username?username=`, `/api/users/by-email?email=` | `users:read` |
 | Delete a user | `DELETE /api/users/{id}` (users they created stay, without a creator) | `users:delete` (a root user can only delete itself) |
 | Roles | `GET /api/roles`, `GET /api/roles/{id}`, `GET /api/roles/name/{name}` | `roles:read` |
@@ -200,9 +213,9 @@ The IAM manages only its own permissions; other applications decide their own au
 | Code | Meaning here |
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
-| `400` | Already exists (tenant, user, role name in your tenant), bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
+| `400` | Already exists (tenant, user, role name in your tenant), roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
 | `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, or wrong username/password |
-| `403` | Logged in but missing the required permission; changing your own roles or a role you hold; resetting your own or the root user's password; or account locked or expired |
+| `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; or account locked or expired |
 | `404` | Not found, including users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
 | `412` | Invalid or expired token on refresh/validation (changes to 401 in step 9) |
