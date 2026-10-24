@@ -78,7 +78,7 @@ Now you can use a tool like Postman to interact with the system. Here are a few 
 #### 1. Create a User
 
 *   **Method:** `POST`
-*   **URL:** `http://localhost:8081/api/users/register`
+*   **URL:** `http://localhost:8080/api/users/register`
 *   **Body (select `raw` and `JSON`):**
     ```json
     {
@@ -94,7 +94,7 @@ Now you can use a tool like Postman to interact with the system. Here are a few 
 #### 2. Log In
 
 *   **Method:** `POST`
-*   **URL:** `http://localhost:8081/api/auth/authenticate`
+*   **URL:** `http://localhost:8080/api/auth/authenticate`
 *   **Body (select `raw` and `JSON`):**
     ```json
     {
@@ -107,7 +107,7 @@ Now you can use a tool like Postman to interact with the system. Here are a few 
 #### 3. Get All Users (Requires Authentication)
 
 *   **Method:** `GET`
-*   **URL:** `http://localhost:8081/api/users`
+*   **URL:** `http://localhost:8080/api/users`
 *   **Headers:**
     *   Add a new header with the key `Authorization`.
     *   For the value, type `Bearer ` (with a space at the end) and then paste the `access_token` you copied.

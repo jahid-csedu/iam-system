@@ -16,7 +16,7 @@ This file lets any new session pick up the work without the conversation that pr
 3. Run `./gradlew clean test` (Docker must be running) to confirm a green baseline before changing anything.
 4. Find the next step in section 4 of this file. Present its plan to the owner: touched classes, cleanup per class, migration, and the
    open decisions as questions. **Wait for the go-ahead.**
-5. Implement → `./gradlew clean test` → smoke-test in Docker (`docker compose up --build app db`, app on port 8081)
+5. Implement → `./gradlew clean test` → smoke-test in Docker (`docker compose up --build app db`, app on port 8080)
    → update `CLAUDE.md` and this file → show the
    result and propose a one-line commit message → commit/push **only** after explicit approval.
 

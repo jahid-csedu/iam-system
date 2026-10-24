@@ -121,10 +121,10 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 ## Commands
 - Run tests: `./gradlew clean test` (**Docker must be running**: Testcontainers starts MySQL 8.0; jacoco report in `build/reports/jacoco`)
 - Run app: `./gradlew bootRun` (loads `.env`; expects MySQL on `localhost:3366`)
-- Run everything in Docker: `docker compose up --build` (app on :8081, MySQL on :3366, plus ELK)
+- Run everything in Docker: `docker compose up --build` (app on :8080, MySQL on :3366, plus ELK)
   - App + DB only: `docker compose up --build app db`
   - The app container reads `SPRING_MAIL_USERNAME/PASSWORD` from `.env` (optional). DB settings are set in `docker-compose.yml`.
-- Swagger UI: http://localhost:8081/swagger-ui.html
+- Swagger UI: http://localhost:8080/swagger-ui.html
 
 ## Database schema rules
 - Flyway owns the schema: `src/main/resources/db/migration/V<n>__<description>.sql`.
