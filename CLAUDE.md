@@ -140,9 +140,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `UserAccessPolicy` is the only place deciding which users an actor may see or manage (today: creator hierarchy).
   `UserValidator` (availability + password policy), `config/PasswordExpirationProperties`.
 - `passwordreset/`: OTP-by-email password reset
-- `role/`, `permission/`: CRUD. Permission = `serviceName` + `PermissionAction` enum (READ/WRITE/UPDATE/DELETE); `permission/validation` = `@ValidAction`
-- `authorization/`: `@RequirePermission` + `AuthorizationAspect` (endpoint checks with strings like `"IAM:READ"`)
-- `auth/`: `AuthController` (`/api/auth/*`: login, refresh, validate, authorize) and its DTOs
+- `role/`, `permission/`: CRUD only (no permission checks). Permission = `serviceName` + `PermissionAction` enum (READ/WRITE/UPDATE/DELETE); `permission/validation` = `@ValidAction`
+- `authorization/`: `AuthorizationService` = the only place answering "does user X hold service:action?";
+  `@RequirePermission` + `AuthorizationAspect` enforce it on endpoints
+- `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, validate, authorize) and DTOs
 - `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`),
   `userdetails/` (incl. `CurrentUserProvider`, the single owner of "who is logged in"), `event/` (lockout listeners)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
@@ -151,7 +152,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
 ## Current behaviours to remember
-- Root user (`is_root_user`) passes every permission check in `PermissionService.hasPermission`, globally (no tenant scope).
+- Root user (`is_root_user`) passes every permission check in `AuthorizationService`, globally (no tenant scope).
+- Endpoint permissions are owned by `@RequirePermission`; `UserAccessPolicy` only decides *which users* an actor may act on
+  (exception: public registration checks `IAM:WRITE` in the policy). Assigning and removing user roles both need `IAM:UPDATE`.
 - Public registration with `rootUser: true` creates a root user but **no tenant**.
 - User visibility and edit rights = walking the `createdBy` chain (`UserAccessPolicy`).
 - Changing your own password always requires the old password, also when passing your own `username`.
@@ -171,15 +174,14 @@ Broken / drift
 - Deleting a user who created other users fails (FK `fk_users_created_by`, no ON DELETE rule). It needs a product decision.
 - JWT errors thrown inside the filter become 500 instead of 401.
 - `RoleMapper.toEntity` drops `permissionIds`.
+- Deleting a permission that is assigned to a role fails (FK `fk_role_permissions_permission`, no ON DELETE rule).
 
 Design debt
-- Authorization logic is in 4 places (security config, aspect, strings in `UserService`, unused JWT `authorities` claim).
-- Current-user lookup still duplicated in `PermissionService` and `AuditAspect` (to move to `CurrentUserProvider` in step 4b).
-  The JPA entity is used as the security principal and is reloaded on every request.
+- `DefaultUserDetails` still builds `service:action` authority strings for an unused JWT `authorities` claim (goes away with the token redesign).
+- `AuthorizationConfig` permits anonymous GET on `/api/roles/**` and `/api/permissions/**`, but `@RequirePermission` then denies it: confusing rules.
+- The JPA entity is used as the security principal and is reloaded on every request.
 - `findAllUsers` loads the whole table and filters in memory.
-- `RoleService` and `PermissionService` still use `Mappers.getMapper` instead of injected mappers.
-- User permission checks are duplicated: `@RequirePermission` on the endpoint plus `UserAccessPolicy` permission checks
-  (and removing roles needs `IAM:DELETE` at the endpoint but `IAM:UPDATE` in the policy). To unify in step 4b.
+- `RoleService` still uses `Mappers.getMapper` instead of an injected mapper.
 - Permission model (free-text `serviceName` + CRUD enum, created through the API) contradicts the target design (fixed, migration-defined permissions).
 
 ## Progress log
@@ -193,4 +195,8 @@ Design debt
   added `UserAccessPolicy`, `CurrentUserProvider`, `PasswordExpirationProperties`; removed `UserRoleAttachmentUtil`;
   thin `UserController`. Fixed: own password change via `?username=` no longer skips the old-password check.
   Code standards + clean-import rule added; all wildcard/unused imports removed.
-  Next: step 4b (one owner for permission checks).
+- 2026-10-24: Step 4b (one owner for permission checks). New `AuthorizationService` (typed service + action, no strings);
+  `PermissionService` is CRUD only (injected mapper, 404 on deleting a missing permission, duplicate check on update);
+  `AuthController` logic moved to `AuthenticationService` (login no longer loads the user twice; bad/expired refresh
+  tokens give 412 instead of 500); `AuditAspect` uses `CurrentUserProvider`. Removing user roles now needs `IAM:UPDATE`.
+  Next: to be chosen by the owner (proposed: step 5, tenant foundation).

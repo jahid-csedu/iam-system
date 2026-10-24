@@ -9,136 +9,88 @@ import com.example.iamsystem.permission.entity.Permission;
 import com.example.iamsystem.permission.entity.PermissionAction;
 import com.example.iamsystem.permission.mapper.PermissionMapper;
 import com.example.iamsystem.permission.repository.PermissionRepository;
-import com.example.iamsystem.security.userdetails.DefaultUserDetails;
-import com.example.iamsystem.user.entity.User;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.mapstruct.factory.Mappers;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Objects;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.PERMISSION_EXISTS;
 import static com.example.iamsystem.common.exception.ErrorMessage.PERMISSION_NOT_FOUND;
 
+/**
+ * Manages the permission catalog. Permission checks live in {@code AuthorizationService}.
+ */
 @Service
-@RequiredArgsConstructor()
-@Slf4j
+@RequiredArgsConstructor
 public class PermissionService {
+
     private final PermissionRepository permissionRepository;
-    private static final PermissionMapper permissionMapper = Mappers.getMapper(PermissionMapper.class);
-    private static final String PERMISSION_TEMPLATE = "%s:%s";
+    private final PermissionMapper permissionMapper;
 
     @Auditable(
             value = AuditEventType.PERMISSION_CREATE,
-            target = "#permissionDto.serviceName + ':' + #permissionDto.action",
+            target = "#request.serviceName + ':' + #request.action",
             detailsExpression = "T(java.util.Map).of('permission_id', #result.id, 'permission_name', #result.serviceName + ':' + #result.action)"
     )
-    public PermissionDto savePermission(PermissionDto permissionDto) {
-        log.debug("Attempting to save permission: {}", permissionDto.getServiceName() + ":" + permissionDto.getAction());
-        validateDuplicatePermission(permissionDto);
-        Permission entity = permissionMapper.toEntity(permissionDto);
-        Permission permission = permissionRepository.save(entity);
-        log.info("Permission saved successfully with ID: {}", permission.getId());
-        return permissionMapper.toDto(permission);
+    @Transactional
+    public PermissionDto savePermission(PermissionDto request) {
+        ensureUnique(request, null);
+        Permission saved = permissionRepository.save(permissionMapper.toEntity(request));
+        return permissionMapper.toDto(saved);
     }
 
     @Auditable(
             value = AuditEventType.PERMISSION_UPDATE,
-            target = "#permissionDto.serviceName + ':' + #permissionDto.action",
-            detailsExpression = "T(java.util.Map).of('permission_id', #id, 'permission_name', #permissionDto.serviceName + ':' + #permissionDto.action)"
+            target = "#request.serviceName + ':' + #request.action",
+            detailsExpression = "T(java.util.Map).of('permission_id', #id, 'permission_name', #request.serviceName + ':' + #request.action)"
     )
-    public PermissionDto updatePermission(Long id, PermissionDto permissionDto) {
-        log.debug("Attempting to update permission with ID: {}", id);
-        Permission permission = permissionRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("Permission not found for update with ID: {}", id);
-                    return new DataNotFoundException(PERMISSION_NOT_FOUND);
-                });
-        permissionMapper.toUpdateEntity(permission, permissionDto);
-        Permission updatedPermission = permissionRepository.save(permission);
-        log.info("Permission with ID: {} updated successfully", id);
-        return permissionMapper.toDto(updatedPermission);
+    @Transactional
+    public PermissionDto updatePermission(Long id, PermissionDto request) {
+        Permission permission = getRequiredPermission(id);
+        ensureUnique(request, id);
+        permissionMapper.toUpdateEntity(permission, request);
+        return permissionMapper.toDto(permissionRepository.save(permission));
     }
 
     @Auditable(
             value = AuditEventType.PERMISSION_DELETE,
             target = "#id"
     )
+    @Transactional
     public void deletePermissionById(Long id) {
-        log.debug("Attempting to delete permission by ID: {}", id);
-        permissionRepository.deleteById(id);
-        log.info("Permission with ID: {} deleted successfully", id);
+        permissionRepository.delete(getRequiredPermission(id));
     }
 
+    @Transactional(readOnly = true)
     public PermissionDto getPermissionById(Long id) {
-        log.debug("Attempting to retrieve permission by ID: {}", id);
-        return permissionRepository.findById(id)
-                .map(permissionMapper::toDto)
-                .orElseThrow(() -> {
-                    log.warn("Permission not found with ID: {}", id);
-                    return new DataNotFoundException(PERMISSION_NOT_FOUND);
-                });
+        return permissionMapper.toDto(getRequiredPermission(id));
     }
 
-    public List<PermissionDto> getPermissionByServiceName(String name) {
-        log.debug("Attempting to retrieve permissions by service name: {}", name);
-        List<PermissionDto> permissions = permissionMapper.toDto(permissionRepository.findAllByServiceName(name));
-        log.info("Retrieved {} permissions for service name: {}", permissions.size(), name);
-        return permissions;
+    @Transactional(readOnly = true)
+    public List<PermissionDto> getPermissionByServiceName(String serviceName) {
+        return permissionMapper.toDto(permissionRepository.findAllByServiceName(serviceName));
     }
 
+    @Transactional(readOnly = true)
     public List<PermissionDto> getAllPermissions() {
-        log.debug("Attempting to retrieve all permissions");
-        List<PermissionDto> permissions = permissionMapper.toDto(permissionRepository.findAll());
-        log.info("Retrieved {} total permissions", permissions.size());
-        return permissions;
+        return permissionMapper.toDto(permissionRepository.findAll());
     }
 
-    public boolean hasPermission(String requiredPermission) {
-        log.debug("Checking if current user has permission: {}", requiredPermission);
-        User user = getCurrentUser();
-        if(Objects.isNull(user)) {
-            log.error("Non authenticated user trying to access: {}", requiredPermission);
-            return false;
-        }
-        if (user.isRootUser()) {
-            log.info("Root user has all permissions. Granting access for: {}", requiredPermission);
-            return true;
-        }
-        boolean hasPermission = user.getRoles().stream()
-                .flatMap(role -> role.getPermissions().stream())
-                .map(permission -> String.format(PERMISSION_TEMPLATE, permission.getServiceName(), permission.getAction()))
-                .anyMatch(requiredPermission::equals);
-        if (hasPermission) {
-            log.info("User '{}' has permission: {}", user.getUsername(), requiredPermission);
-        } else {
-            log.warn("User '{}' does NOT have permission: {}", user.getUsername(), requiredPermission);
-        }
-        return hasPermission;
+    private Permission getRequiredPermission(Long id) {
+        return permissionRepository.findById(id)
+                .orElseThrow(() -> new DataNotFoundException(PERMISSION_NOT_FOUND));
     }
 
-    private void validateDuplicatePermission(PermissionDto permissionDto) {
-        log.debug("Validating for duplicate permission: {}", permissionDto.getServiceName() + ":" + permissionDto.getAction());
-        PermissionAction action = PermissionAction.valueOf(permissionDto.getAction());
-        permissionRepository.findByServiceNameAndAction(permissionDto.getServiceName(), action)
-                .ifPresent(permission -> {
-                    log.warn("Attempted to create duplicate permission: {}", permissionDto.getServiceName() + ":" + permissionDto.getAction());
+    /**
+     * A service/action pair may exist only once; {@code currentId} is the permission being updated, if any.
+     */
+    private void ensureUnique(PermissionDto request, Long currentId) {
+        PermissionAction action = PermissionAction.valueOf(request.getAction());
+        permissionRepository.findByServiceNameAndAction(request.getServiceName(), action)
+                .filter(existing -> !existing.getId().equals(currentId))
+                .ifPresent(existing -> {
                     throw new PermissionAlreadyExistsException(PERMISSION_EXISTS);
                 });
-        log.debug("No duplicate permission found for: {}", permissionDto.getServiceName() + ":" + permissionDto.getAction());
-    }
-
-    private User getCurrentUser() {
-        log.debug("Attempting to retrieve current authenticated user");
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (principal instanceof DefaultUserDetails userDetails) {
-            log.debug("Current user retrieved: {}", userDetails.getUsername());
-            return userDetails.user();
-        }
-        log.warn("No authenticated user found in security context");
-        return null;
     }
 }

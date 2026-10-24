@@ -68,8 +68,8 @@ public class UserController {
     }
 
     @DeleteMapping("/roles")
-    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = DELETE)
-    @Operation(summary = "Remove roles from a user (Requires: IAM:DELETE)")
+    @RequirePermission(serviceName = IAM_SERVICE_NAME, action = UPDATE)
+    @Operation(summary = "Remove roles from a user (Requires: IAM:UPDATE)")
     public ResponseEntity<Void> removeRoles(@RequestBody @Valid UserRoleAttachmentDto request) {
         userRoleService.removeRoles(request);
         return ResponseEntity.noContent().build();

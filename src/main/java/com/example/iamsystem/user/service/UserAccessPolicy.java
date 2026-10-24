@@ -1,9 +1,8 @@
 package com.example.iamsystem.user.service;
 
+import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.common.exception.NoAccessException;
-import com.example.iamsystem.permission.entity.PermissionAction;
-import com.example.iamsystem.permission.service.PermissionService;
 import com.example.iamsystem.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Component;
 import static com.example.iamsystem.common.exception.ErrorMessage.NO_PERMISSION;
 import static com.example.iamsystem.common.exception.ErrorMessage.USER_NOT_FOUND;
 import static com.example.iamsystem.permission.PermissionConstants.IAM_SERVICE_NAME;
-import static com.example.iamsystem.permission.entity.PermissionAction.UPDATE;
 import static com.example.iamsystem.permission.entity.PermissionAction.WRITE;
 
 /**
@@ -26,7 +24,7 @@ import static com.example.iamsystem.permission.entity.PermissionAction.WRITE;
 @Slf4j
 public class UserAccessPolicy {
 
-    private final PermissionService permissionService;
+    private final AuthorizationService authorizationService;
 
     public boolean canView(User actor, User target) {
         return isInHierarchyOf(actor, target);
@@ -41,15 +39,17 @@ public class UserAccessPolicy {
         }
     }
 
+    /**
+     * User registration is a public endpoint, so the creator's permission is checked here rather than on the endpoint.
+     */
     public void checkCanCreateUsers(User actor) {
-        requirePermission(actor, WRITE);
+        authorizationService.checkPermission(actor, IAM_SERVICE_NAME, WRITE);
     }
 
     public void checkCanManageRoles(User actor, User target) {
         if (!isInHierarchyOf(actor, target)) {
             deny(actor, "manage roles of", target);
         }
-        requirePermission(actor, UPDATE);
     }
 
     /**
@@ -80,14 +80,6 @@ public class UserAccessPolicy {
             }
         }
         return false;
-    }
-
-    private void requirePermission(User actor, PermissionAction action) {
-        String permission = IAM_SERVICE_NAME + ":" + action.name();
-        if (!permissionService.hasPermission(permission)) {
-            log.warn("User '{}' lacks permission {}", actor.getUsername(), permission);
-            throw new NoAccessException(NO_PERMISSION);
-        }
     }
 
     private void deny(User actor, String operation, User target) {

@@ -1,38 +1,28 @@
 package com.example.iamsystem.permission.service;
 
 import com.example.iamsystem.common.exception.DataNotFoundException;
+import com.example.iamsystem.common.exception.PermissionAlreadyExistsException;
 import com.example.iamsystem.permission.dto.PermissionDto;
 import com.example.iamsystem.permission.entity.Permission;
 import com.example.iamsystem.permission.entity.PermissionAction;
+import com.example.iamsystem.permission.mapper.PermissionMapper;
 import com.example.iamsystem.permission.repository.PermissionRepository;
-import com.example.iamsystem.role.entity.Role;
-import com.example.iamsystem.security.userdetails.DefaultUserDetails;
-import com.example.iamsystem.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.mapstruct.factory.Mappers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 
-import java.time.Instant;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
+import static com.example.iamsystem.permission.entity.PermissionAction.READ;
+import static com.example.iamsystem.permission.entity.PermissionAction.WRITE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,169 +32,135 @@ class PermissionServiceTest {
     @Mock
     private PermissionRepository permissionRepository;
 
-    @InjectMocks
-    private PermissionService permissionService;
-
-    @Mock
-    private SecurityContext securityContext;
-
-    @Mock
-    private Authentication authentication;
-
-    @Mock
-    private DefaultUserDetails userDetails;
-
-    private Permission permission;
-    private PermissionDto permissionDto;
-
-    @Mock
-    private User user;
-    @Mock
-    private Role role;
+    private PermissionService service;
+    private Permission readPermission;
 
     @BeforeEach
     void setUp() {
-        permission = new Permission();
-        permission.setId(1L);
-        permission.setAction(PermissionAction.READ);
-        permission.setServiceName("TEST_SERVICE");
-        permissionDto = new PermissionDto();
-        permissionDto.setId(1L);
-        permissionDto.setAction("READ");
-        permissionDto.setServiceName("TEST_SERVICE");
-
-        role = new Role();
-        role.setId(1L);
-        role.setName("ROLE_USER");
-        role.setPermissions(Set.of(permission));
-
-        user = new User();
-        user.setId(1L);
-        user.setUsername("testUser");
-        user.setPassword("encoded_password");
-        user.setEmail("test@example.com");
-        user.setPasswordExpiryDate(Instant.now().plusSeconds(1000));
-        user.setRoles(Set.of(role));
-    }
-
-    private void setupSecurityContext() {
-        SecurityContextHolder.setContext(securityContext);
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getPrincipal()).thenReturn(userDetails);
-        when(userDetails.user()).thenReturn(user);
+        PermissionMapper permissionMapper = Mappers.getMapper(PermissionMapper.class);
+        service = new PermissionService(permissionRepository, permissionMapper);
+        readPermission = permission(1L, "TEST_SERVICE", READ);
     }
 
     @Test
-    void savePermission_savesAndReturnsPermission() {
-        when(permissionRepository.findByServiceNameAndAction(any(String.class), any(PermissionAction.class))).thenReturn(Optional.empty());
-        when(permissionRepository.save(any(Permission.class))).thenReturn(permission);
+    void savePermission_whenUnique_savesAndReturnsIt() {
+        when(permissionRepository.findByServiceNameAndAction("TEST_SERVICE", WRITE)).thenReturn(Optional.empty());
+        when(permissionRepository.save(any(Permission.class))).thenReturn(permission(2L, "TEST_SERVICE", WRITE));
 
-        PermissionDto result = permissionService.savePermission(permissionDto);
+        PermissionDto result = service.savePermission(request("TEST_SERVICE", "WRITE"));
 
-        assertNotNull(result);
-        assertEquals(permissionDto.getServiceName(), result.getServiceName());
-        assertEquals(permissionDto.getAction(), result.getAction());
-        verify(permissionRepository, times(1)).save(any(Permission.class));
+        assertEquals(2L, result.getId());
+        assertEquals("WRITE", result.getAction());
     }
 
     @Test
-    void savePermission_throwsExceptionWhenPermissionExists() {
-        when(permissionRepository.findByServiceNameAndAction(any(String.class), any(PermissionAction.class))).thenReturn(Optional.of(permission));
+    void savePermission_whenDuplicate_isRejected() {
+        when(permissionRepository.findByServiceNameAndAction("TEST_SERVICE", READ)).thenReturn(Optional.of(readPermission));
 
-        assertThrows(com.example.iamsystem.common.exception.PermissionAlreadyExistsException.class, () -> permissionService.savePermission(permissionDto));
+        assertThrows(PermissionAlreadyExistsException.class, () -> service.savePermission(request("TEST_SERVICE", "READ")));
+        verify(permissionRepository, never()).save(any());
+    }
+
+    @Test
+    void updatePermission_updatesFieldsButKeepsId() {
+        when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
+        when(permissionRepository.findByServiceNameAndAction("OTHER_SERVICE", WRITE)).thenReturn(Optional.empty());
+        when(permissionRepository.save(readPermission)).thenReturn(readPermission);
+
+        PermissionDto result = service.updatePermission(1L, request("OTHER_SERVICE", "WRITE"));
+
+        assertEquals(1L, result.getId());
+        assertEquals("OTHER_SERVICE", result.getServiceName());
+        assertEquals("WRITE", result.getAction());
+    }
+
+    @Test
+    void updatePermission_toItsOwnValues_isAllowed() {
+        when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
+        when(permissionRepository.findByServiceNameAndAction("TEST_SERVICE", READ)).thenReturn(Optional.of(readPermission));
+        when(permissionRepository.save(readPermission)).thenReturn(readPermission);
+
+        PermissionDto result = service.updatePermission(1L, request("TEST_SERVICE", "READ"));
+
+        assertEquals(1L, result.getId());
+    }
+
+    @Test
+    void updatePermission_toAnotherPermissionsValues_isRejected() {
+        when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
+        when(permissionRepository.findByServiceNameAndAction("TEST_SERVICE", WRITE))
+                .thenReturn(Optional.of(permission(2L, "TEST_SERVICE", WRITE)));
+
+        assertThrows(PermissionAlreadyExistsException.class, () -> service.updatePermission(1L, request("TEST_SERVICE", "WRITE")));
+        verify(permissionRepository, never()).save(any());
+    }
+
+    @Test
+    void updatePermission_whenNotFound_isRejected() {
+        when(permissionRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(DataNotFoundException.class, () -> service.updatePermission(1L, request("TEST_SERVICE", "READ")));
+    }
+
+    @Test
+    void deletePermissionById_deletesExistingPermission() {
+        when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
+
+        service.deletePermissionById(1L);
+
+        verify(permissionRepository).delete(readPermission);
+    }
+
+    @Test
+    void deletePermissionById_whenNotFound_isRejected() {
+        when(permissionRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(DataNotFoundException.class, () -> service.deletePermissionById(1L));
+        verify(permissionRepository, never()).delete(any());
     }
 
     @Test
     void getPermissionById_returnsPermission() {
-        when(permissionRepository.findById(1L)).thenReturn(Optional.of(permission));
+        when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
 
-        PermissionDto result = permissionService.getPermissionById(1L);
+        PermissionDto result = service.getPermissionById(1L);
 
-        assertNotNull(result);
-        assertEquals(permissionDto.getServiceName(), result.getServiceName());
-        assertEquals(permissionDto.getAction(), result.getAction());
+        assertEquals("TEST_SERVICE", result.getServiceName());
+        assertEquals("READ", result.getAction());
     }
 
     @Test
-    void getPermissionById_throwsExceptionWhenNotFound() {
+    void getPermissionById_whenNotFound_isRejected() {
         when(permissionRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThrows(DataNotFoundException.class, () -> permissionService.getPermissionById(1L));
+        assertThrows(DataNotFoundException.class, () -> service.getPermissionById(1L));
     }
 
     @Test
-    void updatePermission_updatesAndReturnsPermission() {
-        when(permissionRepository.findById(1L)).thenReturn(Optional.of(permission));
-        when(permissionRepository.save(any(Permission.class))).thenReturn(permission);
+    void getPermissionByServiceName_returnsPermissionsOfThatService() {
+        when(permissionRepository.findAllByServiceName("TEST_SERVICE")).thenReturn(List.of(readPermission));
 
-        PermissionDto result = permissionService.updatePermission(1L, permissionDto);
+        List<PermissionDto> result = service.getPermissionByServiceName("TEST_SERVICE");
 
-        assertNotNull(result);
-        assertEquals(permissionDto.getServiceName(), result.getServiceName());
-        assertEquals(permissionDto.getAction(), result.getAction());
-        verify(permissionRepository, times(1)).save(any(Permission.class));
+        assertEquals(List.of(1L), result.stream().map(PermissionDto::getId).toList());
     }
 
     @Test
-    void updatePermission_throwsExceptionWhenNotFound() {
-        when(permissionRepository.findById(1L)).thenReturn(Optional.empty());
+    void getAllPermissions_returnsEveryPermission() {
+        when(permissionRepository.findAll()).thenReturn(List.of(readPermission, permission(2L, "TEST_SERVICE", WRITE)));
 
-        assertThrows(DataNotFoundException.class, () -> permissionService.updatePermission(1L, permissionDto));
+        assertEquals(2, service.getAllPermissions().size());
     }
 
-    @Test
-    void deletePermissionById_deletesPermission() {
-        doNothing().when(permissionRepository).deleteById(1L);
-
-        permissionService.deletePermissionById(1L);
-
-        verify(permissionRepository, times(1)).deleteById(1L);
+    private static PermissionDto request(String serviceName, String action) {
+        return new PermissionDto(null, serviceName, action, "description");
     }
 
-    @Test
-    void deletePermissionById_throwsExceptionWhenNotFound() {
-        doThrow(new DataNotFoundException("Permission not found")).when(permissionRepository).deleteById(1L);
-
-        assertThrows(DataNotFoundException.class, () -> permissionService.deletePermissionById(1L));
-    }
-
-    @Test
-    void getPermissionByName_returnsPermissionService() {
-        when(permissionRepository.findAllByServiceName("TEST_SERVICE")).thenReturn(List.of(permission));
-
-        List<PermissionDto> result = permissionService.getPermissionByServiceName("TEST_SERVICE");
-
-        assertNotNull(result);
-        assertEquals(permissionDto.getServiceName(), result.getFirst().getServiceName());
-        assertEquals(permissionDto.getAction(), result.getFirst().getAction());
-    }
-
-    @Test
-    void getAllPermissions_returnsListOfPermissions() {
-        when(permissionRepository.findAll()).thenReturn(Collections.singletonList(permission));
-
-        List<PermissionDto> result = permissionService.getAllPermissions();
-
-        assertNotNull(result);
-        assertEquals(1, result.size());
-    }
-
-    @Test
-    void testHasPermission_whenUserHasProvidedPermission_thenReturnTrue() {
-        setupSecurityContext();
-        assertTrue(permissionService.hasPermission("TEST_SERVICE:READ"));
-    }
-
-    @Test
-    void testHasPermission_whenUserDoesNotHaveProvidedPermission_thenReturnFalse() {
-        setupSecurityContext();
-        assertFalse(permissionService.hasPermission("TEST_SERVICE:WRITE"));
-    }
-
-    @Test
-    void testHasPermission_whenUserIsRootUser_thenReturnTrue() {
-        user.setRootUser(true);
-        setupSecurityContext();
-        assertTrue(permissionService.hasPermission("ANY_SERVICE:ANY_ACTION"));
+    private static Permission permission(Long id, String serviceName, PermissionAction action) {
+        Permission permission = new Permission();
+        permission.setId(id);
+        permission.setServiceName(serviceName);
+        permission.setAction(action);
+        return permission;
     }
 }

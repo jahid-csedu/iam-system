@@ -1,24 +1,27 @@
 package com.example.iamsystem.authorization;
 
-import com.example.iamsystem.common.exception.NoAccessException;
-import com.example.iamsystem.permission.service.PermissionService;
+import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import lombok.RequiredArgsConstructor;
-import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.springframework.stereotype.Component;
 
+/**
+ * Enforces {@link RequirePermission} on controller methods.
+ */
 @Aspect
 @Component
 @RequiredArgsConstructor
 public class AuthorizationAspect {
-    private final PermissionService permissionService;
+
+    private final AuthorizationService authorizationService;
+    private final CurrentUserProvider currentUserProvider;
 
     @Before("@annotation(requirePermission)")
-    public void checkPermission(JoinPoint joinPoint, RequirePermission requirePermission) {
-        String requiredPermission = requirePermission.serviceName() + ":" + requirePermission.action();
-        if (!permissionService.hasPermission(requiredPermission)) {
-            throw new NoAccessException("User does not have permission to perform this action");
-        }
+    public void checkPermission(RequirePermission requirePermission) {
+        authorizationService.checkPermission(
+                currentUserProvider.requireCurrentUser(),
+                requirePermission.serviceName(),
+                requirePermission.action());
     }
 }
