@@ -28,7 +28,7 @@ public class UserPasswordService {
     private final PasswordExpirationProperties passwordExpiration;
 
     /**
-     * Changes the current user's password, or, when {@code username} is given, the password of that user.
+     * Changes the current user's password, or, when {@code username} is given, the password of that user in the same tenant.
      * Changing your own password always requires the old password.
      */
     @Auditable(
@@ -39,7 +39,9 @@ public class UserPasswordService {
     @Transactional
     public void changePassword(PasswordChangeDto request, String username) {
         User actor = currentUserProvider.requireCurrentUser();
-        User target = username == null ? actor : userRepository.getRequiredByUsername(username);
+        User target = username == null
+                ? actor
+                : userRepository.getRequiredByUsernameAndTenantId(username, actor.getTenant().getId());
 
         accessPolicy.checkCanChangePassword(actor, target);
         if (target.equals(actor)) {

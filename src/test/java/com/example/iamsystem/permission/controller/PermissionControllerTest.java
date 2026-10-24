@@ -114,6 +114,7 @@ class PermissionControllerTest {
         // Create admin role with all permissions
         adminRole = new Role();
         adminRole.setName("ADMIN");
+        adminRole.setTenant(tenant);
         adminRole.setDescription("Administrator role");
         adminRole.setPermissions(new HashSet<>());
         adminRole.getPermissions().add(readPermission);
@@ -205,6 +206,7 @@ class PermissionControllerTest {
 
         Role readOnlyRole = new Role();
         readOnlyRole.setName("READ_ONLY");
+        readOnlyRole.setTenant(tenant);
         readOnlyRole.setDescription("Read only role");
         readOnlyRole.setPermissions(new HashSet<>());
         readOnlyRole.getPermissions().add(readPermission);
@@ -281,6 +283,7 @@ class PermissionControllerTest {
 
         Role readOnlyRole = new Role();
         readOnlyRole.setName("READ_ONLY");
+        readOnlyRole.setTenant(tenant);
         readOnlyRole.setDescription("Read only role");
         readOnlyRole.setPermissions(new HashSet<>());
         readOnlyRole.getPermissions().add(readPermission);
@@ -322,6 +325,7 @@ class PermissionControllerTest {
 
         Role readOnlyRole = new Role();
         readOnlyRole.setName("READ_ONLY");
+        readOnlyRole.setTenant(tenant);
         readOnlyRole.setDescription("Read only role");
         readOnlyRole.setPermissions(new HashSet<>());
         readOnlyRole.getPermissions().add(readPermission);

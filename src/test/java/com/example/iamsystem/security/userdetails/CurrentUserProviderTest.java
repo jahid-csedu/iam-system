@@ -1,6 +1,8 @@
 package com.example.iamsystem.security.userdetails;
 
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.tenant.entity.Tenant;
+import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.user.entity.User;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,22 @@ class CurrentUserProviderTest {
     void requireCurrentUser_whenNotAuthenticated_throws() {
         NoAccessException exception = assertThrows(NoAccessException.class, currentUserProvider::requireCurrentUser);
         assertEquals("No logged in user found", exception.getMessage());
+    }
+
+    @Test
+    void requireCurrentTenantId_returnsTheCurrentUsersTenant() {
+        Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
+        tenant.setId(7L);
+        User user = new User();
+        user.setTenant(tenant);
+        authenticate(user);
+
+        assertEquals(7L, currentUserProvider.requireCurrentTenantId());
+    }
+
+    @Test
+    void requireCurrentTenantId_whenNotAuthenticated_throws() {
+        assertThrows(NoAccessException.class, currentUserProvider::requireCurrentTenantId);
     }
 
     private void authenticate(User user) {

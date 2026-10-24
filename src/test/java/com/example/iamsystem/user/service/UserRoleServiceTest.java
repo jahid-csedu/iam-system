@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 import java.util.Set;
 
+import static com.example.iamsystem.user.service.UserTestData.TENANT;
 import static com.example.iamsystem.user.service.UserTestData.createdBy;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,6 +32,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class UserRoleServiceTest {
+
+    private static final Long TENANT_ID = TENANT.getId();
 
     @Mock
     private UserRepository userRepository;
@@ -60,7 +63,7 @@ class UserRoleServiceTest {
     @Test
     void assignRoles_addsRolesToUser() {
         givenManageableChild();
-        when(roleRepository.findAllById(Set.of(10L, 11L))).thenReturn(List.of(admin, viewer));
+        when(roleRepository.findAllByIdInAndTenantId(Set.of(10L, 11L), TENANT_ID)).thenReturn(List.of(admin, viewer));
 
         service.assignRoles(request(10L, 11L));
 
@@ -73,7 +76,7 @@ class UserRoleServiceTest {
     void removeRoles_removesOnlyGivenRoles() {
         givenManageableChild();
         child.getRoles().addAll(Set.of(admin, viewer));
-        when(roleRepository.findAllById(Set.of(10L))).thenReturn(List.of(admin));
+        when(roleRepository.findAllByIdInAndTenantId(Set.of(10L), TENANT_ID)).thenReturn(List.of(admin));
 
         service.removeRoles(request(10L));
 
@@ -82,9 +85,9 @@ class UserRoleServiceTest {
     }
 
     @Test
-    void assignRoles_whenSomeRolesDoNotExist_changesNothing() {
+    void assignRoles_whenSomeRolesAreMissingOrInAnotherTenant_changesNothing() {
         givenManageableChild();
-        when(roleRepository.findAllById(Set.of(10L, 99L))).thenReturn(List.of(admin));
+        when(roleRepository.findAllByIdInAndTenantId(Set.of(10L, 99L), TENANT_ID)).thenReturn(List.of(admin));
 
         assertThrows(DataNotFoundException.class, () -> service.assignRoles(request(10L, 99L)));
         assertTrue(child.getRoles().isEmpty());
@@ -94,7 +97,7 @@ class UserRoleServiceTest {
     @Test
     void assignRoles_whenUserNotFound_isRejected() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
-        when(userRepository.getRequiredByUsername("child")).thenThrow(new DataNotFoundException("User not found"));
+        when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenThrow(new DataNotFoundException("User not found"));
 
         assertThrows(DataNotFoundException.class, () -> service.assignRoles(request(10L)));
     }
@@ -102,17 +105,17 @@ class UserRoleServiceTest {
     @Test
     void assignRoles_whenNotAllowed_isDenied() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
-        when(userRepository.getRequiredByUsername("child")).thenReturn(child);
+        when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenReturn(child);
         doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanManageRoles(root, child);
 
         assertThrows(NoAccessException.class, () -> service.assignRoles(request(10L)));
-        verify(roleRepository, never()).findAllById(any());
+        verify(roleRepository, never()).findAllByIdInAndTenantId(any(), any());
         verify(userRepository, never()).save(any());
     }
 
     private void givenManageableChild() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
-        when(userRepository.getRequiredByUsername("child")).thenReturn(child);
+        when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenReturn(child);
     }
 
     private static UserRoleAttachmentDto request(Long... roleIds) {

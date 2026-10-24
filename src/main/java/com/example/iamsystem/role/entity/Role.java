@@ -2,6 +2,7 @@ package com.example.iamsystem.role.entity;
 
 import com.example.iamsystem.permission.entity.Permission;
 import com.example.iamsystem.tenant.entity.Tenant;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -36,15 +37,16 @@ public class Role implements Serializable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false)
     private String name;
 
     private String description;
 
     /**
-     * Optional until tenant isolation makes every role tenant-owned.
+     * Every role belongs to one tenant; names are unique within it.
      */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
 
     @ManyToMany(fetch = FetchType.EAGER)

@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 5 (tenant foundation).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 6 (tenant isolation).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -14,15 +14,16 @@ How to use the system as a developer through Swagger UI or Postman.
 | **Tenant** | One organization. Created by **tenant signup**, which also creates the tenant's **root user**. |
 | **Root user** | Exactly one per tenant. Holds every permission. Can create users, permissions and roles. |
 | **Permission** | A pair `serviceName` + `action`, where action is one of `READ`, `WRITE`, `UPDATE`, `DELETE`. The system's own endpoints are protected by permissions of the service **`IAM`** (`IAM:READ`, `IAM:WRITE`, …). |
-| **Role** | A named set of permissions. Users get permissions only through roles. |
+| **Role** | A named set of permissions, owned by one tenant (names are unique within the tenant). Users get permissions only through roles. |
 | **"Management" user** | Not a separate type yet (step 7). Any user holding `IAM:*` permissions through a role acts as one. |
 | **"Regular" user** | Not a separate type yet (step 7). A user without `IAM:*` permissions can log in, refresh tokens and change their own password. |
-| **Visibility** | A user sees and manages only the users they created, directly or indirectly. Root sees everyone created in its tree. |
+| **Tenant isolation** | Every user and role belongs to one tenant. With the right `IAM:*` permission you see and manage your **whole tenant**, and nothing else: users and roles of other tenants answer `404`. |
+| **No self-modification** | Nobody can change their own roles, or change or delete a role they hold. Another user with the permission must do it. |
 
 **Important limitations today:**
 - **There are no default permissions or roles yet** (they come in step 7). After signup, the root user must create the
   `IAM` permissions and the roles first. See the walkthrough below.
-- **Permissions and roles are not tenant-scoped yet** (step 6): they are shared by all tenants, and every root user can change all of them.
+- **Permissions are still shared by all tenants** (until step 7): every root user can create, change and delete them for everyone.
 - **Usernames and emails are globally unique** across all tenants (until step 8).
 
 ---
@@ -111,7 +112,8 @@ What each IAM permission allows:
 ```json
 { "name": "USER_MANAGER", "description": "Can create and view users" }
 ```
-→ `200` with the role's `id`. Then attach permissions. Use this endpoint: `permissionIds` in the create body is currently ignored (known issue).
+→ `201` with the role's `id`. The role belongs to your tenant; another tenant may use the same name. A name already used in your
+tenant gives `400`. Then attach permissions:
 
 `PUT /api/roles/permissions`
 ```json
@@ -131,7 +133,8 @@ What each IAM permission allows:
 ```json
 { "username": "bob", "roleIds": [1] }
 ```
-→ `204`. Bob now acts as a "management" user with `IAM:READ` + `IAM:WRITE`: he can create users and see the users he created.
+→ `204`. Bob now acts as a "management" user with `IAM:READ` + `IAM:WRITE`: he can create users and see every user of the tenant.
+Bob can't change his own roles, or change the `USER_MANAGER` role while he holds it (`403`).
 (`DELETE /api/users/roles` with the same body removes roles.) Changing a user's roles can invalidate the tokens they already
 hold, so they may need to log in again.
 
@@ -146,12 +149,13 @@ change her own password, and gets `403` on every management endpoint.
 | What | Request | Who |
 |---|---|---|
 | Change own password | `PATCH /api/users/password` `{ "oldPassword": "...", "newPassword": "..." }` | Any logged-in user |
-| Change a subordinate's password | `PATCH /api/users/password?username=carol` `{ "newPassword": "..." }` | Root user, for users in its tree |
+| Change another user's password | `PATCH /api/users/password?username=carol` `{ "newPassword": "..." }` | Root user, for any user of its tenant |
 | Refresh tokens | `POST /api/auth/token/refresh` `{ "username": "bob", "refresh_token": "..." }` | Public (needs a valid refresh token) |
-| List users | `GET /api/users` (only users you created, directly or indirectly) | `IAM:READ` |
+| List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `IAM:READ` |
 | Find a user | `GET /api/users/{id}`, `/api/users/by-username?username=`, `/api/users/by-email?email=` | `IAM:READ` |
-| Delete a user | `DELETE /api/users/{id}` | `IAM:DELETE` (a root user can only delete itself) |
-| Roles | `GET /api/roles`, `GET /api/roles/{id}`, `GET /api/roles/name/{name}`, `PUT /api/roles/{id}`, `DELETE /api/roles/{id}` | `IAM:READ` / `UPDATE` / `DELETE` |
+| Delete a user | `DELETE /api/users/{id}` (users they created stay, without a creator) | `IAM:DELETE` (a root user can only delete itself) |
+| Roles | `GET /api/roles`, `GET /api/roles/{id}`, `GET /api/roles/name/{name}`, `PUT /api/roles/{id}` `{ "name", "description" }`, `DELETE /api/roles/{id}` (also removes it from its users) | `IAM:READ` / `UPDATE` / `DELETE`, never on a role you hold |
+| Role permissions | `PUT /api/roles/permissions` / `DELETE /api/roles/permissions` `{ "roleId", "permissionIds" }` | `IAM:UPDATE`, never on a role you hold |
 | Permissions | `GET /api/permissions/{id}`, `GET /api/permissions/name/{serviceName}`, `PUT /api/permissions/{id}`, `DELETE /api/permissions/{id}` | `IAM:READ` / `UPDATE` / `DELETE` |
 | Forgot password | `POST /api/password/reset-request?email=...`, then `POST /api/password/reset?otp=...&email=...` (emails a new password; needs mail settings) | Public |
 
@@ -170,15 +174,18 @@ change her own password, and gets `403` on every management endpoint.
 - **Lockout:** 5 failed logins lock the account for 15 minutes.
 - **Password expiry:** passwords expire after 90 days; an expired password blocks login.
 - **One root per tenant**, created only by signup; a root user can't be deleted by anyone else.
+- **Tenant isolation:** users and roles of another tenant are reported as not found (`404`), never as forbidden.
+- **Usernames and emails** stay unique across all tenants until step 8. From then on they are unique per tenant, except
+  that a root user's username and email stay unique across all users of all tenants.
 
 ## 9. Status codes
 
 | Code | Meaning here |
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
-| `400` | Already exists (tenant, user, permission), bad password policy, wrong old password, invalid OTP |
+| `400` | Already exists (tenant, user, role name in your tenant, permission), bad password policy, wrong old password, invalid OTP, negative page or page size below 1 |
 | `401` | Not logged in (missing or invalid token) or wrong username/password |
-| `403` | Logged in but missing the required permission, or account locked or expired |
-| `404` | Not found, including users outside your hierarchy |
+| `403` | Logged in but missing the required permission, changing your own roles or a role you hold, or account locked or expired |
+| `404` | Not found, including users and roles of other tenants |
 | `412` | Invalid or expired token on refresh/validation (changes to 401 in step 9) |
 | `422` | Request body failed validation (the `errors` list shows which field) |

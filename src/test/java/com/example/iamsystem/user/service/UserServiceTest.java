@@ -13,22 +13,29 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 
+import static com.example.iamsystem.user.service.UserTestData.TENANT;
 import static com.example.iamsystem.user.service.UserTestData.createdBy;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
-import static com.example.iamsystem.user.service.UserTestData.user;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
+
+    private static final Long TENANT_ID = TENANT.getId();
 
     @Mock
     private UserRepository userRepository;
@@ -43,64 +50,79 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
-        UserMapper userMapper = Mappers.getMapper(UserMapper.class);
-        service = new UserService(userRepository, accessPolicy, currentUserProvider, userMapper);
+        service = new UserService(userRepository, accessPolicy, currentUserProvider, Mappers.getMapper(UserMapper.class));
         root = rootUser(1, "root");
         child = createdBy(root, 2, "child");
-        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
     }
 
     @Test
-    void findAllUsers_returnsOnlyVisibleUsers() {
-        User stranger = user(3, "stranger");
-        when(userRepository.findAll()).thenReturn(List.of(root, child, stranger));
-        when(accessPolicy.canView(root, root)).thenReturn(true);
-        when(accessPolicy.canView(root, child)).thenReturn(true);
-        when(accessPolicy.canView(root, stranger)).thenReturn(false);
+    void findUsers_returnsOnePageOfTheTenantsUsersOrderedById() {
+        PageRequest expectedRequest = PageRequest.of(1, 2, Sort.by("id"));
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(userRepository.findAllByTenantId(TENANT_ID, expectedRequest))
+                .thenReturn(new PageImpl<>(List.of(root, child), expectedRequest, 5));
 
-        List<UserDto> result = service.findAllUsers();
+        Page<UserDto> result = service.findUsers(1, 2);
 
-        assertEquals(List.of("root", "child"), result.stream().map(UserDto::getUsername).toList());
+        assertEquals(List.of("root", "child"), result.getContent().stream().map(UserDto::getUsername).toList());
+        assertEquals(5, result.getTotalElements());
     }
 
     @Test
-    void findUserById_whenVisible_returnsUser() {
-        when(userRepository.getRequiredById(2L)).thenReturn(child);
+    void findUsers_capsThePageSize() {
+        PageRequest cappedRequest = PageRequest.of(0, UserService.MAX_PAGE_SIZE, Sort.by("id"));
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(userRepository.findAllByTenantId(TENANT_ID, cappedRequest)).thenReturn(Page.empty(cappedRequest));
+
+        assertEquals(UserService.MAX_PAGE_SIZE, service.findUsers(0, 10_000).getSize());
+    }
+
+    @Test
+    void findUsers_withInvalidPaging_isRejected() {
+        assertThrows(IllegalArgumentException.class, () -> service.findUsers(-1, 20));
+        assertThrows(IllegalArgumentException.class, () -> service.findUsers(0, 0));
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void findUserById_looksUpWithinTheCurrentTenant() {
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(child);
 
         UserDto result = service.findUserById(2L);
 
-        verify(accessPolicy).checkCanView(root, child);
         assertEquals("child", result.getUsername());
         assertEquals("root", result.getCreatedBy());
     }
 
     @Test
-    void findUserById_whenNotVisible_reportsNotFound() {
-        when(userRepository.getRequiredById(2L)).thenReturn(child);
-        doThrow(new DataNotFoundException("User not found")).when(accessPolicy).checkCanView(root, child);
+    void findUserById_outsideTheTenant_isNotFound() {
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenThrow(new DataNotFoundException("User not found"));
 
         assertThrows(DataNotFoundException.class, () -> service.findUserById(2L));
     }
 
     @Test
-    void findUserByUsername_returnsVisibleUser() {
-        when(userRepository.getRequiredByUsername("child")).thenReturn(child);
+    void findUserByUsername_looksUpWithinTheCurrentTenant() {
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenReturn(child);
 
         assertEquals("child", service.findUserByUsername("child").getUsername());
-        verify(accessPolicy).checkCanView(root, child);
     }
 
     @Test
-    void findUserByEmail_returnsVisibleUser() {
-        when(userRepository.getRequiredByEmail("child@example.com")).thenReturn(child);
+    void findUserByEmail_looksUpWithinTheCurrentTenant() {
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(userRepository.getRequiredByEmailAndTenantId("child@example.com", TENANT_ID)).thenReturn(child);
 
         assertEquals("child@example.com", service.findUserByEmail("child@example.com").getEmail());
-        verify(accessPolicy).checkCanView(root, child);
     }
 
     @Test
     void deleteUser_whenAllowed_deletesUser() {
-        when(userRepository.getRequiredById(2L)).thenReturn(child);
+        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(child);
 
         service.deleteUser(2L);
 
@@ -110,7 +132,8 @@ class UserServiceTest {
 
     @Test
     void deleteUser_whenNotAllowed_keepsUser() {
-        when(userRepository.getRequiredById(2L)).thenReturn(child);
+        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(child);
         doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanDelete(root, child);
 
         assertThrows(NoAccessException.class, () -> service.deleteUser(2L));
@@ -118,8 +141,9 @@ class UserServiceTest {
     }
 
     @Test
-    void deleteUser_whenUserNotFound_isRejected() {
-        when(userRepository.getRequiredById(2L)).thenThrow(new DataNotFoundException("User not found"));
+    void deleteUser_outsideTheTenant_isNotFound() {
+        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenThrow(new DataNotFoundException("User not found"));
 
         assertThrows(DataNotFoundException.class, () -> service.deleteUser(2L));
         verify(userRepository, never()).delete(any());

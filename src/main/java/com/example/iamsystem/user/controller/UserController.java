@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,8 +27,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 import static com.example.iamsystem.permission.PermissionConstants.IAM_SERVICE_NAME;
 import static com.example.iamsystem.permission.entity.PermissionAction.DELETE;
 import static com.example.iamsystem.permission.entity.PermissionAction.READ;
@@ -39,6 +38,8 @@ import static com.example.iamsystem.permission.entity.PermissionAction.WRITE;
 @RequiredArgsConstructor
 @SecurityRequirement(name = "Bearer Authentication")
 public class UserController {
+
+    private static final String DEFAULT_PAGE_SIZE = "20";
 
     private final UserCreationService userCreationService;
     private final UserPasswordService userPasswordService;
@@ -53,7 +54,7 @@ public class UserController {
     }
 
     @PatchMapping("/password")
-    @Operation(summary = "Change user password. Can be done by the user or a root user for each subordinates")
+    @Operation(summary = "Change your own password (old password required), or, as the root user, another user's password")
     public ResponseEntity<Void> changePassword(@RequestBody @Valid PasswordChangeDto request,
                                                @RequestParam(required = false) String username) {
         userPasswordService.changePassword(request, username);
@@ -62,7 +63,7 @@ public class UserController {
 
     @PutMapping("/roles")
     @RequirePermission(serviceName = IAM_SERVICE_NAME, action = UPDATE)
-    @Operation(summary = "Assign roles to a user (Requires: IAM:UPDATE)")
+    @Operation(summary = "Assign roles of your tenant to another user (Requires: IAM:UPDATE)")
     public ResponseEntity<Void> assignRoles(@RequestBody @Valid UserRoleAttachmentDto request) {
         userRoleService.assignRoles(request);
         return ResponseEntity.noContent().build();
@@ -70,7 +71,7 @@ public class UserController {
 
     @DeleteMapping("/roles")
     @RequirePermission(serviceName = IAM_SERVICE_NAME, action = UPDATE)
-    @Operation(summary = "Remove roles from a user (Requires: IAM:UPDATE)")
+    @Operation(summary = "Remove roles from another user (Requires: IAM:UPDATE)")
     public ResponseEntity<Void> removeRoles(@RequestBody @Valid UserRoleAttachmentDto request) {
         userRoleService.removeRoles(request);
         return ResponseEntity.noContent().build();
@@ -78,9 +79,10 @@ public class UserController {
 
     @GetMapping
     @RequirePermission(serviceName = IAM_SERVICE_NAME, action = READ)
-    @Operation(summary = "Get all users (Requires: IAM:READ)")
-    public ResponseEntity<List<UserDto>> getAllUsers() {
-        return ResponseEntity.ok(userService.findAllUsers());
+    @Operation(summary = "List your tenant's users, one page at a time, ordered by id (Requires: IAM:READ)")
+    public ResponseEntity<PagedModel<UserDto>> getUsers(@RequestParam(defaultValue = "0") int page,
+                                                        @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) int size) {
+        return ResponseEntity.ok(new PagedModel<>(userService.findUsers(page, size)));
     }
 
     @GetMapping("/{id}")

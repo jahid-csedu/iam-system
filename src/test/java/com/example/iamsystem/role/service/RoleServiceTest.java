@@ -1,190 +1,175 @@
 package com.example.iamsystem.role.service;
 
 import com.example.iamsystem.common.exception.DataNotFoundException;
-import com.example.iamsystem.permission.entity.Permission;
-import com.example.iamsystem.permission.entity.PermissionAction;
-import com.example.iamsystem.permission.repository.PermissionRepository;
+import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.common.exception.RoleAlreadyExistsException;
 import com.example.iamsystem.role.dto.RoleDto;
-import com.example.iamsystem.role.dto.RolePermissionDto;
+import com.example.iamsystem.role.dto.RoleRequestDto;
 import com.example.iamsystem.role.entity.Role;
+import com.example.iamsystem.role.mapper.RoleMapper;
 import com.example.iamsystem.role.repository.RoleRepository;
+import com.example.iamsystem.security.userdetails.CurrentUserProvider;
+import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.mapstruct.factory.Mappers;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 
+import static com.example.iamsystem.role.service.RoleTestData.TENANT;
+import static com.example.iamsystem.role.service.RoleTestData.role;
+import static com.example.iamsystem.role.service.RoleTestData.userWithRoles;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class RoleServiceTest {
 
+    private static final Long TENANT_ID = TENANT.getId();
+
     @Mock
     private RoleRepository roleRepository;
-
     @Mock
-    private PermissionRepository permissionRepository;
+    private TenantRepository tenantRepository;
+    @Mock
+    private RoleAccessPolicy accessPolicy;
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
-    @InjectMocks
-    private RoleService roleService;
-
+    private RoleService service;
+    private User actor;
     private Role role;
-    private RoleDto roleDto;
-    private Set<Long> permissionIds;
-    private List<Permission> permissions;
-
-    @Mock
-    private User user;
+    private RoleRequestDto request;
 
     @BeforeEach
     void setUp() {
-        roleDto = new RoleDto();
-        roleDto.setId(1L);
-        roleDto.setName("ROLE_USER");
-        role = new Role();
-        role.setId(1L);
-        role.setName("ROLE_USER");
-
-        Permission p1 = new Permission();
-        p1.setId(1L);
-        p1.setServiceName("TEST");
-        p1.setAction(PermissionAction.READ);
-
-        Permission p2 = new Permission();
-        p2.setId(2L);
-        p2.setServiceName("TEST");
-        p2.setAction(PermissionAction.WRITE);
-
-        permissionIds = new HashSet<>(Arrays.asList(1L, 2L));
-        permissions = Arrays.asList(p1, p2);
-
-        user = new User();
-        user.setId(1L);
-        user.setUsername("testUser");
+        service = new RoleService(roleRepository, tenantRepository, accessPolicy, currentUserProvider,
+                Mappers.getMapper(RoleMapper.class));
+        actor = userWithRoles();
+        role = role(10, "VIEWER");
+        request = new RoleRequestDto("AUDITOR", "Reads audit data");
     }
 
     @Test
-    void createRole_createsAndReturnsRole() {
-        when(roleRepository.save(any(Role.class))).thenReturn(role);
+    void createRole_createsTheRoleInTheCurrentTenant() {
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(tenantRepository.getReferenceById(TENANT_ID)).thenReturn(TENANT);
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        RoleDto result = roleService.createRole(roleDto);
+        RoleDto result = service.createRole(request);
 
-        assertNotNull(result);
-        assertEquals(roleDto.getName(), result.getName());
-        verify(roleRepository, times(1)).save(any(Role.class));
+        ArgumentCaptor<Role> captor = ArgumentCaptor.forClass(Role.class);
+        verify(roleRepository).save(captor.capture());
+        assertSame(TENANT, captor.getValue().getTenant());
+        assertEquals("AUDITOR", result.name());
+        assertEquals("Reads audit data", result.description());
     }
 
     @Test
-    void updateRole_updatesAndReturnsRole() {
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
-        when(roleRepository.save(any(Role.class))).thenReturn(role);
+    void createRole_withNameTakenInTheTenant_isRejected() {
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(roleRepository.existsByNameAndTenantId("AUDITOR", TENANT_ID)).thenReturn(true);
 
-        RoleDto result = roleService.updateRole(1L, roleDto);
-
-        assertNotNull(result);
-        assertEquals(roleDto.getName(), result.getName());
-        verify(roleRepository, times(1)).save(any(Role.class));
+        assertThrows(RoleAlreadyExistsException.class, () -> service.createRole(request));
+        verify(roleRepository, never()).save(any());
     }
 
     @Test
-    void deleteRole_deletesRole() {
-        doNothing().when(roleRepository).deleteById(1L);
+    void updateRole_updatesNameAndDescription() {
+        givenActorAndRole();
+        when(roleRepository.save(role)).thenReturn(role);
 
-        roleService.deleteRole(1L);
+        RoleDto result = service.updateRole(10L, request);
 
-        verify(roleRepository, times(1)).deleteById(1L);
+        verify(accessPolicy).checkCanModify(actor, role);
+        assertEquals("AUDITOR", result.name());
+        assertEquals("Reads audit data", role.getDescription());
     }
 
     @Test
-    void getRole_returnsRole() {
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
+    void updateRole_toNameOfAnotherRoleInTheTenant_isRejected() {
+        givenActorAndRole();
+        when(roleRepository.existsByNameAndTenantIdAndIdNot("AUDITOR", TENANT_ID, 10L)).thenReturn(true);
 
-        RoleDto result = roleService.getRole(1L);
-
-        assertNotNull(result);
-        assertEquals(roleDto.getName(), result.getName());
+        assertThrows(RoleAlreadyExistsException.class, () -> service.updateRole(10L, request));
+        assertEquals("VIEWER", role.getName());
+        verify(roleRepository, never()).save(any());
     }
 
     @Test
-    void getRoleByName_returnsRole() {
-        when(roleRepository.findByName("ROLE_USER")).thenReturn(Optional.of(role));
+    void updateRole_whenNotAllowed_changesNothing() {
+        givenActorAndRole();
+        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanModify(actor, role);
 
-        RoleDto result = roleService.getRoleByName("ROLE_USER");
-
-        assertNotNull(result);
-        assertEquals(roleDto.getName(), result.getName());
+        assertThrows(NoAccessException.class, () -> service.updateRole(10L, request));
+        assertEquals("VIEWER", role.getName());
+        verify(roleRepository, never()).save(any());
     }
 
     @Test
-    void getRoles_returnsListOfRoles() {
-        when(roleRepository.findAll()).thenReturn(Collections.singletonList(role));
+    void updateRole_outsideTheTenant_isNotFound() {
+        when(currentUserProvider.requireCurrentUser()).thenReturn(actor);
+        when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenThrow(new DataNotFoundException("Role not found"));
 
-        List<RoleDto> result = roleService.getRoles();
-
-        assertNotNull(result);
-        assertEquals(1, result.size());
+        assertThrows(DataNotFoundException.class, () -> service.updateRole(10L, request));
     }
 
     @Test
-    void assignPermissions_attachesPermissionsToRole() {
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
-        when(permissionRepository.findAllById(permissionIds)).thenReturn(permissions);
-        when(roleRepository.save(any(Role.class))).thenReturn(role);
+    void deleteRole_whenAllowed_deletesRole() {
+        givenActorAndRole();
 
-        RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
-        roleService.assignPermissions(rolePermissionDto);
+        service.deleteRole(10L);
 
-        verify(permissionRepository, times(1)).findAllById(anySet());
-        verify(roleRepository, times(1)).save(any(Role.class));
+        verify(accessPolicy).checkCanModify(actor, role);
+        verify(roleRepository).delete(role);
     }
 
     @Test
-    void assignPermissions_throwsExceptionWhenPermissionsNotFound() {
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
-        when(permissionRepository.findAllById(permissionIds)).thenReturn(Collections.singletonList(permissions.getFirst()));
+    void deleteRole_whenNotAllowed_keepsRole() {
+        givenActorAndRole();
+        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanModify(actor, role);
 
-        RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
-
-        assertThrows(DataNotFoundException.class, () -> roleService.assignPermissions(rolePermissionDto));
+        assertThrows(NoAccessException.class, () -> service.deleteRole(10L));
+        verify(roleRepository, never()).delete(any());
     }
 
     @Test
-    void removePermissions_removesPermissionsFromRole() {
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
-        when(permissionRepository.findAllById(permissionIds)).thenReturn(permissions);
-        when(roleRepository.save(any(Role.class))).thenReturn(role);
+    void getRole_looksUpWithinTheCurrentTenant() {
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
 
-        RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
-        roleService.removePermissions(rolePermissionDto);
-
-        verify(permissionRepository, times(1)).findAllById(anySet());
-        verify(roleRepository, times(1)).save(any(Role.class));
+        assertEquals("VIEWER", service.getRole(10L).name());
     }
 
     @Test
-    void removePermissions_throwsExceptionWhenPermissionsNotFound() {
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
-        when(permissionRepository.findAllById(permissionIds)).thenReturn(Collections.singletonList(permissions.getFirst()));
+    void getRoleByName_looksUpWithinTheCurrentTenant() {
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(roleRepository.getRequiredByNameAndTenantId("VIEWER", TENANT_ID)).thenReturn(role);
 
-        RolePermissionDto rolePermissionDto = new RolePermissionDto(1L, permissionIds);
+        assertEquals(10L, service.getRoleByName("VIEWER").id());
+    }
 
-        assertThrows(DataNotFoundException.class, () -> roleService.removePermissions(rolePermissionDto));
+    @Test
+    void getRoles_returnsTheTenantsRoles() {
+        when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
+        when(roleRepository.findAllByTenantIdOrderByName(TENANT_ID)).thenReturn(List.of(role));
+
+        assertEquals(List.of("VIEWER"), service.getRoles().stream().map(RoleDto::name).toList());
+    }
+
+    private void givenActorAndRole() {
+        when(currentUserProvider.requireCurrentUser()).thenReturn(actor);
+        when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
     }
 }

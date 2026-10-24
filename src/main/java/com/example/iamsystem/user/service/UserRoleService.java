@@ -18,6 +18,9 @@ import java.util.Set;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.ROLES_NOT_FOUND;
 
+/**
+ * Assigns and removes roles of users in the current user's tenant.
+ */
 @Service
 @RequiredArgsConstructor
 public class UserRoleService {
@@ -34,8 +37,9 @@ public class UserRoleService {
     )
     @Transactional
     public void assignRoles(UserRoleAttachmentDto request) {
-        User user = getManageableUser(request.getUsername());
-        user.getRoles().addAll(getExistingRoles(request.getRoleIds()));
+        User actor = currentUserProvider.requireCurrentUser();
+        User user = getManageableUser(actor, request.getUsername());
+        user.getRoles().addAll(getTenantRoles(request.getRoleIds(), actor.getTenant().getId()));
         userRepository.save(user);
     }
 
@@ -46,20 +50,23 @@ public class UserRoleService {
     )
     @Transactional
     public void removeRoles(UserRoleAttachmentDto request) {
-        User user = getManageableUser(request.getUsername());
-        getExistingRoles(request.getRoleIds()).forEach(user.getRoles()::remove);
+        User actor = currentUserProvider.requireCurrentUser();
+        User user = getManageableUser(actor, request.getUsername());
+        getTenantRoles(request.getRoleIds(), actor.getTenant().getId()).forEach(user.getRoles()::remove);
         userRepository.save(user);
     }
 
-    private User getManageableUser(String username) {
-        User actor = currentUserProvider.requireCurrentUser();
-        User user = userRepository.getRequiredByUsername(username);
+    private User getManageableUser(User actor, String username) {
+        User user = userRepository.getRequiredByUsernameAndTenantId(username, actor.getTenant().getId());
         accessPolicy.checkCanManageRoles(actor, user);
         return user;
     }
 
-    private List<Role> getExistingRoles(Set<Long> roleIds) {
-        List<Role> roles = roleRepository.findAllById(roleIds);
+    /**
+     * Roles of another tenant count as missing.
+     */
+    private List<Role> getTenantRoles(Set<Long> roleIds, Long tenantId) {
+        List<Role> roles = roleRepository.findAllByIdInAndTenantId(roleIds, tenantId);
         if (roles.size() != roleIds.size()) {
             throw new DataNotFoundException(ROLES_NOT_FOUND);
         }

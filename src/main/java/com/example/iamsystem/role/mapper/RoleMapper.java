@@ -2,7 +2,9 @@ package com.example.iamsystem.role.mapper;
 
 import com.example.iamsystem.permission.entity.Permission;
 import com.example.iamsystem.role.dto.RoleDto;
+import com.example.iamsystem.role.dto.RoleRequestDto;
 import com.example.iamsystem.role.entity.Role;
+import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -14,20 +16,28 @@ import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring")
 public interface RoleMapper {
-    @Mapping(target = "permissionIds", source = ".", qualifiedByName = "SetPermissions")
+
+    @Mapping(target = "permissionIds", source = "permissions", qualifiedByName = "permissionIds")
     RoleDto toDto(Role role);
 
-    @Mapping(target = "permissions", ignore = true)
-    Role toEntity(RoleDto roleDto);
+    List<RoleDto> toDtoList(List<Role> roles);
 
-    List<RoleDto> toDto(List<Role> roles);
+    /**
+     * Maps only the editable fields; the tenant is set by {@code RoleService}.
+     */
+    @BeanMapping(ignoreByDefault = true)
+    @Mapping(target = "name", source = "name")
+    @Mapping(target = "description", source = "description")
+    Role toEntity(RoleRequestDto request);
 
-    @Mapping(target = "id", ignore = true)
-    void toUpdateEntity(@MappingTarget Role role, RoleDto roleDto);
+    @BeanMapping(ignoreByDefault = true)
+    @Mapping(target = "name", source = "name")
+    @Mapping(target = "description", source = "description")
+    void updateEntity(@MappingTarget Role role, RoleRequestDto request);
 
-    @Named("SetPermissions")
-    default Set<Long> setPermissions(Role role) {
-        return role.getPermissions().stream()
+    @Named("permissionIds")
+    default Set<Long> permissionIds(Set<Permission> permissions) {
+        return permissions.stream()
                 .map(Permission::getId)
                 .collect(Collectors.toSet());
     }

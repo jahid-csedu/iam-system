@@ -8,45 +8,51 @@ import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.mapper.UserMapper;
 import com.example.iamsystem.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-
 /**
- * Reads and deletes users, limited to what the current user is allowed to see.
+ * Reads and deletes users of the current user's tenant.
  */
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
+    public static final int MAX_PAGE_SIZE = 100;
+    private static final Sort BY_ID = Sort.by("id");
 
     private final UserRepository userRepository;
     private final UserAccessPolicy accessPolicy;
     private final CurrentUserProvider currentUserProvider;
     private final UserMapper userMapper;
 
+    /**
+     * One page of the tenant's users, ordered by id. Page sizes above {@link #MAX_PAGE_SIZE} are capped;
+     * a negative page or a size below 1 is rejected.
+     */
     @Transactional(readOnly = true)
-    public List<UserDto> findAllUsers() {
-        User actor = currentUserProvider.requireCurrentUser();
-        List<User> visibleUsers = userRepository.findAll().stream()
-                .filter(user -> accessPolicy.canView(actor, user))
-                .toList();
-        return userMapper.toDtoList(visibleUsers);
+    public Page<UserDto> findUsers(int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE), BY_ID);
+        return userRepository.findAllByTenantId(currentUserProvider.requireCurrentTenantId(), pageRequest)
+                .map(userMapper::toDto);
     }
 
     @Transactional(readOnly = true)
     public UserDto findUserById(Long id) {
-        return toVisibleDto(userRepository.getRequiredById(id));
+        return userMapper.toDto(userRepository.getRequiredByIdAndTenantId(id, currentUserProvider.requireCurrentTenantId()));
     }
 
     @Transactional(readOnly = true)
     public UserDto findUserByUsername(String username) {
-        return toVisibleDto(userRepository.getRequiredByUsername(username));
+        return userMapper.toDto(userRepository.getRequiredByUsernameAndTenantId(username, currentUserProvider.requireCurrentTenantId()));
     }
 
     @Transactional(readOnly = true)
     public UserDto findUserByEmail(String email) {
-        return toVisibleDto(userRepository.getRequiredByEmail(email));
+        return userMapper.toDto(userRepository.getRequiredByEmailAndTenantId(email, currentUserProvider.requireCurrentTenantId()));
     }
 
     @Auditable(
@@ -56,13 +62,8 @@ public class UserService {
     @Transactional
     public void deleteUser(Long id) {
         User actor = currentUserProvider.requireCurrentUser();
-        User user = userRepository.getRequiredById(id);
+        User user = userRepository.getRequiredByIdAndTenantId(id, actor.getTenant().getId());
         accessPolicy.checkCanDelete(actor, user);
         userRepository.delete(user);
-    }
-
-    private UserDto toVisibleDto(User user) {
-        accessPolicy.checkCanView(currentUserProvider.requireCurrentUser(), user);
-        return userMapper.toDto(user);
     }
 }

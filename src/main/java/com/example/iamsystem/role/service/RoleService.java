@@ -2,165 +2,97 @@ package com.example.iamsystem.role.service;
 
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
-import com.example.iamsystem.common.exception.DataNotFoundException;
-import com.example.iamsystem.permission.entity.Permission;
-import com.example.iamsystem.permission.repository.PermissionRepository;
+import com.example.iamsystem.common.exception.RoleAlreadyExistsException;
 import com.example.iamsystem.role.dto.RoleDto;
-import com.example.iamsystem.role.dto.RolePermissionDto;
+import com.example.iamsystem.role.dto.RoleRequestDto;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.mapper.RoleMapper;
 import com.example.iamsystem.role.repository.RoleRepository;
+import com.example.iamsystem.security.userdetails.CurrentUserProvider;
+import com.example.iamsystem.tenant.repository.TenantRepository;
+import com.example.iamsystem.user.entity.User;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.mapstruct.factory.Mappers;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Set;
 
-import static com.example.iamsystem.common.exception.ErrorMessage.ROLE_NOT_FOUND;
+import static com.example.iamsystem.common.exception.ErrorMessage.ROLE_EXISTS;
 
+/**
+ * Creates, reads, updates and deletes the roles of the current user's tenant.
+ */
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class RoleService {
+
     private final RoleRepository roleRepository;
-    private final PermissionRepository permissionRepository;
-    private static final RoleMapper roleMapper = Mappers.getMapper(RoleMapper.class);
+    private final TenantRepository tenantRepository;
+    private final RoleAccessPolicy accessPolicy;
+    private final CurrentUserProvider currentUserProvider;
+    private final RoleMapper roleMapper;
 
     @Auditable(
             value = AuditEventType.ROLE_CREATION,
-            target = "#roleDto.name",
-            detailsExpression = "T(java.util.Map).of('role_id', #result.id, 'role_name', #result.name)"
+            target = "#request.name()",
+            detailsExpression = "T(java.util.Map).of('role_id', #result.id(), 'role_name', #result.name())"
     )
-    public RoleDto createRole(RoleDto roleDto) {
-        log.debug("Attempting to create role: {}", roleDto.getName());
-        Role role = roleMapper.toEntity(roleDto);
-        Role savedRole = roleRepository.save(role);
-        log.info("Role created successfully with ID: {}", savedRole.getId());
-        return roleMapper.toDto(savedRole);
+    @Transactional
+    public RoleDto createRole(RoleRequestDto request) {
+        Long tenantId = currentUserProvider.requireCurrentTenantId();
+        if (roleRepository.existsByNameAndTenantId(request.name(), tenantId)) {
+            throw new RoleAlreadyExistsException(ROLE_EXISTS);
+        }
+        Role role = roleMapper.toEntity(request);
+        role.setTenant(tenantRepository.getReferenceById(tenantId));
+        return roleMapper.toDto(roleRepository.save(role));
     }
 
     @Auditable(
             value = AuditEventType.ROLE_UPDATE,
-            target = "#roleDto.name",
-            detailsExpression = "T(java.util.Map).of('role_id', #id, 'role_name', #roleDto.name)"
+            target = "#request.name()",
+            detailsExpression = "T(java.util.Map).of('role_id', #id, 'role_name', #request.name())"
     )
-    public RoleDto updateRole(Long id, RoleDto roleDto) {
-        log.debug("Attempting to update role with ID: {}", id);
-        Role role = roleRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("Role not found for update with ID: {}", id);
-                    return new DataNotFoundException(ROLE_NOT_FOUND);
-                });
-        roleMapper.toUpdateEntity(role, roleDto);
-        Role updatedRole = roleRepository.save(role);
-        log.info("Role with ID: {} updated successfully", id);
-        return roleMapper.toDto(updatedRole);
+    @Transactional
+    public RoleDto updateRole(Long id, RoleRequestDto request) {
+        User actor = currentUserProvider.requireCurrentUser();
+        Long tenantId = actor.getTenant().getId();
+        Role role = roleRepository.getRequiredByIdAndTenantId(id, tenantId);
+        accessPolicy.checkCanModify(actor, role);
+        if (roleRepository.existsByNameAndTenantIdAndIdNot(request.name(), tenantId, id)) {
+            throw new RoleAlreadyExistsException(ROLE_EXISTS);
+        }
+        roleMapper.updateEntity(role, request);
+        return roleMapper.toDto(roleRepository.save(role));
     }
 
+    /**
+     * Deleting a role also removes it from every user holding it.
+     */
     @Auditable(
             value = AuditEventType.ROLE_DELETE,
             target = "#id"
     )
+    @Transactional
     public void deleteRole(Long id) {
-        log.debug("Attempting to delete role with ID: {}", id);
-        roleRepository.deleteById(id);
-        log.info("Role with ID: {} deleted successfully", id);
+        User actor = currentUserProvider.requireCurrentUser();
+        Role role = roleRepository.getRequiredByIdAndTenantId(id, actor.getTenant().getId());
+        accessPolicy.checkCanModify(actor, role);
+        roleRepository.delete(role);
     }
 
-    @Auditable(
-            value = AuditEventType.PERMISSIONS_ASSIGNED_TO_ROLE,
-            target = "#rolePermissionDto.roleId",
-            detailsExpression = "T(java.util.Map).of('role_id', #rolePermissionDto.roleId, 'permissions_assigned', #rolePermissionDto.permissionIds.![toString()].join(','))"
-    )
-    public void assignPermissions(RolePermissionDto rolePermissionDto) {
-        log.debug("Attempting to assign permissions to role ID: {}", rolePermissionDto.getRoleId());
-        Role role = findRoleById(rolePermissionDto);
-
-        attachPermissionToRole(role, rolePermissionDto.getPermissionIds());
-        roleRepository.save(role);
-        log.info("Permissions assigned successfully to role ID: {}", rolePermissionDto.getRoleId());
-    }
-
-    @Auditable(
-            value = AuditEventType.PERMISSIONS_REMOVED_FROM_ROLE,
-            target = "#rolePermissionDto.roleId",
-            detailsExpression = "T(java.util.Map).of('role_id', #rolePermissionDto.roleId, 'permissions_removed', #rolePermissionDto.permissionIds.![toString()].join(','))"
-    )
-    public void removePermissions(RolePermissionDto rolePermissionDto) {
-        log.debug("Attempting to remove permissions from role ID: {}", rolePermissionDto.getRoleId());
-        Role role = findRoleById(rolePermissionDto);
-
-        detachPermissionFromRole(role, rolePermissionDto.getPermissionIds());
-        roleRepository.save(role);
-        log.info("Permissions removed successfully from role ID: {}", rolePermissionDto.getRoleId());
-    }
-
-
+    @Transactional(readOnly = true)
     public RoleDto getRole(Long id) {
-        log.debug("Attempting to retrieve role by ID: {}", id);
-        Role role = roleRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("Role not found with ID: {}", id);
-                    return new DataNotFoundException(ROLE_NOT_FOUND);
-                });
-        log.info("Successfully retrieved role with ID: {}", id);
-        return roleMapper.toDto(role);
+        return roleMapper.toDto(roleRepository.getRequiredByIdAndTenantId(id, currentUserProvider.requireCurrentTenantId()));
     }
 
+    @Transactional(readOnly = true)
     public RoleDto getRoleByName(String name) {
-        log.debug("Attempting to retrieve role by name: {}", name);
-        Role role = roleRepository.findByName(name)
-                .orElseThrow(() -> {
-                    log.warn("Role not found with name: {}", name);
-                    return new DataNotFoundException(ROLE_NOT_FOUND);
-                });
-        log.info("Successfully retrieved role with name: {}", name);
-        return roleMapper.toDto(role);
+        return roleMapper.toDto(roleRepository.getRequiredByNameAndTenantId(name, currentUserProvider.requireCurrentTenantId()));
     }
 
+    @Transactional(readOnly = true)
     public List<RoleDto> getRoles() {
-        log.debug("Attempting to retrieve all roles");
-        List<Role> roles = roleRepository.findAll();
-        log.info("Retrieved {} total roles", roles.size());
-        return roleMapper.toDto(roles);
-    }
-
-    private Role findRoleById(RolePermissionDto rolePermissionDto) {
-        log.debug("Finding role by ID: {}", rolePermissionDto.getRoleId());
-        return roleRepository.findById(rolePermissionDto.getRoleId())
-                .orElseThrow(() -> {
-                    log.warn("Role not found for permission assignment/removal with ID: {}", rolePermissionDto.getRoleId());
-                    return new DataNotFoundException(ROLE_NOT_FOUND);
-                });
-    }
-
-    private void attachPermissionToRole(Role role, Set<Long> permissionIds) {
-        log.debug("Attaching permissions {} to role ID: {}", permissionIds, role.getId());
-        List<Permission> permissions = getPermissions(permissionIds);
-
-        role.getPermissions().addAll(permissions);
-        log.debug("Permissions attached to role ID: {}", role.getId());
-    }
-
-    private void detachPermissionFromRole(Role role, Set<Long> permissionIds) {
-        log.debug("Detaching permissions {} from role ID: {}", permissionIds, role.getId());
-        List<Permission> permissions = getPermissions(permissionIds);
-
-        permissions.forEach(role.getPermissions()::remove);
-        log.debug("Permissions detached from role ID: {}", role.getId());
-    }
-
-    private List<Permission> getPermissions(Set<Long> permissionIds) {
-        log.debug("Retrieving permissions for IDs: {}", permissionIds);
-        List<Permission> permissions = permissionRepository.findAllById(permissionIds);
-        if (permissions.size() != permissionIds.size()) {
-            log.warn("Some permissions not found for IDs: {}", permissionIds);
-            throw new DataNotFoundException("Some permissions not found");
-        }
-        log.debug("Successfully retrieved {} permissions for IDs: {}", permissions.size(), permissionIds);
-        return permissions;
+        return roleMapper.toDtoList(roleRepository.findAllByTenantIdOrderByName(currentUserProvider.requireCurrentTenantId()));
     }
 }
-

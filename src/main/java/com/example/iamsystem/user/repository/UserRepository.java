@@ -2,6 +2,8 @@ package com.example.iamsystem.user.repository;
 
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.user.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,22 +15,34 @@ import java.util.Optional;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.USER_NOT_FOUND;
 
+/**
+ * Lookups on behalf of a tenant's users are always tenant-scoped; a user of another tenant is simply not found.
+ * The unscoped lookups serve login, availability checks and password reset.
+ */
 public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByUsername(String username);
 
     Optional<User> findByEmail(String email);
 
-    default User getRequiredById(Long id) {
-        return findById(id).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+    Page<User> findAllByTenantId(Long tenantId, Pageable pageable);
+
+    Optional<User> findByIdAndTenantId(Long id, Long tenantId);
+
+    Optional<User> findByUsernameAndTenantId(String username, Long tenantId);
+
+    Optional<User> findByEmailAndTenantId(String email, Long tenantId);
+
+    default User getRequiredByIdAndTenantId(Long id, Long tenantId) {
+        return findByIdAndTenantId(id, tenantId).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
     }
 
-    default User getRequiredByUsername(String username) {
-        return findByUsername(username).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+    default User getRequiredByUsernameAndTenantId(String username, Long tenantId) {
+        return findByUsernameAndTenantId(username, tenantId).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
     }
 
-    default User getRequiredByEmail(String email) {
-        return findByEmail(email).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+    default User getRequiredByEmailAndTenantId(String email, Long tenantId) {
+        return findByEmailAndTenantId(email, tenantId).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
     }
 
     @Modifying

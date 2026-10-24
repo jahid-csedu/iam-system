@@ -65,8 +65,12 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
     and the future management UI: roles, regular users, token settings, UI settings.
   - *Regular users*: login/logout, get access (+ refresh) tokens, change password, set up MFA (later). No management access.
 - Every tenant-owned row has a `tenant_id`. Usernames (and emails) become unique per tenant in step 8, when login knows
-  the tenant through `client_id`; until then both stay globally unique. Tenants have no slug until one is needed.
-  Tenant isolation replaces the current `createdBy`-chain check (`createdBy` stays for audit only).
+  the tenant through `client_id`; until then both stay globally unique (app check; only email has a DB unique key).
+  Exception, from step 8 on: a **root user's username and email are unique across all users of all tenants**
+  (no other user anywhere may share them; enforced in application code, MySQL can't express it as one constraint).
+  Tenants have no slug until one is needed.
+  Done (step 6): tenant isolation. Every user and role lookup is tenant-scoped, anything of another tenant is 404,
+  and there is no hierarchy inside a tenant (`createdBy` is audit only).
 
 ### Tenant identification
 - Regular users identify their tenant through a **`client_id`**. Tenants register client applications,
@@ -136,7 +140,8 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 - Hibernate runs with `ddl-auto=validate` (app and tests), so an entity/schema mismatch fails at startup.
 - No seed data yet. The first root user is created by tenant signup.
 - One root per tenant is a functional unique index (`uk_users_root_per_tenant`), not visible to Hibernate validation.
-- Booleans are `BOOLEAN`, timestamps `DATETIME(6)`, and constraints get readable names (`fk_<table>_<ref>`, `uk_<table>_<col>`).
+- Booleans are `BOOLEAN`, timestamps `DATETIME(6)`, and constraints get readable names (`fk_<table>_<ref>`, `uk_<table>_<col>`, `idx_<table>_<col>`).
+- Every table with a `tenant_id` has an index starting with `tenant_id` (`idx_<table>_tenant`, or a unique key such as `uk_roles_tenant_name`).
 
 ## Current layout (`src/main/java/com/example/iamsystem`)
 Package by feature. Each feature uses only the sub-packages it needs, always with these names:
@@ -146,29 +151,33 @@ Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enum
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
 - `tenant/`: `Tenant` + `TenantStatus`, `TenantSignupService` (tenant + root user in one transaction), `TenantController`
-- `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserService` (find + delete);
+- `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserService` (paged list, find, delete);
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
-  `UserAccessPolicy` is the only place deciding which users an actor may see or manage (today: creator hierarchy).
+  `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles, root-only rules).
   `UserValidator` (availability + password policy), `config/PasswordExpirationProperties`.
 - `passwordreset/`: OTP-by-email password reset
-- `role/`, `permission/`: CRUD only (no permission checks). Permission = `serviceName` + `PermissionAction` enum (READ/WRITE/UPDATE/DELETE); `permission/validation` = `@ValidAction`
+- `role/`: tenant-owned roles. `RoleService` (CRUD), `RolePermissionService` (attach/detach permissions), `RoleAccessPolicy` (no changes to a role you hold)
+- `permission/`: global CRUD until step 7. Permission = `serviceName` + `PermissionAction` enum (READ/WRITE/UPDATE/DELETE); `permission/validation` = `@ValidAction`
 - `authorization/`: `AuthorizationService` = the only place answering "does user X hold service:action?";
   `@RequirePermission` + `AuthorizationAspect` enforce it on endpoints
 - `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, validate, authorize) and DTOs
 - `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`),
-  `userdetails/` (incl. `CurrentUserProvider`, the single owner of "who is logged in"), `event/` (lockout listeners)
+  `userdetails/` (incl. `CurrentUserProvider`, the single owner of "who is logged in" and of the current tenant id), `event/` (lockout listeners)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
 - `application/`, `service/`: entities from PR #10, **not used by any code yet** (become clients / disappear in steps 7–8).
 - `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (mail, OpenAPI), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
 ## Current behaviours to remember
-- Root user (`is_root_user`) passes every permission check in `AuthorizationService`, globally (no tenant scope).
-- Endpoint permissions are owned by `@RequirePermission`; `UserAccessPolicy` only decides *which users* an actor may act on
-  (exception: public registration checks `IAM:WRITE` in the policy). Assigning and removing user roles both need `IAM:UPDATE`.
+- Root user (`is_root_user`) passes every permission check in `AuthorizationService`; what it can reach is still limited to its tenant.
+- **Tenant boundary = tenant-scoped repository lookups** (`...AndTenantId`). Users and roles of other tenants are 404, never 403.
+  Policies (`UserAccessPolicy`, `RoleAccessPolicy`) only decide rules inside the tenant.
+- No self-modification: nobody changes their own roles or a role they hold (403). Changing another user's password is root-only.
+- Endpoint permissions are owned by `@RequirePermission`; the access policies never check permissions. Assigning and removing user roles both need `IAM:UPDATE`.
 - `POST /api/tenants/signup` (public) creates a tenant + its root user. `POST /api/users` (`IAM:WRITE`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
-- User visibility and edit rights = walking the `createdBy` chain (`UserAccessPolicy`).
+- `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
+- Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
 - Changing your own password always requires the old password, also when passing your own `username`.
 - Token revocation = JWT `version` claim vs `User.@Version` (the same column as optimistic locking).
 - Access token 5 min, refresh token 24 h; constants and secrets live in `security/jwt/JwtConstant.java`.
@@ -176,23 +185,21 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- No tenant isolation yet (step 6): roles and permissions are global, and any root user (anyone can sign up a tenant)
-  can modify every role and permission in the system.
+- Permissions are still global (step 7): any root user (anyone can sign up a tenant) can create, change or delete
+  the permissions every tenant uses.
 - JWT secrets are hard-coded in `JwtConstant` (HMAC, so any verifier could also forge tokens). `mail.debug=true`.
 - Password reset emails a plaintext new password. OTP uses `java.util.Random`, has no attempt limit, and the endpoint reveals whether an email exists.
 - `/api/auth/token/validate` ignores the token version (revoked tokens are reported as valid).
 
 Broken / drift
-- Deleting a user who created other users fails (FK `fk_users_created_by`, no ON DELETE rule). It needs a product decision.
+- `users.username` has no DB unique key (only an app check); step 8 adds per-tenant uniqueness plus the global root rule.
+- A root user can delete itself, which leaves its tenant without a root (decide with the platform/tenant lifecycle work).
 - JWT errors thrown inside the filter become 500 instead of 401.
-- `RoleMapper.toEntity` drops `permissionIds`.
 - Deleting a permission that is assigned to a role fails (FK `fk_role_permissions_permission`, no ON DELETE rule).
 
 Design debt
 - `DefaultUserDetails` still builds `service:action` authority strings for an unused JWT `authorities` claim (goes away with the token redesign).
 - The JPA entity is used as the security principal and is reloaded on every request.
-- `findAllUsers` loads the whole table and filters in memory.
-- `RoleService` still uses `Mappers.getMapper` instead of an injected mapper.
 - Permission model (free-text `serviceName` + CRUD enum, created through the API) contradicts the target design (fixed, migration-defined permissions).
 
 ## Progress log
@@ -216,4 +223,10 @@ Design debt
   transaction), `POST /api/users` (`IAM:WRITE`) replaces `/api/users/register`; `UserFactory`; entities cleaned (id-based equals);
   `AuthorizationConfig` simplified (anonymous → 401). Decisions: usernames/emails global until step 8, no tenant slug yet.
   Added `docs/USER_MANUAL.md`.
-  Next: step 6 (tenant isolation).
+- 2026-10-25: Step 6 (tenant isolation). Flyway `V3__tenant_isolation.sql`: roles `tenant_id NOT NULL` + `uk_roles_tenant_name`,
+  `idx_<table>_tenant` on every tenant-owned table, `created_by` ON DELETE SET NULL, `user_roles.role_id` ON DELETE CASCADE.
+  Tenant-scoped user and role lookups (other tenants → 404), no hierarchy inside a tenant, paged `GET /api/users`,
+  no self role changes and no changes to a held role. `RoleService` split (`RolePermissionService`, `RoleAccessPolicy`),
+  role DTOs as records, create role → 201. Decisions: usernames stay global until step 8, then per tenant, except root
+  username/email unique across all users; `AuthenticatedActor` moved to step 6b; permissions untouched until step 7.
+  Next: step 6b (`AuthenticatedActor`).

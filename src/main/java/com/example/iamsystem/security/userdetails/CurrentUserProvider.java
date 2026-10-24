@@ -27,4 +27,11 @@ public class CurrentUserProvider {
     public User requireCurrentUser() {
         return currentUser().orElseThrow(() -> new NoAccessException(USER_NOT_LOGGED_IN));
     }
+
+    /**
+     * The tenant of the current user: the boundary for every tenant-owned read and write.
+     */
+    public Long requireCurrentTenantId() {
+        return requireCurrentUser().getTenant().getId();
+    }
 }

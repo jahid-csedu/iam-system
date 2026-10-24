@@ -40,8 +40,9 @@ This file lets any new session pick up the work without the conversation that pr
 | 3 | Package-by-feature layout | `8f164f3` |
 | 4a | `UserService` split by responsibility, `UserAccessPolicy`, `CurrentUserProvider`, code standards | `98a5965` |
 | 4b | `AuthorizationService` is the single owner of permission checks; `AuthenticationService` | `9c8fe14` |
-| Docs | This plan; user manual (`docs/USER_MANUAL.md`) | `d188c69`, step 5 commit |
-| 5 | Tenants: `V2__tenants.sql`, `POST /api/tenants/signup` (tenant + root atomically, one root per tenant), `POST /api/users` | step 5 commit |
+| Docs | This plan; user manual (`docs/USER_MANUAL.md`) | `d188c69`, `dc3482a` |
+| 5 | Tenants: `V2__tenants.sql`, `POST /api/tenants/signup` (tenant + root atomically, one root per tenant), `POST /api/users` | `c104519` |
+| 6 | Tenant isolation: `V3__tenant_isolation.sql`, tenant-scoped user/role lookups, paged user list, no self role changes, `RoleService` split | step 6 commit |
 
 ---
 
@@ -81,21 +82,33 @@ Proposed design:
 - **Done when:** a signup creates a tenant + root in one transaction; a second root for the same tenant is impossible;
   tests cover signup rollback on failure.
 
-### Step 6: Tenant isolation
+### Step 6: Tenant isolation (DONE, kept for reference)
 
-**Goal:** no user can see or change anything outside their tenant. This closes the "any root can edit every role" hole.
+Decisions taken: **no hierarchy** inside a tenant (anyone with the permission sees the whole tenant; `createdBy` is audit
+only); `AuthenticatedActor` moved to **step 6b**; permissions stay global and untouched until step 7; username uniqueness
+moves entirely to step 8 (see there); the local DB was reset.
+
+What was built:
+- V3: roles `tenant_id NOT NULL` + `uk_roles_tenant_name (tenant_id, name)`; `idx_<table>_tenant` on every tenant-owned table;
+  `fk_users_created_by ON DELETE SET NULL`; `fk_user_roles_role ON DELETE CASCADE`.
+- Tenant boundary = tenant-scoped repository lookups (`...AndTenantId`); other tenants' users and roles are 404.
+- `GET /api/users` paged (`page`, `size` capped at 100, ordered by id). Roles: CRUD in `RoleService`, permission
+  assignment in `RolePermissionService`, request/response records, create → 201, removing role permissions needs `IAM:UPDATE`.
+- No self-modification, brought forward from step 7: no own role changes (`UserAccessPolicy`), no changes to a held role
+  (`RoleAccessPolicy`). Changing another user's password stays root-only until step 7 turns it into a permission.
+- `TenantIsolationTest` proves tenant A's root gets 404 on every tenant B user and role endpoint.
+
+### Step 6b: `AuthenticatedActor` as the security principal
+
+**Goal:** stop using the JPA `User` entity as the security principal (it is reloaded on every request and carries lazy state).
 
 Proposed design:
-- `UserAccessPolicy`: the same-tenant rule replaces the `createdBy` hierarchy. Decision below on whether management users
-  keep any hierarchy inside a tenant. `createdBy` stays for audit only.
-- Every tenant-owned query is tenant-scoped at the repository level (`findAllByTenantId`, `findByTenantIdAndUsername`, …).
-  `findAllUsers` becomes a paginated, tenant-scoped query (fixes the load-everything issue).
-- Roles become tenant-owned (`roles.tenant_id NOT NULL`); role CRUD and role assignment only within the tenant.
-- Introduce an `AuthenticatedActor` record (`userId`, `username`, `tenantId`, flags) as the security principal instead of the
-  JPA entity. `CurrentUserProvider` returns it, which removes the entity-reload-per-request smell. (This may become step 6b if large.)
-- Decide the FK behaviour for deleting a user who created others (`created_by` → `ON DELETE SET NULL` is the likely answer).
-- **Open decisions:** hierarchy inside a tenant (yes/no); whether `AuthenticatedActor` is part of step 6 or its own step.
-- **Done when:** integration tests prove that tenant A's root/management users get 404/403 on every tenant B resource.
+- An `AuthenticatedActor` record (`userId`, `username`, `tenantId`, `rootUser`, role ids or permission set) built by the JWT
+  filter / `DefaultUserDetails`. `CurrentUserProvider` returns it; services load the `User` entity only when they change it.
+- `AuthorizationService`, the access policies and `AuditAspect` take the actor instead of the entity.
+- `DefaultUserDetails` stops building the unused `service:action` authority strings if nothing needs them.
+- **Open decisions:** whether permissions are resolved per request (DB) or carried in the token (affects step 9 revocation).
+- **Done when:** no request path reads the `User` entity from the security context; tests cover the filter and provider.
 
 ### Step 7: Fixed permission catalog, user types, predefined roles
 
@@ -132,8 +145,12 @@ Proposed design:
   `refresh_token_ttl_seconds`, plus a `client_token_claims` table (or JSON column) listing which user claims go into tokens.
 - Tenant signup auto-creates the tenant's **management-console client**, which only accepts management users.
 - Login request: `client_id` + username + password. The client resolves the tenant; the username is looked up inside it.
-- Switch usernames and emails to per-tenant uniqueness (`UNIQUE(tenant_id, username)`, `UNIQUE(tenant_id, email)`), as decided in
-  step 5. Password reset and every lookup by username/email become tenant-aware.
+- Switch usernames and emails to per-tenant uniqueness (`UNIQUE(tenant_id, username)`, `UNIQUE(tenant_id, email)`, replacing
+  the global `uk_users_email`; `username` becomes `NOT NULL`), as decided in steps 5 and 6. Password reset and every lookup by
+  username/email become tenant-aware.
+- **Root exception (decided in step 6):** a root user's username and email are unique across **all users of all tenants**.
+  No user anywhere may share them, so the check runs both when a root is created (signup) and when any user is created or renamed.
+  It is enforced in application code (MySQL can't express it as one constraint).
 - Management endpoints for clients (CRUD, token settings), protected by fixed permissions such as `clients:write`.
 - **Open decisions:** client secrets now or later (needed for OAuth2 confidential clients); the default token settings for new clients.
 - **Done when:** login without a valid `client_id` fails; the console client rejects regular users; TTL/refresh/claims follow the client.
@@ -171,15 +188,16 @@ Proposed design:
 
 | Item | Where it is handled |
 |---|---|
-| Public registration lets anyone become root with global power | Step 5 done (signup creates an own tenant); step 6 removes the global power |
+| Public registration lets anyone become root with global power | Done: step 5 (signup creates an own tenant), step 6 (tenant isolation) |
 | Hard-coded HMAC JWT secrets | Step 9 |
 | JWT filter errors → 500 instead of 401 | Step 9 (or earlier as a small fix) |
 | `/token/validate` ignores revocation | Step 9 |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
 | `mail.debug=true`, `logging.level.root=DEBUG`, DB credentials in `application.properties` | Small config step (profiles + env) |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |
-| `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Step 7 (roles are reworked) |
+| `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Deleting a permission assigned to a role fails (FK) | Step 7 (permissions become read-only) |
+| A root user can delete itself, leaving its tenant without a root | Step 10 (tenant lifecycle) or a small fix earlier |
 | `README.md` out of date | After step 5, and kept current afterwards |
 
 ---

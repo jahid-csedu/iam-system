@@ -13,6 +13,7 @@ INSERT INTO
     `created_at`,
     `description`,
     `name`,
+    `tenant_id`,
     `updated_at`
   )
 VALUES
@@ -21,6 +22,7 @@ VALUES
     '2025-06-27 14:10:14.550149',
     'Admin User role of the system',
     'ADMIN',
+    1,
     '2025-06-27 14:10:14.550149'
   );
 

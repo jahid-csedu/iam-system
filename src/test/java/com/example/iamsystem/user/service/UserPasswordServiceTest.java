@@ -17,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
 
+import static com.example.iamsystem.user.service.UserTestData.TENANT;
 import static com.example.iamsystem.user.service.UserTestData.createdBy;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static com.example.iamsystem.user.service.UserTestData.user;
@@ -81,7 +82,7 @@ class UserPasswordServiceTest {
     @Test
     void changeOwnPassword_byOwnUsername_stillRequiresOldPassword() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(child);
-        when(userRepository.getRequiredByUsername("child")).thenReturn(child);
+        when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT.getId())).thenReturn(child);
 
         assertThrows(InvalidPasswordException.class,
                 () -> service.changePassword(new PasswordChangeDto(null, "NewPassword1!"), "child"));
@@ -89,9 +90,9 @@ class UserPasswordServiceTest {
     }
 
     @Test
-    void changePassword_byRootForSubordinate_doesNotNeedOldPassword() {
+    void changePassword_byRootForAnotherUser_doesNotNeedOldPassword() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
-        when(userRepository.getRequiredByUsername("child")).thenReturn(child);
+        when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT.getId())).thenReturn(child);
         when(passwordEncoder.encode("NewPassword1!")).thenReturn("encoded-new");
 
         service.changePassword(new PasswordChangeDto(null, "NewPassword1!"), "child");
@@ -105,7 +106,7 @@ class UserPasswordServiceTest {
     void changePassword_forUserNotAllowed_isDenied() {
         User stranger = user(3, "stranger");
         when(currentUserProvider.requireCurrentUser()).thenReturn(child);
-        when(userRepository.getRequiredByUsername("stranger")).thenReturn(stranger);
+        when(userRepository.getRequiredByUsernameAndTenantId("stranger", TENANT.getId())).thenReturn(stranger);
         doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanChangePassword(child, stranger);
 
         assertThrows(NoAccessException.class,
