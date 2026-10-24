@@ -3,6 +3,7 @@ package com.example.iamsystem.tenant.service;
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.common.exception.TenantAlreadyExistsException;
+import com.example.iamsystem.role.service.PredefinedRoleService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.tenant.dto.TenantSignupResultDto;
 import com.example.iamsystem.tenant.entity.Tenant;
@@ -20,7 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 import static com.example.iamsystem.common.exception.ErrorMessage.TENANT_EXISTS;
 
 /**
- * Creates a tenant and its single root user in one transaction: either both exist afterwards, or neither.
+ * Creates a tenant with its single root user and its predefined roles in one transaction: either all exist afterwards,
+ * or none.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,7 @@ public class TenantSignupService {
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final UserFactory userFactory;
+    private final PredefinedRoleService predefinedRoleService;
     private final TenantMapper tenantMapper;
     private final UserMapper userMapper;
 
@@ -43,6 +46,7 @@ public class TenantSignupService {
             throw new TenantAlreadyExistsException(TENANT_EXISTS);
         }
         Tenant tenant = tenantRepository.save(new Tenant(request.tenantName(), TenantStatus.ACTIVE));
+        predefinedRoleService.createPredefinedRoles(tenant);
 
         User root = userFactory.newUser(request.rootUser(), tenant);
         root.setRootUser(true);

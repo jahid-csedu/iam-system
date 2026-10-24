@@ -93,6 +93,8 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   every TENANT key implicitly but never a PLATFORM one.
 - **Roles are dynamic**: built from the fixed permission list. On tenant creation, a set of **predefined roles** is
   created for that tenant. Root, or a management user with role-modification permission, can modify those roles and create new ones.
+  Done (step 7b): `ADMIN` (every key), `USER_MANAGER` (`users:*` except reset-password), `VIEWER` (the read keys), copied
+  from migration-defined templates at signup; later template changes never reach existing tenants.
   The platform tenant works the same way.
 - Management users are given a set of roles and/or a set of individual permissions.
 - **No self-modification, at every level (platform and tenant):** a user can never
@@ -145,7 +147,9 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 - Never edit an applied migration. Every schema change is a new `V<n+1>__...` file.
 - When the current development plan is finished, all migrations are merged into a single `V1__baseline.sql` taken from the
   live schema; versioned migrations start from there. Each step is verified on a fresh database (`docker compose down -v`).
-- The permission catalog is reference data inserted by migrations (the only rows migrations insert).
+- The permission catalog and the role templates are reference data inserted by migrations (the only rows migrations insert).
+  A migration that adds a permission key also adds it to the `ADMIN` template (a test fails otherwise) and decides which
+  other templates get it.
 - Hibernate runs with `ddl-auto=validate` (app and tests), so an entity/schema mismatch fails at startup.
 - No other seed data. The first root user is created by tenant signup.
 - One root per tenant is a functional unique index (`uk_users_root_per_tenant`), not visible to Hibernate validation.
@@ -159,14 +163,15 @@ Package by feature. Each feature uses only the sub-packages it needs, always wit
 Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enums/` or `aspect/` packages:
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
-- `tenant/`: `Tenant` + `TenantStatus`, `TenantSignupService` (tenant + root user in one transaction), `TenantController`
+- `tenant/`: `Tenant` + `TenantStatus`, `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserService` (paged list, find, delete);
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
   `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles, root-only rules).
   `UserValidator` (availability + password policy), `config/PasswordExpirationProperties`.
 - `passwordreset/`: self-service reset (OTP by email, user found by username or email) and `NewPasswordIssuer`, the one
   place that generates a new password and emails it (used by both resets); `config/OtpExpirationProperties`
-- `role/`: tenant-owned roles. `RoleService` (CRUD), `RolePermissionService` (attach/detach permissions), `RoleAccessPolicy` (no changes to a role you hold)
+- `role/`: tenant-owned roles. `RoleService` (CRUD), `RolePermissionService` (attach/detach permissions), `RoleAccessPolicy` (no changes to a role you hold),
+  `PredefinedRoleService` (copies the `RoleTemplate`s into a new tenant during signup)
 - `permission/`: the read-only catalog. `PermissionKey` enum (key + scope) mirrors the `permissions` rows (a test keeps them in sync);
   `@RequirePermission(PermissionKey)` on every protected endpoint
 - `authorization/`: `AuthorizationService` = the only place answering "does user X hold service:action?";
@@ -257,4 +262,8 @@ Design debt
   a username or email in a JSON body. Fixed: OTP expiry was in days instead of minutes; OTP now from `SecureRandom`;
   405/415/unreadable-body errors no longer become 500. Decisions: generic keys; merge all migrations into one baseline
   after the plan.
-  Next: step 7b (predefined roles).
+- 2026-10-25: Step 7b (predefined roles). Flyway `V5__predefined_roles.sql`: `role_templates` + `role_template_permissions`
+  (`ADMIN` = every key, `USER_MANAGER` = users read/create/update/delete, `VIEWER` = read keys). Signup copies them into the
+  new tenant in the same transaction (`PredefinedRoleService`). Decisions: no role-manager role; template changes never
+  reach existing tenants.
+  Next: step 7c (user types and direct permissions).

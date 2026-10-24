@@ -1,6 +1,7 @@
 package com.example.iamsystem.tenant.service;
 
 import com.example.iamsystem.common.exception.TenantAlreadyExistsException;
+import com.example.iamsystem.role.service.PredefinedRoleService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.tenant.dto.TenantSignupResultDto;
 import com.example.iamsystem.tenant.entity.Tenant;
@@ -39,6 +40,8 @@ class TenantSignupServiceTest {
     private UserRepository userRepository;
     @Mock
     private UserFactory userFactory;
+    @Mock
+    private PredefinedRoleService predefinedRoleService;
 
     private TenantSignupService service;
     private UserCreationDto rootDetails;
@@ -46,14 +49,14 @@ class TenantSignupServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TenantSignupService(tenantRepository, userRepository, userFactory,
+        service = new TenantSignupService(tenantRepository, userRepository, userFactory, predefinedRoleService,
                 Mappers.getMapper(TenantMapper.class), Mappers.getMapper(UserMapper.class));
         rootDetails = new UserCreationDto("root", "Password1!", "Root", "root@acme.com");
         request = new TenantSignupDto("Acme", rootDetails);
     }
 
     @Test
-    @DisplayName("Signup creates an active tenant and its root user")
+    @DisplayName("Signup creates an active tenant, its root user and its predefined roles")
     void signup_createsActiveTenantAndItsRootUser() {
         when(tenantRepository.existsByName("Acme")).thenReturn(false);
         when(tenantRepository.save(any(Tenant.class))).thenAnswer(invocation -> {
@@ -78,6 +81,7 @@ class TenantSignupServiceTest {
         assertTrue(result.rootUser().isRootUser());
         assertEquals(7L, result.rootUser().getTenantId());
         verify(userFactory).newUser(rootDetails, tenant);
+        verify(predefinedRoleService).createPredefinedRoles(tenant);
     }
 
     @Test
@@ -87,7 +91,7 @@ class TenantSignupServiceTest {
 
         assertThrows(TenantAlreadyExistsException.class, () -> service.signup(request));
         verify(tenantRepository, never()).save(any());
-        verifyNoInteractions(userFactory, userRepository);
+        verifyNoInteractions(userFactory, userRepository, predefinedRoleService);
     }
 
     private Tenant savedTenant() {

@@ -1,5 +1,12 @@
 package com.example.iamsystem.tenant.controller;
 
+import com.example.iamsystem.permission.PermissionKey;
+import com.example.iamsystem.permission.entity.Permission;
+import com.example.iamsystem.permission.entity.PermissionScope;
+import com.example.iamsystem.role.entity.Role;
+import com.example.iamsystem.role.entity.RoleTemplate;
+import com.example.iamsystem.role.repository.RoleRepository;
+import com.example.iamsystem.role.repository.RoleTemplateRepository;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.repository.TenantRepository;
@@ -19,6 +26,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
@@ -35,6 +48,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = "/sql/delete_user_role.sql", executionPhase = AFTER_TEST_METHOD)
 class TenantControllerTest {
 
+    private static final Set<String> PREDEFINED_ROLES = Set.of("ADMIN", "USER_MANAGER", "VIEWER");
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -46,6 +61,12 @@ class TenantControllerTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private RoleRepository roleRepository;
+
+    @Autowired
+    private RoleTemplateRepository roleTemplateRepository;
 
     @Test
     @DisplayName("Signup creates the tenant and its root user, who can log in")
@@ -80,6 +101,45 @@ class TenantControllerTest {
         signup("Beta", "taken", "root@beta.com").andExpect(status().isBadRequest());
 
         assertFalse(tenantRepository.existsByName("Beta"));
+        assertEquals(PREDEFINED_ROLES.size(), roleRepository.count());
+    }
+
+    @Test
+    @DisplayName("Signup gives the tenant its own ADMIN, USER_MANAGER and VIEWER roles")
+    void signup_createsThePredefinedRoles() throws Exception {
+        signup("Acme", "acme-root", "root@acme.com").andExpect(status().isCreated());
+
+        Map<String, Set<String>> roles = rolesOf("Acme");
+
+        assertEquals(PREDEFINED_ROLES, roles.keySet());
+        assertEquals(allKeys(), roles.get("ADMIN"));
+        assertEquals(Set.of("users:read", "users:create", "users:update", "users:delete"), roles.get("USER_MANAGER"));
+        assertEquals(Set.of("users:read", "roles:read", "permissions:read"), roles.get("VIEWER"));
+    }
+
+    @Test
+    @DisplayName("Each tenant owns its copies: deleting one tenant's role leaves the other tenant's and the template untouched")
+    void predefinedRoles_areIndependentPerTenant() throws Exception {
+        signup("Acme", "acme-root", "root@acme.com").andExpect(status().isCreated());
+        signup("Globex", "globex-root", "root@globex.com").andExpect(status().isCreated());
+
+        roleRepository.delete(roleRepository.getRequiredByNameAndTenantId("VIEWER", tenantId("Acme")));
+
+        assertFalse(rolesOf("Acme").containsKey("VIEWER"));
+        assertEquals(PREDEFINED_ROLES, rolesOf("Globex").keySet());
+        assertEquals(PREDEFINED_ROLES.size(), roleTemplateRepository.count());
+    }
+
+    @Test
+    @DisplayName("The ADMIN template holds every permission key, and templates hold only TENANT permissions")
+    void roleTemplates_coverTheCatalog() {
+        RoleTemplate admin = roleTemplateRepository.findAll().stream()
+                .filter(template -> template.getName().equals("ADMIN"))
+                .findFirst().orElseThrow();
+
+        assertEquals(allKeys(), admin.getPermissions().stream().map(Permission::getName).collect(Collectors.toSet()));
+        roleTemplateRepository.findAll().forEach(template -> template.getPermissions()
+                .forEach(permission -> assertEquals(PermissionScope.TENANT, permission.getScope())));
     }
 
     @Test
@@ -101,6 +161,22 @@ class TenantControllerTest {
         secondRoot.setRootUser(true);
 
         assertThrows(DataIntegrityViolationException.class, () -> userRepository.save(secondRoot));
+    }
+
+    private Long tenantId(String tenantName) {
+        return tenantRepository.findAll().stream()
+                .filter(tenant -> tenant.getName().equals(tenantName))
+                .findFirst().orElseThrow().getId();
+    }
+
+    private Map<String, Set<String>> rolesOf(String tenantName) {
+        return roleRepository.findAllByTenantIdOrderByName(tenantId(tenantName)).stream()
+                .collect(Collectors.toMap(Role::getName,
+                        role -> role.getPermissions().stream().map(Permission::getName).collect(Collectors.toSet())));
+    }
+
+    private static Set<String> allKeys() {
+        return Arrays.stream(PermissionKey.values()).map(PermissionKey::key).collect(Collectors.toSet());
     }
 
     private ResultActions signup(String tenantName, String username, String email) throws Exception {

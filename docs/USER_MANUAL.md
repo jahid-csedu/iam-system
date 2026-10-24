@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 7a (fixed permission catalog).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 7b (predefined roles).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -21,7 +21,6 @@ How to use the system as a developer through Swagger UI or Postman.
 | **No self-modification** | Nobody can change their own roles, change or delete a role they hold, or reset their own password through the management API. Another user with the permission must do it. |
 
 **Important limitations today:**
-- **No predefined roles yet** (step 7b): after signup, the root user builds the roles from the catalog.
 - **Usernames and emails are globally unique** across all tenants (until step 8).
 
 ### The permission catalog
@@ -38,6 +37,17 @@ How to use the system as a developer through Swagger UI or Postman.
 | `roles:update` | Rename roles, change their description, add and remove their permissions |
 | `roles:delete` | Delete roles |
 | `permissions:read` | List the catalog and view a permission |
+
+### Predefined roles
+
+Every new tenant gets its own copies of these roles at signup. They are ordinary roles of the tenant: assign them, change
+them, delete them, or create more. Later changes to the predefined set never affect existing tenants.
+
+| Role | Permissions |
+|---|---|
+| `ADMIN` | every key in the catalog |
+| `USER_MANAGER` | `users:read`, `users:create`, `users:update`, `users:delete` |
+| `VIEWER` | `users:read`, `roles:read`, `permissions:read` |
 
 ---
 
@@ -102,20 +112,21 @@ character** (`@#!$%^&-+=()`).
 ```
 → `200` with `access_token` (valid 5 minutes) and `refresh_token` (valid 24 hours). Use the access token as `Bearer` from now on.
 
-### Step 3: Look up the permission ids (root)
-`GET /api/permissions` → the catalog (see section 1), each entry with its `id`, `name`, `scope` and `description`.
+### Step 3: Look at your roles (root)
+`GET /api/roles` → the predefined `ADMIN`, `USER_MANAGER` and `VIEWER` roles of your tenant, each with its `id` and
+`permissionIds`. `GET /api/permissions` shows which key each permission id is.
 
-### Step 4: Create a role and give it permissions (root)
+### Step 4 (optional): Create your own role (root)
 `POST /api/roles`
 ```json
-{ "name": "USER_MANAGER", "description": "Can create and view users" }
+{ "name": "AUDITOR", "description": "Views users" }
 ```
 → `201` with the role's `id`. The role belongs to your tenant; another tenant may use the same name. A name already used in your
-tenant gives `400`. Then attach permissions, for example the ids of `users:read` and `users:create`:
+tenant gives `400`. Then attach permissions by id (from `GET /api/permissions`):
 
 `PUT /api/roles/permissions`
 ```json
-{ "roleId": 1, "permissionIds": [1, 2] }
+{ "roleId": 4, "permissionIds": [1] }
 ```
 → `204`. An unknown permission id gives `404`. (`DELETE /api/roles/permissions` with the same body removes them.)
 
@@ -129,9 +140,9 @@ tenant gives `400`. Then attach permissions, for example the ids of `users:read`
 ### Step 6: Give the user a role (needs `users:update`)
 `PUT /api/users/roles`
 ```json
-{ "username": "bob", "roleIds": [1] }
+{ "username": "bob", "roleIds": [2] }
 ```
-→ `204`. Bob now acts as a "management" user with `users:read` + `users:create`: he can create users and see every user of the tenant.
+(using the id of `USER_MANAGER`) → `204`. Bob now acts as a "management" user: he can see, create, update and delete the users of the tenant.
 Bob can't change his own roles, or change the `USER_MANAGER` role while he holds it (`403`).
 (`DELETE /api/users/roles` with the same body removes roles.) Changing a user's roles revokes the tokens they already
 hold (`401`), so they log in again. Changing the permissions of a role applies to its users immediately, without new tokens.

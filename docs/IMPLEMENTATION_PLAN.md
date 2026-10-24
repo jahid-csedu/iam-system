@@ -46,7 +46,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 6 | Tenant isolation: `V3__tenant_isolation.sql`, tenant-scoped user/role lookups, paged user list, no self role changes, `RoleService` split | `a687558` |
 | Tests | `@DisplayName` on every test (now a rule) | `fa06792` |
 | 6b | `AuthenticatedActor` principal, one-query JWT filter (revoked/inactive/locked → 401), DB permission checks | `1ab8f81` |
-| 7a | Fixed permission catalog (`V4`), `PermissionKey`, read-only permission API, password change vs. reset split, forgot-password by username or email | step 7a commit |
+| 7a | Fixed permission catalog (`V4`), `PermissionKey`, read-only permission API, password change vs. reset split, forgot-password by username or email | `1f4f5e2` |
+| 7b | Predefined roles (`V5`): `ADMIN`, `USER_MANAGER`, `VIEWER` templates copied into each new tenant at signup | step 7b commit |
 
 ---
 
@@ -128,16 +129,15 @@ What was built: `V4__permission_catalog.sql` (catalog rows, `scope`, `services` 
 sync test; `@RequirePermission(PermissionKey)`; root holds TENANT keys only; only TENANT permissions attachable to roles;
 `NewPasswordIssuer` shared by both resets; OTP expiry bug fixed (days → minutes); Spring MVC errors keep their status.
 
-### Step 7b: Predefined roles
+### Step 7b: Predefined roles (DONE, kept for reference)
 
-**Goal:** a new tenant starts with ready-made roles instead of an empty role list.
+Decisions taken: `ADMIN` has every key (including `users:reset-password`); `USER_MANAGER` = `users:read/create/update/delete`;
+`VIEWER` = `users:read`, `roles:read`, `permissions:read`; no role-manager role (`ADMIN` covers it); template changes never
+reach existing tenants.
 
-Proposed design:
-- A template defined by migration (`role_templates` + `role_template_permissions`), copied into each new tenant on signup,
-  in the same transaction. The copies are ordinary roles: root (or a user with `roles:update`) can change or delete them.
-- **Open decisions:** the predefined role set and the keys in each (e.g. Admin = all keys except `users:reset-password`?,
-  User Manager, Role Manager, Viewer); whether later template changes ever reach existing tenants (proposal: no).
-- **Done when:** signup creates the predefined roles; tests cover the copy and its independence from other tenants.
+What was built: `V5__predefined_roles.sql` (`role_templates`, `role_template_permissions`); immutable `RoleTemplate` entity;
+`PredefinedRoleService` (mandatory transaction) called by `TenantSignupService`; tests for the copy, per-tenant independence,
+rollback, and "the ADMIN template holds every key".
 
 ### Step 7c: User types and direct permissions
 
