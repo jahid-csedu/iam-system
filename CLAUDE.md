@@ -94,16 +94,23 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
 
 ## Stack
 Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (stateless JWT, JJWT 0.12)
-· Spring Data JPA · MySQL 8 (H2 in tests) · MapStruct + Lombok · springdoc OpenAPI · Gradle
+· Spring Data JPA · MySQL 8 + Flyway (Testcontainers MySQL in tests) · MapStruct + Lombok · springdoc OpenAPI · Gradle
 · ELK for logs (Logstash tails `logs/application.log`).
 
 ## Commands
-- Run tests: `./gradlew clean test` (H2, profile `test`; jacoco report in `build/reports/jacoco`)
+- Run tests: `./gradlew clean test` (**Docker must be running**: Testcontainers starts MySQL 8.0; jacoco report in `build/reports/jacoco`)
 - Run app: `./gradlew bootRun` (loads `.env`; expects MySQL on `localhost:3366`)
 - Run everything in Docker: `docker compose up --build` (app on :8080, MySQL on :3366, plus ELK)
   - App + DB only: `docker compose up --build app db`
   - The app container reads `SPRING_MAIL_USERNAME/PASSWORD` from `.env` (optional). DB settings are set in `docker-compose.yml`.
 - Swagger UI: http://localhost:8080/swagger-ui.html
+
+## Database schema rules
+- Flyway owns the schema: `src/main/resources/db/migration/V<n>__<description>.sql`.
+- Never edit an applied migration. Every schema change is a new `V<n+1>__...` file.
+- Hibernate runs with `ddl-auto=validate` (app and tests), so an entity/schema mismatch fails at startup.
+- No seed data yet. The first root user is created through public registration.
+- Booleans are `BOOLEAN`, timestamps `DATETIME(6)`, and constraints get readable names (`fk_<table>_<ref>`, `uk_<table>_<col>`).
 
 ## Current layout (`src/main/java/com/example/iamsystem`)
 - `security/`: JWT filter, `JwtTokenUtil`, `AuthController` (`/api/auth/*`), `DefaultUserDetails(User)`, login success/failure listeners (lockout)
@@ -112,7 +119,7 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 - `aspect/AuthorizationAspect` + `util/authorization/@RequirePermission`: endpoint permission checks (string `"IAM:READ"` etc.)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
 - `organization/`, `application/`, `service/`: entities from PR #10. **Not used by any code yet.** `organizations` is the closest thing to a tenant.
-- `db-init/`: MySQL schema + seed data (used only by docker compose)
+- `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
 ## Current behaviours to remember
 - Root user (`is_root_user`) passes every permission check in `PermissionService.hasPermission`, globally (no tenant scope).
@@ -131,8 +138,7 @@ Security
 - `/api/auth/token/validate` ignores the token version (revoked tokens are reported as valid).
 
 Broken / drift
-- Schema exists in 3 versions (db-init SQL, Hibernate ddl, H2 create-drop) and they have drifted. `serviceName` vs `service_name`, `password_reset_otp` vs `password_reset_otps`. Seeded actions (`VIEW_PRODUCTS`…) don't fit the enum, so loading them throws.
-  Confirmed in Docker: `GET /api/users` returns 500 (`No enum constant PermissionAction.VIEW_PRODUCTS`).
+- Deleting a user who created other users fails (FK `fk_users_created_by`, no ON DELETE rule). It needs a product decision.
 - JWT errors thrown inside the filter become 500 instead of 401.
 - `RoleMapper.toEntity` drops `permissionIds`.
 
@@ -146,4 +152,6 @@ Design debt
 ## Progress log
 - 2026-10-24: Codebase reviewed. CLAUDE.md created. Target design agreed (platform/tenant/regular levels, client_id, fixed permissions + dynamic roles, no self-modification, per-application token settings, management-console client per tenant).
 - 2026-10-24: Step 1 (baseline). Dockerfile on JDK 25, `app` service in docker-compose, fixed `ddl-auto` property name.
-  Next: step 2, Flyway (single schema source).
+- 2026-10-24: Step 2 (single schema). Flyway `V1__baseline.sql` (from the entities), `ddl-auto=validate`, removed `db-init/`,
+  tests on Testcontainers MySQL instead of H2, `.env` no longer passed to the test JVM.
+  Next: to be chosen by the owner.

@@ -34,6 +34,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    runtimeOnly 'org.flywaydb:flyway-mysql'
 
     implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
 
@@ -53,7 +55,7 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testImplementation 'org.springframework.security:spring-security-test'
-    testRuntimeOnly 'com.h2database:h2'
+    testImplementation 'org.testcontainers:testcontainers-mysql'
 }
 
 apply from: 'jacoco_excludes.gradle'
@@ -61,7 +63,6 @@ apply from: 'jacoco_excludes.gradle'
 tasks.named('test') {
     useJUnitPlatform()
     finalizedBy jacocoTestReport
-    systemProperties loadEnvVariables()
     systemProperty "spring.profiles.active", "test"
 }
 
