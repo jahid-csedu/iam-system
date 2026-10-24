@@ -1,5 +1,8 @@
 # CLAUDE.md
 
+> **Resuming work?** Read this file, then `docs/IMPLEMENTATION_PLAN.md` (step-by-step plan and how to resume).
+> This file = rules, agreed decisions, current state. The plan file = proposed technical design per remaining step.
+
 ## Working agreement
 - The project owner makes the design decisions. Propose, explain trade-offs, then wait for a go-ahead.
 - Work one small step at a time. One concern per change/PR. Don't bundle refactors with features.
@@ -9,6 +12,7 @@
 - Match existing style unless the step is specifically to change that style.
 - Check every change against the "Target design" section below.
 - Update this file when a step changes the architecture, commands, design or known issues.
+  When a step finishes, also update `docs/IMPLEMENTATION_PLAN.md` (move it to "Done", adjust later steps if needed).
 
 ## Code standards
 What "clean" means for every class a step touches:
@@ -117,10 +121,10 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 ## Commands
 - Run tests: `./gradlew clean test` (**Docker must be running**: Testcontainers starts MySQL 8.0; jacoco report in `build/reports/jacoco`)
 - Run app: `./gradlew bootRun` (loads `.env`; expects MySQL on `localhost:3366`)
-- Run everything in Docker: `docker compose up --build` (app on :8080, MySQL on :3366, plus ELK)
+- Run everything in Docker: `docker compose up --build` (app on :8081, MySQL on :3366, plus ELK)
   - App + DB only: `docker compose up --build app db`
   - The app container reads `SPRING_MAIL_USERNAME/PASSWORD` from `.env` (optional). DB settings are set in `docker-compose.yml`.
-- Swagger UI: http://localhost:8080/swagger-ui.html
+- Swagger UI: http://localhost:8081/swagger-ui.html
 
 ## Database schema rules
 - Flyway owns the schema: `src/main/resources/db/migration/V<n>__<description>.sql`.
@@ -199,4 +203,5 @@ Design debt
   `PermissionService` is CRUD only (injected mapper, 404 on deleting a missing permission, duplicate check on update);
   `AuthController` logic moved to `AuthenticationService` (login no longer loads the user twice; bad/expired refresh
   tokens give 412 instead of 500); `AuditAspect` uses `CurrentUserProvider`. Removing user roles now needs `IAM:UPDATE`.
-  Next: to be chosen by the owner (proposed: step 5, tenant foundation).
+- 2026-10-24: Wrote `docs/IMPLEMENTATION_PLAN.md` (full step plan for resuming in a fresh session).
+  Next: step 5 (tenant foundation). Its open decisions are listed in the plan.
