@@ -1,5 +1,5 @@
 # Build Stage
-FROM eclipse-temurin:21-jdk-jammy AS build
+FROM eclipse-temurin:25-jdk-noble AS build
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN chmod +x gradlew
 RUN ./gradlew clean build -x test
 
 # Run Stage
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:25-jre-noble
 
 WORKDIR /app
 
