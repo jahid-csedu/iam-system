@@ -15,6 +15,7 @@ import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -90,6 +91,7 @@ class RoleControllerTest {
     }
 
     @Test
+    @DisplayName("Lists the tenant's roles ordered by name")
     void getAllRoles_returnsTheTenantsRolesByName() throws Exception {
         perform(get("/api/roles"), admin)
                 .andExpect(status().isOk())
@@ -97,11 +99,13 @@ class RoleControllerTest {
     }
 
     @Test
+    @DisplayName("Listing roles without authentication is unauthorized")
     void getAllRoles_withoutAuthentication_isUnauthorized() throws Exception {
         mockMvc.perform(get("/api/roles")).andExpect(status().isUnauthorized());
     }
 
     @Test
+    @DisplayName("A role is created in the caller's tenant")
     void createRole_isCreatedInTheCallersTenant() throws Exception {
         perform(post("/api/roles"), admin, new RoleRequestDto("AUDITOR", "Reads audit data"))
                 .andExpect(status().isCreated())
@@ -113,24 +117,28 @@ class RoleControllerTest {
     }
 
     @Test
+    @DisplayName("A role name already used in the tenant is a bad request")
     void createRole_withNameTakenInTheTenant_isBadRequest() throws Exception {
         perform(post("/api/roles"), admin, new RoleRequestDto("READ_ONLY", null))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
+    @DisplayName("A role without a name fails validation")
     void createRole_withoutName_failsValidation() throws Exception {
         perform(post("/api/roles"), admin, new RoleRequestDto(" ", null))
                 .andExpect(status().isUnprocessableEntity());
     }
 
     @Test
+    @DisplayName("Creating a role without IAM:WRITE is forbidden")
     void createRole_withoutWritePermission_isForbidden() throws Exception {
         perform(post("/api/roles"), readOnlyUser, new RoleRequestDto("AUDITOR", null))
                 .andExpect(status().isForbidden());
     }
 
     @Test
+    @DisplayName("A role is found by id with its permissions")
     void getRoleById_returnsRole() throws Exception {
         perform(get("/api/roles/{id}", adminRole.getId()), readOnlyUser)
                 .andExpect(status().isOk())
@@ -139,11 +147,13 @@ class RoleControllerTest {
     }
 
     @Test
+    @DisplayName("An unknown role id is not found")
     void getRoleById_unknownId_isNotFound() throws Exception {
         perform(get("/api/roles/{id}", -1), admin).andExpect(status().isNotFound());
     }
 
     @Test
+    @DisplayName("A role is found by name")
     void getRoleByName_returnsRole() throws Exception {
         perform(get("/api/roles/name/{name}", "READ_ONLY"), admin)
                 .andExpect(status().isOk())
@@ -151,6 +161,7 @@ class RoleControllerTest {
     }
 
     @Test
+    @DisplayName("A role the caller doesn't hold is updated")
     void updateRole_aRoleTheCallerDoesNotHold_isUpdated() throws Exception {
         perform(put("/api/roles/{id}", readOnlyRole.getId()), admin, new RoleRequestDto("VIEWER", "Updated"))
                 .andExpect(status().isOk())
@@ -159,24 +170,28 @@ class RoleControllerTest {
     }
 
     @Test
+    @DisplayName("Updating a role the caller holds is forbidden")
     void updateRole_aRoleTheCallerHolds_isForbidden() throws Exception {
         perform(put("/api/roles/{id}", adminRole.getId()), admin, new RoleRequestDto("SUPER_ADMIN", null))
                 .andExpect(status().isForbidden());
     }
 
     @Test
+    @DisplayName("Renaming a role to another role's name is a bad request")
     void updateRole_toTheNameOfAnotherRole_isBadRequest() throws Exception {
         perform(put("/api/roles/{id}", readOnlyRole.getId()), admin, new RoleRequestDto("ADMIN", null))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
+    @DisplayName("Updating a role without IAM:UPDATE is forbidden")
     void updateRole_withoutUpdatePermission_isForbidden() throws Exception {
         perform(put("/api/roles/{id}", adminRole.getId()), readOnlyUser, new RoleRequestDto("ADMIN", "x"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
+    @DisplayName("Deleting a role removes it from its users")
     void deleteRole_removesItFromItsUsers() throws Exception {
         perform(delete("/api/roles/{id}", readOnlyRole.getId()), admin).andExpect(status().isNoContent());
 
@@ -185,16 +200,19 @@ class RoleControllerTest {
     }
 
     @Test
+    @DisplayName("Deleting a role the caller holds is forbidden")
     void deleteRole_aRoleTheCallerHolds_isForbidden() throws Exception {
         perform(delete("/api/roles/{id}", adminRole.getId()), admin).andExpect(status().isForbidden());
     }
 
     @Test
+    @DisplayName("Deleting a role without IAM:DELETE is forbidden")
     void deleteRole_withoutDeletePermission_isForbidden() throws Exception {
         perform(delete("/api/roles/{id}", adminRole.getId()), readOnlyUser).andExpect(status().isForbidden());
     }
 
     @Test
+    @DisplayName("Assigned permissions are added to the role")
     void assignPermissions_addsThemToTheRole() throws Exception {
         perform(put("/api/roles/permissions"), admin, new RolePermissionDto(readOnlyRole.getId(), Set.of(writePermission.getId())))
                 .andExpect(status().isNoContent());
@@ -203,24 +221,28 @@ class RoleControllerTest {
     }
 
     @Test
+    @DisplayName("Assigning permissions to a role the caller holds is forbidden")
     void assignPermissions_toARoleTheCallerHolds_isForbidden() throws Exception {
         perform(put("/api/roles/permissions"), admin, new RolePermissionDto(adminRole.getId(), Set.of(readPermission.getId())))
                 .andExpect(status().isForbidden());
     }
 
     @Test
+    @DisplayName("Assigning an unknown permission is not found")
     void assignPermissions_unknownPermission_isNotFound() throws Exception {
         perform(put("/api/roles/permissions"), admin, new RolePermissionDto(readOnlyRole.getId(), Set.of(-1L)))
                 .andExpect(status().isNotFound());
     }
 
     @Test
+    @DisplayName("Assigning permissions without IAM:UPDATE is forbidden")
     void assignPermissions_withoutUpdatePermission_isForbidden() throws Exception {
         perform(put("/api/roles/permissions"), readOnlyUser, new RolePermissionDto(adminRole.getId(), Set.of(readPermission.getId())))
                 .andExpect(status().isForbidden());
     }
 
     @Test
+    @DisplayName("Removing permissions removes only the given ones")
     void removePermissions_removesOnlyTheGivenOnes() throws Exception {
         perform(put("/api/roles/permissions"), admin, new RolePermissionDto(readOnlyRole.getId(), Set.of(writePermission.getId())))
                 .andExpect(status().isNoContent());
@@ -232,6 +254,7 @@ class RoleControllerTest {
     }
 
     @Test
+    @DisplayName("Removing permissions without IAM:UPDATE is forbidden")
     void removePermissions_withoutUpdatePermission_isForbidden() throws Exception {
         perform(delete("/api/roles/permissions"), readOnlyUser, new RolePermissionDto(adminRole.getId(), Set.of(readPermission.getId())))
                 .andExpect(status().isForbidden());

@@ -8,6 +8,7 @@ import com.example.iamsystem.permission.entity.PermissionAction;
 import com.example.iamsystem.permission.mapper.PermissionMapper;
 import com.example.iamsystem.permission.repository.PermissionRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
@@ -43,6 +44,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("A unique permission is saved and returned")
     void savePermission_whenUnique_savesAndReturnsIt() {
         when(permissionRepository.findByServiceNameAndAction("TEST_SERVICE", WRITE)).thenReturn(Optional.empty());
         when(permissionRepository.save(any(Permission.class))).thenReturn(permission(2L, "TEST_SERVICE", WRITE));
@@ -54,6 +56,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("A duplicate permission is rejected")
     void savePermission_whenDuplicate_isRejected() {
         when(permissionRepository.findByServiceNameAndAction("TEST_SERVICE", READ)).thenReturn(Optional.of(readPermission));
 
@@ -62,6 +65,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Updating changes the fields but keeps the id")
     void updatePermission_updatesFieldsButKeepsId() {
         when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
         when(permissionRepository.findByServiceNameAndAction("OTHER_SERVICE", WRITE)).thenReturn(Optional.empty());
@@ -75,6 +79,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Updating a permission to its own values is allowed")
     void updatePermission_toItsOwnValues_isAllowed() {
         when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
         when(permissionRepository.findByServiceNameAndAction("TEST_SERVICE", READ)).thenReturn(Optional.of(readPermission));
@@ -86,6 +91,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Updating to the values of another permission is rejected")
     void updatePermission_toAnotherPermissionsValues_isRejected() {
         when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
         when(permissionRepository.findByServiceNameAndAction("TEST_SERVICE", WRITE))
@@ -96,6 +102,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Updating an unknown permission is rejected")
     void updatePermission_whenNotFound_isRejected() {
         when(permissionRepository.findById(1L)).thenReturn(Optional.empty());
 
@@ -103,6 +110,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("An existing permission is deleted")
     void deletePermissionById_deletesExistingPermission() {
         when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
 
@@ -112,6 +120,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Deleting an unknown permission is rejected")
     void deletePermissionById_whenNotFound_isRejected() {
         when(permissionRepository.findById(1L)).thenReturn(Optional.empty());
 
@@ -120,6 +129,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("A permission is found by id")
     void getPermissionById_returnsPermission() {
         when(permissionRepository.findById(1L)).thenReturn(Optional.of(readPermission));
 
@@ -130,6 +140,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("An unknown permission id is rejected")
     void getPermissionById_whenNotFound_isRejected() {
         when(permissionRepository.findById(1L)).thenReturn(Optional.empty());
 
@@ -137,6 +148,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Only the permissions of the given service are returned")
     void getPermissionByServiceName_returnsPermissionsOfThatService() {
         when(permissionRepository.findAllByServiceName("TEST_SERVICE")).thenReturn(List.of(readPermission));
 
@@ -146,6 +158,7 @@ class PermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Every permission is returned")
     void getAllPermissions_returnsEveryPermission() {
         when(permissionRepository.findAll()).thenReturn(List.of(readPermission, permission(2L, "TEST_SERVICE", WRITE)));
 

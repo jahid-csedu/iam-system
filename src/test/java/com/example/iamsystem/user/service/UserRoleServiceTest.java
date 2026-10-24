@@ -9,6 +9,7 @@ import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -61,6 +62,7 @@ class UserRoleServiceTest {
     }
 
     @Test
+    @DisplayName("Assigned roles are added to the user")
     void assignRoles_addsRolesToUser() {
         givenManageableChild();
         when(roleRepository.findAllByIdInAndTenantId(Set.of(10L, 11L), TENANT_ID)).thenReturn(List.of(admin, viewer));
@@ -73,6 +75,7 @@ class UserRoleServiceTest {
     }
 
     @Test
+    @DisplayName("Removing roles removes only the given ones")
     void removeRoles_removesOnlyGivenRoles() {
         givenManageableChild();
         child.getRoles().addAll(Set.of(admin, viewer));
@@ -85,6 +88,7 @@ class UserRoleServiceTest {
     }
 
     @Test
+    @DisplayName("If some roles are missing or in another tenant, nothing changes")
     void assignRoles_whenSomeRolesAreMissingOrInAnotherTenant_changesNothing() {
         givenManageableChild();
         when(roleRepository.findAllByIdInAndTenantId(Set.of(10L, 99L), TENANT_ID)).thenReturn(List.of(admin));
@@ -95,6 +99,7 @@ class UserRoleServiceTest {
     }
 
     @Test
+    @DisplayName("Assigning roles to an unknown user is rejected")
     void assignRoles_whenUserNotFound_isRejected() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenThrow(new DataNotFoundException("User not found"));
@@ -103,6 +108,7 @@ class UserRoleServiceTest {
     }
 
     @Test
+    @DisplayName("A denied role assignment changes nothing")
     void assignRoles_whenNotAllowed_isDenied() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenReturn(child);

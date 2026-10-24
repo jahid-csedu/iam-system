@@ -10,6 +10,7 @@ import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.mapper.UserMapper;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
@@ -51,6 +52,7 @@ class UserCreationServiceTest {
     }
 
     @Test
+    @DisplayName("A new user joins the creator's tenant with the creator recorded")
     void createUser_putsNewUserInCreatorsTenantWithCreatorRecorded() {
         User creator = rootUser(1, "root");
         User newUser = user(2, "alice");
@@ -68,6 +70,7 @@ class UserCreationServiceTest {
     }
 
     @Test
+    @DisplayName("Creating a user without a logged-in user is denied")
     void createUser_whenNobodyLoggedIn_isDenied() {
         when(currentUserProvider.requireCurrentUser()).thenThrow(new NoAccessException("No logged in user found"));
 
@@ -76,6 +79,7 @@ class UserCreationServiceTest {
     }
 
     @Test
+    @DisplayName("An invalid new user saves nothing")
     void createUser_whenUserIsInvalid_savesNothing() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(rootUser(1, "root"));
         when(tenantRepository.getReferenceById(TENANT.getId())).thenReturn(TENANT);

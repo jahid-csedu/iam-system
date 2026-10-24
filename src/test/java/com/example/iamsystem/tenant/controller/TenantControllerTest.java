@@ -7,6 +7,7 @@ import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -45,6 +46,7 @@ class TenantControllerTest {
     private UserRepository userRepository;
 
     @Test
+    @DisplayName("Signup creates the tenant and its root user, who can log in")
     void signup_createsTenantWithItsRootUser_whoCanLogIn() throws Exception {
         signup("Acme", "acme-root", "root@acme.com")
                 .andExpect(status().isCreated())
@@ -61,6 +63,7 @@ class TenantControllerTest {
     }
 
     @Test
+    @DisplayName("Signup with a taken tenant name is rejected")
     void signup_withTakenTenantName_isRejected() throws Exception {
         signup("Acme", "acme-root", "root@acme.com").andExpect(status().isCreated());
 
@@ -68,6 +71,7 @@ class TenantControllerTest {
     }
 
     @Test
+    @DisplayName("Signup with an invalid root user leaves no tenant behind")
     void signup_whenRootUserIsInvalid_leavesNoTenantBehind() throws Exception {
         signup("Acme", "taken", "root@acme.com").andExpect(status().isCreated());
 
@@ -77,11 +81,13 @@ class TenantControllerTest {
     }
 
     @Test
+    @DisplayName("Signup without a tenant name fails validation")
     void signup_withoutTenantName_failsValidation() throws Exception {
         signup(" ", "acme-root", "root@acme.com").andExpect(status().isUnprocessableEntity());
     }
 
     @Test
+    @DisplayName("The database allows only one root user per tenant")
     void database_allowsOnlyOneRootUserPerTenant() throws Exception {
         signup("Acme", "acme-root", "root@acme.com").andExpect(status().isCreated());
         Tenant acme = userRepository.findByUsername("acme-root").orElseThrow().getTenant();

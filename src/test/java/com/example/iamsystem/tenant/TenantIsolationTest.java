@@ -13,6 +13,7 @@ import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -78,6 +79,7 @@ class TenantIsolationTest {
     }
 
     @Test
+    @DisplayName("The user list contains only the caller's tenant")
     void userList_containsOnlyTheCallersTenant() throws Exception {
         perform(get("/api/users"))
                 .andExpect(status().isOk())
@@ -85,6 +87,7 @@ class TenantIsolationTest {
     }
 
     @Test
+    @DisplayName("Users of another tenant are not found")
     void usersOfAnotherTenant_areNotFound() throws Exception {
         perform(get("/api/users/{id}", globexMember.getId())).andExpect(status().isNotFound());
         perform(get("/api/users/by-username").param("username", "globex-member")).andExpect(status().isNotFound());
@@ -92,6 +95,7 @@ class TenantIsolationTest {
     }
 
     @Test
+    @DisplayName("Users of another tenant cannot be deleted or changed")
     void usersOfAnotherTenant_cannotBeChanged() throws Exception {
         perform(delete("/api/users/{id}", globexMember.getId())).andExpect(status().isNotFound());
         perform(patch("/api/users/password").param("username", "globex-member"), new PasswordChangeDto(null, "NewPassword1!"))
@@ -102,6 +106,7 @@ class TenantIsolationTest {
     }
 
     @Test
+    @DisplayName("Roles of another tenant cannot be assigned")
     void rolesOfAnotherTenant_cannotBeAssigned() throws Exception {
         perform(put("/api/users/roles"), roleAttachment("acme-member", globexRole.getId())).andExpect(status().isNotFound());
 
@@ -109,6 +114,7 @@ class TenantIsolationTest {
     }
 
     @Test
+    @DisplayName("The role list contains only the caller's tenant")
     void roleList_containsOnlyTheCallersTenant() throws Exception {
         perform(get("/api/roles"))
                 .andExpect(status().isOk())
@@ -116,6 +122,7 @@ class TenantIsolationTest {
     }
 
     @Test
+    @DisplayName("Roles of another tenant are not found or changeable")
     void rolesOfAnotherTenant_areNotFound() throws Exception {
         perform(get("/api/roles/{id}", globexRole.getId())).andExpect(status().isNotFound());
         perform(put("/api/roles/{id}", globexRole.getId()), new RoleRequestDto("HACKED", null)).andExpect(status().isNotFound());
@@ -126,6 +133,7 @@ class TenantIsolationTest {
     }
 
     @Test
+    @DisplayName("Role names are unique per tenant only")
     void roleNames_areUniquePerTenantOnly() throws Exception {
         perform(post("/api/roles"), new RoleRequestDto("AUDITOR", null)).andExpect(status().isCreated());
         perform(post("/api/roles"), new RoleRequestDto("AUDITOR", null)).andExpect(status().isBadRequest());

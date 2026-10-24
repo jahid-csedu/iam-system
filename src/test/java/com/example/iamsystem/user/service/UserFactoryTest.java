@@ -7,6 +7,7 @@ import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
@@ -49,6 +50,7 @@ class UserFactoryTest {
     }
 
     @Test
+    @DisplayName("Builds an active user in the tenant with an encoded password")
     void newUser_buildsActiveUserInTenantWithEncodedPassword() {
         when(passwordEncoder.encode("Password1!")).thenReturn("encoded");
 
@@ -67,6 +69,7 @@ class UserFactoryTest {
     }
 
     @Test
+    @DisplayName("A taken username is rejected")
     void newUser_whenUsernameTaken_isRejected() {
         doThrow(new UserAlreadyExistsException("Username not available")).when(userValidator).validateUsernameAvailable("alice");
 
@@ -75,6 +78,7 @@ class UserFactoryTest {
     }
 
     @Test
+    @DisplayName("A taken email is rejected")
     void newUser_whenEmailTaken_isRejected() {
         doThrow(new UserAlreadyExistsException("Email not available")).when(userValidator).validateEmailAvailable("alice@example.com");
 
@@ -82,6 +86,7 @@ class UserFactoryTest {
     }
 
     @Test
+    @DisplayName("A password violating the policy is rejected")
     void newUser_whenPasswordViolatesPolicy_isRejected() {
         doThrow(new UserInputNotValidException("policy")).when(userValidator).validatePasswordPolicy("Password1!");
 

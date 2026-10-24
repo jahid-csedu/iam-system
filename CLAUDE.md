@@ -30,6 +30,8 @@ What "clean" means for every class a step touches:
 - **Clean imports.** No unused imports; delete them. No wildcard (`*`) imports, static ones included; import each class or member explicitly.
   Keep IntelliJ's default order: other imports, blank line, `javax.*`/`java.*`, blank line, static imports (each group sorted).
 - **Tests.** Behaviour of every touched class is covered; tests change together with the code.
+  Every test method has a `@DisplayName` stating the behaviour in plain English (e.g. `@DisplayName("Users of another tenant are not found")`),
+  placed right after `@Test`.
 
 ## Commits
 - Work directly on `master`. Don't create a branch unless the owner explicitly asks for one.

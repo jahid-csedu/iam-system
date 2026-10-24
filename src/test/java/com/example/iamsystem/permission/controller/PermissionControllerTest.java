@@ -15,6 +15,7 @@ import com.example.iamsystem.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -147,6 +148,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user with IAM:READ lists the permissions")
     void getAllPermissions_successful() throws Exception {
 
         mockMvc.perform(get("/api/permissions")
@@ -158,6 +160,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user without IAM:READ cannot list the permissions")
     void getAllPermissions_forbidden() throws Exception {
         // Create a user without any permissions
         User noPermissionUser = new User();
@@ -178,6 +181,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user with IAM:WRITE creates a permission")
     void createPermission_successful() throws Exception {
         PermissionDto newPermissionDto = new PermissionDto(null, "NEW_SERVICE", PermissionAction.READ.name(),
                 "New service read access");
@@ -193,6 +197,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user without IAM:WRITE cannot create a permission")
     void createPermission_forbidden() throws Exception {
         // Create a user with only READ permission
         User readOnlyUser = new User();
@@ -227,6 +232,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user with IAM:READ gets a permission by id")
     void getPermissionById_successful() throws Exception {
         mockMvc.perform(get("/api/permissions/{id}", readPermission.getId())
                         .with(authentication(getAuthenticationToken(testUser)))
@@ -238,6 +244,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user without IAM:READ cannot get a permission by id")
     void getPermissionById_forbidden() throws Exception {
         User noPermissionUser = new User();
         noPermissionUser.setTenant(tenant);
@@ -257,6 +264,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user with IAM:UPDATE updates a permission")
     void updatePermission_successful() throws Exception {
         PermissionDto updatedPermissionDto = new PermissionDto(updatePermission.getId(), IAM_SERVICE_NAME,
                 PermissionAction.UPDATE.name(), "Updated description");
@@ -271,6 +279,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user without IAM:UPDATE cannot update a permission")
     void updatePermission_forbidden() throws Exception {
         User readOnlyUser = new User();
         readOnlyUser.setTenant(tenant);
@@ -304,6 +313,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user with IAM:DELETE deletes a permission")
     void deletePermissionById_successful() throws Exception {
         mockMvc.perform(delete("/api/permissions/{id}", deletePermission.getId())
                         .with(authentication(getAuthenticationToken(testUser)))
@@ -313,6 +323,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user without IAM:DELETE cannot delete a permission")
     void deletePermissionById_forbidden() throws Exception {
         User readOnlyUser = new User();
         readOnlyUser.setTenant(tenant);
@@ -342,6 +353,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user with IAM:READ lists the permissions of a service")
     void getPermissionByServiceName_successful() throws Exception {
         mockMvc.perform(get("/api/permissions/name/{serviceName}", IAM_SERVICE_NAME)
                         .with(authentication(getAuthenticationToken(testUser)))
@@ -352,6 +364,7 @@ class PermissionControllerTest {
     }
 
     @Test
+    @DisplayName("A user without IAM:READ cannot list the permissions of a service")
     void getPermissionByServiceName_forbidden() throws Exception {
         User noPermissionUser = new User();
         noPermissionUser.setTenant(tenant);

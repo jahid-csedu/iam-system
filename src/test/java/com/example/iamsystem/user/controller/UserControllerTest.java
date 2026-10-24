@@ -11,6 +11,7 @@ import com.example.iamsystem.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -75,6 +76,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Root creates a user in its own tenant")
     @Sql("/sql/insert_user_role.sql")
     void createUser_byRoot_createsUserInRootsTenant() throws Exception {
         User root = userRepository.findByUsername("root").orElseThrow();
@@ -92,6 +94,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Creating a user without IAM:WRITE is forbidden")
     @Sql("/sql/insert_user_role.sql")
     void createUser_withoutWritePermission_isForbidden() throws Exception {
         User plainUser = userRepository.findByUsername("user").orElseThrow();
@@ -105,6 +108,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Root assigns a role to another user")
     @Sql("/sql/insert_user_role.sql")
     void assignRoles_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
@@ -122,6 +126,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Assigning roles to yourself is forbidden")
     @Sql("/sql/insert_user_role.sql")
     void assignRoles_toSelf_isForbidden() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
@@ -138,6 +143,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Root removes a role from another user")
     @Sql("/sql/insert_user_role.sql")
     void removeRoles_successful() throws Exception {
         User user = userRepository.findByUsername("user").orElseThrow();
@@ -163,6 +169,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Lists the tenant's users with paging information")
     @Sql("/sql/insert_user_role.sql")
     void getAllUsers_returnsTheTenantsUsers() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
@@ -176,6 +183,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Returns the requested page of users")
     @Sql("/sql/insert_user_role.sql")
     void getAllUsers_returnsTheRequestedPage() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
@@ -190,6 +198,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("A negative page is a bad request")
     @Sql("/sql/insert_user_role.sql")
     void getAllUsers_withNegativePage_isBadRequest() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
@@ -201,6 +210,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("A user is found by id")
     @Sql("/sql/insert_user_role.sql")
     void getUserById_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
@@ -214,6 +224,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("A user is found by username")
     @Sql("/sql/insert_user_role.sql")
     void getUserByUsername_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
@@ -226,6 +237,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("A user is found by email")
     @Sql("/sql/insert_user_role.sql")
     void getUserByEmail_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
@@ -238,6 +250,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Root deletes another user")
     @Sql("/sql/insert_user_role.sql")
     void deleteUser_successful() throws Exception {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
@@ -250,6 +263,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Deleting a user keeps the users they created")
     @Sql("/sql/insert_user_role.sql")
     void deleteUser_whoCreatedOthers_keepsThoseUsers() throws Exception {
         User root = userRepository.findByUsername("root").orElseThrow();
@@ -269,6 +283,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Another user cannot delete the root user")
     @Sql("/sql/insert_user_role.sql")
     void deleteUser_rootByAnotherUser_isForbidden() throws Exception {
         User currentUser = userRepository.findByUsername("user").orElseThrow();
@@ -280,6 +295,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("A user changes their own password")
     @Sql("/sql/insert_user_role.sql")
     void changePassword_byUser_successful() throws Exception {
         User currentUser = userRepository.findByUsername("user").orElseThrow();
@@ -295,6 +311,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("Root changes another user's password")
     @Sql("/sql/insert_user_role.sql")
     void changePassword_byRootUser_forAnotherUser_successful() throws Exception {
         User currentRootUser = userRepository.findByUsername("root").orElseThrow();
@@ -312,6 +329,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("A wrong old password is a bad request")
     @Sql("/sql/insert_user_role.sql")
     void changePassword_byUser_invalidOldPassword() throws Exception {
         User currentUser = userRepository.findByUsername("user").orElseThrow();
@@ -326,6 +344,7 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("A regular user cannot change another user's password")
     @Sql("/sql/insert_user_role.sql")
     void changePassword_byUser_forAnotherUser_unauthorized() throws Exception {
         User currentUser = userRepository.findByUsername("user").orElseThrow();

@@ -3,6 +3,7 @@ package com.example.iamsystem.user.service;
 import com.example.iamsystem.common.exception.UserAlreadyExistsException;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -27,6 +28,7 @@ class UserValidatorTest {
 
 
     @Test
+    @DisplayName("A taken email is rejected")
     void validateEmailAvailable_whenEmailExists_shouldThrowException() {
         // Arrange
         String email = "test@example.com";
@@ -39,6 +41,7 @@ class UserValidatorTest {
     }
 
     @Test
+    @DisplayName("A free email is accepted")
     void validateEmailAvailable_whenEmailDoesNotExist_shouldNotThrowException() {
         // Arrange
         String email = "test@example.com";
@@ -51,6 +54,7 @@ class UserValidatorTest {
     }
 
     @Test
+    @DisplayName("A taken username is rejected")
     void validateUsernameAvailable_whenUsernameExists_shouldThrowException() {
         // Arrange
         String username = "testuser";
@@ -63,6 +67,7 @@ class UserValidatorTest {
     }
 
     @Test
+    @DisplayName("A free username is accepted")
     void validateUsernameAvailable_whenUsernameDoesNotExist_shouldNotThrowException() {
         // Arrange
         String username = "testuser";

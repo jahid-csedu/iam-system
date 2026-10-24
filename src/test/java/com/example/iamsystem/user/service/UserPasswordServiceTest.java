@@ -9,6 +9,7 @@ import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -57,6 +58,7 @@ class UserPasswordServiceTest {
     }
 
     @Test
+    @DisplayName("The correct old password updates the password and its expiry")
     void changeOwnPassword_withCorrectOldPassword_updatesPasswordAndExpiry() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(child);
         when(passwordEncoder.matches("old", "encoded-child")).thenReturn(true);
@@ -70,6 +72,7 @@ class UserPasswordServiceTest {
     }
 
     @Test
+    @DisplayName("A wrong old password is rejected")
     void changeOwnPassword_withWrongOldPassword_isRejected() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(child);
         when(passwordEncoder.matches("wrong", "encoded-child")).thenReturn(false);
@@ -80,6 +83,7 @@ class UserPasswordServiceTest {
     }
 
     @Test
+    @DisplayName("Passing your own username still requires the old password")
     void changeOwnPassword_byOwnUsername_stillRequiresOldPassword() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(child);
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT.getId())).thenReturn(child);
@@ -90,6 +94,7 @@ class UserPasswordServiceTest {
     }
 
     @Test
+    @DisplayName("Root changing another user's password needs no old password")
     void changePassword_byRootForAnotherUser_doesNotNeedOldPassword() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT.getId())).thenReturn(child);
@@ -103,6 +108,7 @@ class UserPasswordServiceTest {
     }
 
     @Test
+    @DisplayName("Changing the password of a user you may not manage is denied")
     void changePassword_forUserNotAllowed_isDenied() {
         User stranger = user(3, "stranger");
         when(currentUserProvider.requireCurrentUser()).thenReturn(child);
@@ -115,6 +121,7 @@ class UserPasswordServiceTest {
     }
 
     @Test
+    @DisplayName("A new password violating the policy is rejected")
     void changePassword_violatingPasswordPolicy_isRejected() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(child);
         when(passwordEncoder.matches("old", "encoded-child")).thenReturn(true);

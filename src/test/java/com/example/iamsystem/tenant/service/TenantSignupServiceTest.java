@@ -13,6 +13,7 @@ import com.example.iamsystem.user.mapper.UserMapper;
 import com.example.iamsystem.user.repository.UserRepository;
 import com.example.iamsystem.user.service.UserFactory;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
@@ -52,6 +53,7 @@ class TenantSignupServiceTest {
     }
 
     @Test
+    @DisplayName("Signup creates an active tenant and its root user")
     void signup_createsActiveTenantAndItsRootUser() {
         when(tenantRepository.existsByName("Acme")).thenReturn(false);
         when(tenantRepository.save(any(Tenant.class))).thenAnswer(invocation -> {
@@ -79,6 +81,7 @@ class TenantSignupServiceTest {
     }
 
     @Test
+    @DisplayName("Signup with a taken tenant name creates nothing")
     void signup_whenTenantNameTaken_createsNothing() {
         when(tenantRepository.existsByName("Acme")).thenReturn(true);
 

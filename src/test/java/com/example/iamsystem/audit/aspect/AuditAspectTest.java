@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -60,6 +61,7 @@ class AuditAspectTest {
     }
 
     @Test
+    @DisplayName("A successful call logs the actor, target and details")
     void audit_onSuccess_logsActorTargetAndDetails() throws Throwable {
         givenCurrentUser("alice");
         when(joinPoint.proceed()).thenReturn("deleted");
@@ -75,6 +77,7 @@ class AuditAspectTest {
     }
 
     @Test
+    @DisplayName("A failed call logs the reason and rethrows the exception")
     void audit_onFailure_logsReasonAndRethrows() throws Throwable {
         givenCurrentUser("alice");
         IllegalStateException failure = new IllegalStateException("boom");
@@ -90,6 +93,7 @@ class AuditAspectTest {
     }
 
     @Test
+    @DisplayName("Without a logged-in user, placeholders are logged")
     void audit_withoutLoggedInUser_usesPlaceholders() throws Throwable {
         when(currentUserProvider.currentUser()).thenReturn(Optional.empty());
 
@@ -101,6 +105,7 @@ class AuditAspectTest {
     }
 
     @Test
+    @DisplayName("A broken SpEL expression still logs the event")
     void audit_withBrokenExpression_stillLogsTheEvent() throws Throwable {
         givenCurrentUser("alice");
 

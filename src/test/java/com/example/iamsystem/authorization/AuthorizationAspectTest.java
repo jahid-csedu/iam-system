@@ -3,6 +3,7 @@ package com.example.iamsystem.authorization;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.user.entity.User;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,6 +29,7 @@ class AuthorizationAspectTest {
     private AuthorizationAspect aspect;
 
     @Test
+    @DisplayName("The annotated permission is checked for the current user")
     void checkPermission_checksTheAnnotatedPermissionForTheCurrentUser() throws NoSuchMethodException {
         User user = new User();
         when(currentUserProvider.requireCurrentUser()).thenReturn(user);
@@ -38,6 +40,7 @@ class AuthorizationAspectTest {
     }
 
     @Test
+    @DisplayName("Without a logged-in user, access is denied")
     void checkPermission_whenNobodyLoggedIn_isDenied() {
         when(currentUserProvider.requireCurrentUser()).thenThrow(new NoAccessException("No logged in user found"));
 
@@ -46,6 +49,7 @@ class AuthorizationAspectTest {
     }
 
     @Test
+    @DisplayName("A missing permission propagates the denial")
     void checkPermission_whenPermissionMissing_propagatesDenial() throws NoSuchMethodException {
         User user = new User();
         when(currentUserProvider.requireCurrentUser()).thenReturn(user);

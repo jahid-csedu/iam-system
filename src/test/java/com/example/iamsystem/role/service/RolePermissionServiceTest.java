@@ -10,6 +10,7 @@ import com.example.iamsystem.role.repository.RoleRepository;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -63,6 +64,7 @@ class RolePermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Assigned permissions are added to the role")
     void assignPermissions_addsThemToTheRole() {
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
         when(permissionRepository.findAllById(Set.of(1L, 2L))).thenReturn(List.of(read, write));
@@ -75,6 +77,7 @@ class RolePermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Removing permissions removes only the given ones")
     void removePermissions_removesOnlyTheGivenOnes() {
         role.getPermissions().addAll(Set.of(read, write));
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
@@ -87,6 +90,7 @@ class RolePermissionServiceTest {
     }
 
     @Test
+    @DisplayName("If some permissions don't exist, nothing changes")
     void assignPermissions_whenSomePermissionsDoNotExist_changesNothing() {
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
         when(permissionRepository.findAllById(Set.of(1L, 99L))).thenReturn(List.of(read));
@@ -97,6 +101,7 @@ class RolePermissionServiceTest {
     }
 
     @Test
+    @DisplayName("A role outside the tenant is not found")
     void assignPermissions_toRoleOutsideTheTenant_isNotFound() {
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenThrow(new DataNotFoundException("Role not found"));
 
@@ -105,6 +110,7 @@ class RolePermissionServiceTest {
     }
 
     @Test
+    @DisplayName("Assigning permissions to a role the actor holds is denied")
     void assignPermissions_toRoleTheActorHolds_isDenied() {
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
         doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanModify(actor, role);

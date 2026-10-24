@@ -24,6 +24,7 @@ This file lets any new session pick up the work without the conversation that pr
 
 - The owner decides. One small step at a time; work on `master`; no branches unless asked.
 - Every class a step touches ends that step fully clean (see "Code standards" in `CLAUDE.md`), including clean, explicit imports.
+- Every test method has a plain-English `@DisplayName`.
 - Flyway owns the schema; never edit an applied migration; `ddl-auto=validate`.
 - Commit messages: one brief line, no AI attribution. Never commit or push without explicit approval.
 

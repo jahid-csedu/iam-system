@@ -8,6 +8,7 @@ import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.mapper.UserMapper;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
@@ -56,6 +57,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("Returns one page of the tenant's users ordered by id")
     void findUsers_returnsOnePageOfTheTenantsUsersOrderedById() {
         PageRequest expectedRequest = PageRequest.of(1, 2, Sort.by("id"));
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
@@ -69,6 +71,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("The page size is capped")
     void findUsers_capsThePageSize() {
         PageRequest cappedRequest = PageRequest.of(0, UserService.MAX_PAGE_SIZE, Sort.by("id"));
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
@@ -78,6 +81,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("A negative page or a page size below 1 is rejected")
     void findUsers_withInvalidPaging_isRejected() {
         assertThrows(IllegalArgumentException.class, () -> service.findUsers(-1, 20));
         assertThrows(IllegalArgumentException.class, () -> service.findUsers(0, 0));
@@ -85,6 +89,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("A user is looked up by id within the current tenant")
     void findUserById_looksUpWithinTheCurrentTenant() {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(child);
@@ -96,6 +101,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("A user outside the tenant is not found")
     void findUserById_outsideTheTenant_isNotFound() {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenThrow(new DataNotFoundException("User not found"));
@@ -104,6 +110,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("A user is looked up by username within the current tenant")
     void findUserByUsername_looksUpWithinTheCurrentTenant() {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenReturn(child);
@@ -112,6 +119,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("A user is looked up by email within the current tenant")
     void findUserByEmail_looksUpWithinTheCurrentTenant() {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(userRepository.getRequiredByEmailAndTenantId("child@example.com", TENANT_ID)).thenReturn(child);
@@ -120,6 +128,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("An allowed delete deletes the user")
     void deleteUser_whenAllowed_deletesUser() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(child);
@@ -131,6 +140,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("A denied delete keeps the user")
     void deleteUser_whenNotAllowed_keepsUser() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(child);
@@ -141,6 +151,7 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("Deleting a user outside the tenant is not found")
     void deleteUser_outsideTheTenant_isNotFound() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(root);
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenThrow(new DataNotFoundException("User not found"));

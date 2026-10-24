@@ -12,6 +12,7 @@ import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
@@ -62,6 +63,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("A role is created in the current tenant")
     void createRole_createsTheRoleInTheCurrentTenant() {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(tenantRepository.getReferenceById(TENANT_ID)).thenReturn(TENANT);
@@ -77,6 +79,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("A role name already used in the tenant is rejected")
     void createRole_withNameTakenInTheTenant_isRejected() {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(roleRepository.existsByNameAndTenantId("AUDITOR", TENANT_ID)).thenReturn(true);
@@ -86,6 +89,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("Updating changes the name and description")
     void updateRole_updatesNameAndDescription() {
         givenActorAndRole();
         when(roleRepository.save(role)).thenReturn(role);
@@ -98,6 +102,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("Renaming to another role's name in the tenant is rejected")
     void updateRole_toNameOfAnotherRoleInTheTenant_isRejected() {
         givenActorAndRole();
         when(roleRepository.existsByNameAndTenantIdAndIdNot("AUDITOR", TENANT_ID, 10L)).thenReturn(true);
@@ -108,6 +113,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("A denied update changes nothing")
     void updateRole_whenNotAllowed_changesNothing() {
         givenActorAndRole();
         doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanModify(actor, role);
@@ -118,6 +124,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("Updating a role outside the tenant is not found")
     void updateRole_outsideTheTenant_isNotFound() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(actor);
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenThrow(new DataNotFoundException("Role not found"));
@@ -126,6 +133,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("An allowed delete deletes the role")
     void deleteRole_whenAllowed_deletesRole() {
         givenActorAndRole();
 
@@ -136,6 +144,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("A denied delete keeps the role")
     void deleteRole_whenNotAllowed_keepsRole() {
         givenActorAndRole();
         doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanModify(actor, role);
@@ -145,6 +154,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("A role is looked up by id within the current tenant")
     void getRole_looksUpWithinTheCurrentTenant() {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
@@ -153,6 +163,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("A role is looked up by name within the current tenant")
     void getRoleByName_looksUpWithinTheCurrentTenant() {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(roleRepository.getRequiredByNameAndTenantId("VIEWER", TENANT_ID)).thenReturn(role);
@@ -161,6 +172,7 @@ class RoleServiceTest {
     }
 
     @Test
+    @DisplayName("Only the tenant's roles are listed")
     void getRoles_returnsTheTenantsRoles() {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(roleRepository.findAllByTenantIdOrderByName(TENANT_ID)).thenReturn(List.of(role));

@@ -2,6 +2,7 @@ package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.user.entity.User;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
@@ -19,6 +20,7 @@ class UserAccessPolicyTest {
     private final User member = user(3, "member");
 
     @Test
+    @DisplayName("Managing another user's roles is allowed")
     void checkCanManageRoles_ofAnotherUser_isAllowed() {
         assertDoesNotThrow(() -> policy.checkCanManageRoles(manager, member));
         assertDoesNotThrow(() -> policy.checkCanManageRoles(member, manager));
@@ -26,6 +28,7 @@ class UserAccessPolicyTest {
     }
 
     @Test
+    @DisplayName("Managing your own roles is denied")
     void checkCanManageRoles_ofSelf_isDenied() {
         NoAccessException exception = assertThrows(NoAccessException.class, () -> policy.checkCanManageRoles(manager, manager));
         assertEquals("Users cannot change their own roles", exception.getMessage());
@@ -33,28 +36,33 @@ class UserAccessPolicyTest {
     }
 
     @Test
+    @DisplayName("Changing your own password is allowed")
     void checkCanChangePassword_ownPassword_isAllowed() {
         assertDoesNotThrow(() -> policy.checkCanChangePassword(member, member));
     }
 
     @Test
+    @DisplayName("Root may change anyone else's password")
     void checkCanChangePassword_rootForAnyoneElse_isAllowed() {
         assertDoesNotThrow(() -> policy.checkCanChangePassword(root, member));
     }
 
     @Test
+    @DisplayName("A non-root user may not change someone else's password")
     void checkCanChangePassword_nonRootForSomeoneElse_isDenied() {
         assertThrows(NoAccessException.class, () -> policy.checkCanChangePassword(manager, member));
         assertThrows(NoAccessException.class, () -> policy.checkCanChangePassword(manager, root));
     }
 
     @Test
+    @DisplayName("The root user can only be deleted by itself")
     void checkCanDelete_rootUser_onlyBySelf() {
         assertDoesNotThrow(() -> policy.checkCanDelete(root, root));
         assertThrows(NoAccessException.class, () -> policy.checkCanDelete(manager, root));
     }
 
     @Test
+    @DisplayName("A non-root user may be deleted")
     void checkCanDelete_nonRootUser_isAllowed() {
         assertDoesNotThrow(() -> policy.checkCanDelete(manager, member));
         assertDoesNotThrow(() -> policy.checkCanDelete(root, manager));

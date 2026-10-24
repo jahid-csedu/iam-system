@@ -6,6 +6,7 @@ import com.example.iamsystem.permission.entity.PermissionAction;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
@@ -36,12 +37,14 @@ class AuthorizationServiceTest {
     }
 
     @Test
+    @DisplayName("A role granting the service and action gives the permission")
     void hasPermission_whenARoleGrantsServiceAndAction_isTrue() {
         assertTrue(authorizationService.hasPermission(user, "IAM", READ));
         assertTrue(authorizationService.hasPermission(user, "BILLING", WRITE));
     }
 
     @Test
+    @DisplayName("Both the service and the action must match")
     void hasPermission_requiresBothServiceAndActionToMatch() {
         assertFalse(authorizationService.hasPermission(user, "IAM", WRITE));
         assertFalse(authorizationService.hasPermission(user, "BILLING", READ));
@@ -49,6 +52,7 @@ class AuthorizationServiceTest {
     }
 
     @Test
+    @DisplayName("The root user always has the permission")
     void hasPermission_forRootUser_isAlwaysTrue() {
         User root = new User();
         root.setRootUser(true);
@@ -57,6 +61,7 @@ class AuthorizationServiceTest {
     }
 
     @Test
+    @DisplayName("The check throws only when the permission is missing")
     void checkPermission_throwsOnlyWhenPermissionMissing() {
         assertDoesNotThrow(() -> authorizationService.checkPermission(user, "IAM", READ));
         assertThrows(NoAccessException.class, () -> authorizationService.checkPermission(user, "IAM", WRITE));

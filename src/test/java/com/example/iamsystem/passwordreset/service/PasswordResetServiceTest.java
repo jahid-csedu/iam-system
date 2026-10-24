@@ -7,6 +7,7 @@ import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -65,6 +66,7 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    @DisplayName("Requesting a reset saves an OTP and emails it")
     void createPasswordResetOtpForUser_successful() {
         when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(user));
         when(otpRepository.findByUser(any(User.class))).thenReturn(null);
@@ -80,6 +82,7 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    @DisplayName("Requesting a reset for an unknown email is rejected and sends nothing")
     void createPasswordResetOtpForUser_userNotFound() {
         when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
 
@@ -92,6 +95,7 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    @DisplayName("Requesting a reset replaces the user's existing OTP")
     void createPasswordResetOtpForUser_existingOtpDeleted() {
         when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(user));
         when(otpRepository.findByUser(any(User.class))).thenReturn(passwordResetOTP);
@@ -109,6 +113,7 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    @DisplayName("A valid OTP resets the password, emails it and deletes the OTP")
     void resetPassword_successful() {
         passwordResetOTP.setExpiryDate(Instant.now().plusSeconds(1000));
         when(otpRepository.findByOtp(anyString())).thenReturn(passwordResetOTP);
@@ -127,6 +132,7 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    @DisplayName("An unknown OTP is rejected")
     void resetPassword_invalidOtp() {
         when(otpRepository.findByOtp(anyString())).thenReturn(null);
 
@@ -140,6 +146,7 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    @DisplayName("An OTP of another user is rejected")
     void resetPassword_otpDoesNotBelongToUser() {
         User anotherUser = new User();
         anotherUser.setEmail("another@example.com");
@@ -157,6 +164,7 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    @DisplayName("An expired OTP is rejected")
     void resetPassword_otpExpired() {
         passwordResetOTP.setExpiryDate(Instant.now().minusSeconds(1000));
 

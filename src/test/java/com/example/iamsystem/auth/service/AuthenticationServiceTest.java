@@ -14,6 +14,7 @@ import com.example.iamsystem.user.dto.UserLoginDto;
 import com.example.iamsystem.user.entity.User;
 import io.jsonwebtoken.ExpiredJwtException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -63,6 +64,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
+    @DisplayName("Login issues tokens for the authenticated principal without reloading the user")
     void login_issuesTokensForTheAuthenticatedPrincipalWithoutReloadingTheUser() {
         when(authenticationManager.authenticate(any()))
                 .thenReturn(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
@@ -75,6 +77,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
+    @DisplayName("Login with bad credentials issues no tokens")
     void login_withBadCredentials_issuesNoTokens() {
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Bad credentials"));
 
@@ -83,6 +86,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
+    @DisplayName("A valid refresh token gets new tokens")
     void refresh_withValidRefreshToken_issuesNewTokens() {
         when(userDetailsService.loadUserByUsername("alice")).thenReturn(userDetails);
         when(jwtTokenUtil.validateToken("refresh-token", userDetails, REFRESH_TOKEN)).thenReturn(true);
@@ -92,6 +96,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
+    @DisplayName("An invalid refresh token is rejected")
     void refresh_withInvalidRefreshToken_isRejected() {
         when(userDetailsService.loadUserByUsername("alice")).thenReturn(userDetails);
         when(jwtTokenUtil.validateToken("refresh-token", userDetails, REFRESH_TOKEN)).thenReturn(false);
@@ -101,6 +106,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
+    @DisplayName("An expired refresh token is rejected as an invalid token")
     void refresh_withExpiredRefreshToken_isRejectedAsInvalidToken() {
         when(userDetailsService.loadUserByUsername("alice")).thenReturn(userDetails);
         when(jwtTokenUtil.validateToken("expired", userDetails, REFRESH_TOKEN))
@@ -110,6 +116,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
+    @DisplayName("Validation reports whether the access token is valid")
     void validate_reportsWhetherTheAccessTokenIsValid() {
         TokenValidationRequest request = new TokenValidationRequest();
         request.setToken("access-token");
@@ -119,6 +126,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
+    @DisplayName("Authorize asks the authorization service about the current user")
     void authorize_asksAuthorizationServiceForTheCurrentUser() {
         AuthorizationRequest request = new AuthorizationRequest();
         request.setServiceName("BILLING");
