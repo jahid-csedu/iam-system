@@ -14,6 +14,7 @@ public class ErrorMessage {
     public static final String INVALID_TOKEN = "Invalid Token";
     public static final String REFRESH_TOKEN_REQUIRED = "Refresh token is required";
     public static final String ROLE_NOT_FOUND = "Role not found";
+    public static final String ROLES_NOT_FOUND = "Some roles not found";
     public static final String PERMISSION_NOT_FOUND = "Permission not found";
     public static final String PERMISSION_EXISTS = "Permission already exists";
     public static final String SERVICE_NAME_REQUIRED = "Service name cannot be null or blank";

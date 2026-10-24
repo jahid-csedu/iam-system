@@ -3,12 +3,29 @@
 ## Working agreement
 - The project owner makes the design decisions. Propose, explain trade-offs, then wait for a go-ahead.
 - Work one small step at a time. One concern per change/PR. Don't bundle refactors with features.
-- Don't refactor, rename or "clean up" code outside the step we agreed on. Note it under "Known issues" instead.
+- **Every class or file a step touches must end that step as clean as we can make it** (see "Code standards").
+  Each step plan lists the touched classes and the cleanup planned for them. Code the step doesn't touch
+  stays as it is; note problems there under "Known issues".
 - Match existing style unless the step is specifically to change that style.
 - Check every change against the "Target design" section below.
 - Update this file when a step changes the architecture, commands, design or known issues.
 
+## Code standards
+What "clean" means for every class a step touches:
+- **Single responsibility.** Small focused classes; no god services. Controllers stay thin (no logic).
+- **One owner per concern.** No duplicated logic (e.g. current-user lookup, permission strings). Shared behaviour lives in one injectable bean.
+- **Dependency injection only.** Constructor injection (`@RequiredArgsConstructor`); inject MapStruct mappers, never `Mappers.getMapper`; no static access to collaborators where a bean can be injected.
+- **Explicit failures.** No `assert` or silent `null` returns for runtime checks; throw a meaningful exception.
+- **No magic strings or numbers.** Constants live in the feature that owns them. Config values come from `@ConfigurationProperties`, not scattered `@Value`.
+- **Logging with purpose.** No entry/exit debug noise. INFO for meaningful events, WARN for suspicious ones, ERROR only for real failures. Never log secrets.
+- **Entities.** No Lombok `@Data`/`@AllArgsConstructor` on JPA entities; `equals`/`hashCode` based on id; no business logic that belongs in services.
+- **HTTP.** Correct status codes (201 on create, 204 for empty responses, 401/403/404 as appropriate).
+- **Clean imports.** No unused imports; delete them. No wildcard (`*`) imports, static ones included; import each class or member explicitly.
+  Keep IntelliJ's default order: other imports, blank line, `javax.*`/`java.*`, blank line, static imports (each group sorted).
+- **Tests.** Behaviour of every touched class is covered; tests change together with the code.
+
 ## Commits
+- Work directly on `master`. Don't create a branch unless the owner explicitly asks for one.
 - Never commit (or push) without the owner's explicit approval for that specific commit. Finish the change, show it, then wait.
 - Commit messages are a single line: brief and specific (e.g. `Reject rootUser flag on public registration`). No body, no long details.
 - Never add `Co-Authored-By`, "Generated with Claude", or any other AI attribution, in commits or in PR descriptions. The project owner is the sole author.
@@ -114,16 +131,20 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 
 ## Current layout (`src/main/java/com/example/iamsystem`)
 Package by feature. Each feature uses only the sub-packages it needs, always with these names:
-`controller/`, `service/`, `dto/`, `entity/` (JPA entities + their enums), `repository/`, `mapper/` (MapStruct).
+`controller/`, `service/`, `dto/`, `entity/` (JPA entities + their enums), `repository/`, `mapper/` (MapStruct),
+`config/` (`@ConfigurationProperties` records and feature configuration).
 Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enums/` or `aspect/` packages:
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
-- `user/`: `UserService` (registration, password change, role assignment, creator-tree visibility), `UserValidator`, `UserRoleAttachmentUtil`
+- `user/`: one service per responsibility: `UserRegistrationService`, `UserPasswordService`, `UserRoleService`, `UserService` (find + delete).
+  `UserAccessPolicy` is the only place deciding which users an actor may see or manage (today: creator hierarchy).
+  `UserValidator` (availability + password policy), `config/PasswordExpirationProperties`.
 - `passwordreset/`: OTP-by-email password reset
 - `role/`, `permission/`: CRUD. Permission = `serviceName` + `PermissionAction` enum (READ/WRITE/UPDATE/DELETE); `permission/validation` = `@ValidAction`
 - `authorization/`: `@RequirePermission` + `AuthorizationAspect` (endpoint checks with strings like `"IAM:READ"`)
 - `auth/`: `AuthController` (`/api/auth/*`: login, refresh, validate, authorize) and its DTOs
-- `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`), `userdetails/`, `event/` (lockout listeners)
+- `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`),
+  `userdetails/` (incl. `CurrentUserProvider`, the single owner of "who is logged in"), `event/` (lockout listeners)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
 - `organization/`, `application/`, `service/`: entities from PR #10. **Not used by any code yet.** `organizations` is the closest thing to a tenant.
 - `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (mail, OpenAPI), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
@@ -132,7 +153,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 ## Current behaviours to remember
 - Root user (`is_root_user`) passes every permission check in `PermissionService.hasPermission`, globally (no tenant scope).
 - Public registration with `rootUser: true` creates a root user but **no tenant**.
-- User visibility and edit rights = walking the `createdBy` chain (`UserService.isUserInTree`).
+- User visibility and edit rights = walking the `createdBy` chain (`UserAccessPolicy`).
+- Changing your own password always requires the old password, also when passing your own `username`.
 - Token revocation = JWT `version` claim vs `User.@Version` (the same column as optimistic locking).
 - Access token 5 min, refresh token 24 h; constants and secrets live in `security/jwt/JwtConstant.java`.
 - `is_super_user` exists in schema and entity but is never read.
@@ -152,9 +174,12 @@ Broken / drift
 
 Design debt
 - Authorization logic is in 4 places (security config, aspect, strings in `UserService`, unused JWT `authorities` claim).
-- `getCurrentUser()` is duplicated in 4 classes. The JPA entity is used as the security principal and is reloaded on every request.
+- Current-user lookup still duplicated in `PermissionService` and `AuditAspect` (to move to `CurrentUserProvider` in step 4b).
+  The JPA entity is used as the security principal and is reloaded on every request.
 - `findAllUsers` loads the whole table and filters in memory.
-- Mappers are declared `componentModel="spring"` but used via `Mappers.getMapper`.
+- `RoleService` and `PermissionService` still use `Mappers.getMapper` instead of injected mappers.
+- User permission checks are duplicated: `@RequirePermission` on the endpoint plus `UserAccessPolicy` permission checks
+  (and removing roles needs `IAM:DELETE` at the endpoint but `IAM:UPDATE` in the policy). To unify in step 4b.
 - Permission model (free-text `serviceName` + CRUD enum, created through the API) contradicts the target design (fixed, migration-defined permissions).
 
 ## Progress log
@@ -164,4 +189,8 @@ Design debt
   tests on Testcontainers MySQL instead of H2, `.env` no longer passed to the test JVM.
 - 2026-10-24: Step 3 (package by feature). Moved every class into feature packages with consistent sub-packages;
   no class renamed, no logic changed. Updated jacoco exclusions to the new paths.
-  Next: to be chosen by the owner.
+- 2026-10-24: Step 4a (user feature cleanup). Split `UserService` into registration/password/role/query services,
+  added `UserAccessPolicy`, `CurrentUserProvider`, `PasswordExpirationProperties`; removed `UserRoleAttachmentUtil`;
+  thin `UserController`. Fixed: own password change via `?username=` no longer skips the old-password check.
+  Code standards + clean-import rule added; all wildcard/unused imports removed.
+  Next: step 4b (one owner for permission checks).

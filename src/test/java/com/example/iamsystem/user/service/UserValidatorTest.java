@@ -12,7 +12,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class UserValidatorTest {
@@ -33,7 +35,6 @@ class UserValidatorTest {
         // Act & Assert
         assertThrows(UserAlreadyExistsException.class, () -> userValidator.validateEmailAvailable(email));
 
-        // Verify logging behavior
         verify(userRepository, times(1)).findByEmail(email);
     }
 
@@ -46,7 +47,6 @@ class UserValidatorTest {
         // Act & Assert
         userValidator.validateEmailAvailable(email);
 
-        // Verify logging behavior
         verify(userRepository, times(1)).findByEmail(email);
     }
 
@@ -59,7 +59,6 @@ class UserValidatorTest {
         // Act & Assert
         assertThrows(UserAlreadyExistsException.class, () -> userValidator.validateUsernameAvailable(username));
 
-        // Verify logging behavior
         verify(userRepository, times(1)).findByUsername(username);
     }
 
@@ -72,7 +71,6 @@ class UserValidatorTest {
         // Act & Assert
         userValidator.validateUsernameAvailable(username);
 
-        // Verify logging behavior
         verify(userRepository, times(1)).findByUsername(username);
     }
 }
