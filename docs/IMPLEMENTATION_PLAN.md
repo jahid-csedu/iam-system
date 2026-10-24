@@ -49,7 +49,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 7a | Fixed permission catalog (`V4`), `PermissionKey`, read-only permission API, password change vs. reset split, forgot-password by username or email | `1f4f5e2` |
 | 7b | Predefined roles (`V5`): `ADMIN`, `USER_MANAGER`, `VIEWER` templates copied into each new tenant at signup | `24b07c8` |
 | 7c | User types (`V6`): `MANAGEMENT`/`REGULAR`, `users:create-management`, direct user permissions | `b7dc4e1` |
-| 8a | Clients (`V7`): `client_id` login/refresh/forgot-password, console client per tenant, per-tenant usernames/emails | step 8a commit |
+| 8a | Clients (`V7`): `client_id` login/refresh/forgot-password, console client per tenant, per-tenant usernames/emails | `5f2c416` |
+| 8b | Per-client token settings (`V8`): lifetimes, refresh on/off, selectable claims | step 8b commit |
 
 ---
 
@@ -162,18 +163,15 @@ What was built: `V7__clients.sql` (`clients`, one console per tenant, per-tenant
 username up inside the client's tenant; refresh only through the issuing client; forgot-password tenant-scoped; root
 username/email unique across all tenants (application check); lockout listeners by user id.
 
-### Step 8b: Per-client token settings
+### Step 8b: Per-client token settings (DONE, kept for reference)
 
-**Goal:** each client decides its tokens.
+Decisions taken: defaults for every new client 5-minute access tokens, refresh tokens on for 24 hours, the `username` claim
+(refresh stays on by default because step 9 reworks refresh tokens anyway); selectable claims `username`, `email`,
+`full_name`, `user_type`, `tenant_id` (never roles/permissions); access 1 min–1 h, refresh 1 h–30 days and longer than
+access; `clients:update` covers the settings; the console's settings are editable.
 
-Proposed design:
-- `clients` gains `access_token_ttl_seconds`, `refresh_token_enabled`, `refresh_token_ttl_seconds`, plus the user claims to put
-  into tokens (a `client_token_claims` table or a column), with defaults for new clients (today's 5 min / 24 h).
-- `PUT /api/clients/{id}/token-settings` (a new key such as `clients:update-token-settings` or under `clients:update`).
-- Login and refresh read the settings of the client; no refresh token when the client disables it.
-- **Open decisions:** the default values; which user claims are selectable (id, username, email, full name, user type, tenant);
-  whether the console client's settings can be changed.
-- **Done when:** TTL, refresh and claims follow the client; the hard-coded validity constants are gone.
+What was built: `V8__client_token_settings.sql`; `TokenClaim`; `TokenSettingsDto` with validation; `PUT /api/clients/{id}/token-settings`;
+`JwtTokenUtil.generateAccessToken/generateRefreshToken(user, client)`; no refresh token when disabled; hard-coded lifetimes removed.
 
 ### Step 9: Token redesign (asymmetric signing, JWKS, refresh-token store, introspection)
 

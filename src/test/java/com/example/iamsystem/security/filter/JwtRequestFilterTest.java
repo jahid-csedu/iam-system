@@ -1,5 +1,6 @@
 package com.example.iamsystem.security.filter;
 
+import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.user.entity.User;
@@ -19,8 +20,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.time.Instant;
 import java.util.Optional;
 
-import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
-import static com.example.iamsystem.security.jwt.TokenType.REFRESH_TOKEN;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,12 +46,17 @@ class JwtRequestFilterTest {
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
     private User user;
+    private Client client;
 
     @BeforeEach
     void setUp() {
         filter = new JwtRequestFilter(tokenUtil, userRepository);
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
+        client = new Client();
+        client.setClientId("app-client");
+        client.setAccessTokenTtlSeconds(300);
+        client.setRefreshTokenTtlSeconds(3600);
         user = new User();
         user.setId(1L);
         user.setUsername("alice");
@@ -67,7 +71,7 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A valid access token of a current user authenticates the request as that actor")
     void validToken_authenticatesTheActor() throws Exception {
-        bearer(tokenUtil.generateToken(user, "app-client", ACCESS_TOKEN));
+        bearer(tokenUtil.generateAccessToken(user, client));
         when(userRepository.findActor(eq(1L), eq(2), any(Instant.class))).thenReturn(Optional.of(actor));
 
         filter.doFilter(request, response, filterChain);
@@ -79,7 +83,7 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A revoked token, or one of an inactive or locked user, leaves the request unauthenticated")
     void tokenWithoutCurrentActor_leavesRequestUnauthenticated() throws Exception {
-        bearer(tokenUtil.generateToken(user, "app-client", ACCESS_TOKEN));
+        bearer(tokenUtil.generateAccessToken(user, client));
         when(userRepository.findActor(eq(1L), eq(2), any(Instant.class))).thenReturn(Optional.empty());
 
         filter.doFilter(request, response, filterChain);
@@ -103,7 +107,7 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A refresh token is not accepted as an access token")
     void refreshToken_isNotAnAccessToken() throws Exception {
-        bearer(tokenUtil.generateToken(user, "app-client", REFRESH_TOKEN));
+        bearer(tokenUtil.generateRefreshToken(user, client));
 
         filter.doFilter(request, response, filterChain);
 

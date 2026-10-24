@@ -9,9 +9,11 @@ delete from `tenants`;
 INSERT INTO `tenants` (`id`, `name`, `status`, `created_at`, `updated_at`)
 VALUES (1, 'Test Tenant', 'ACTIVE', '2025-06-27 14:10:14.550149', '2025-06-27 14:10:14.550149');
 
-INSERT INTO `clients` (`id`, `tenant_id`, `client_id`, `name`, `type`, `created_at`, `updated_at`)
-VALUES (1, 1, 'test-console-client-0001', 'Management Console', 'MANAGEMENT_CONSOLE',
+INSERT INTO `clients` (`id`, `tenant_id`, `client_id`, `name`, `type`,
+                       `access_token_ttl_seconds`, `refresh_token_enabled`, `refresh_token_ttl_seconds`, `created_at`, `updated_at`)
+VALUES (1, 1, 'test-console-client-0001', 'Management Console', 'MANAGEMENT_CONSOLE', 300, true, 86400,
         '2025-06-27 14:10:14.550149', '2025-06-27 14:10:14.550149');
+INSERT INTO `client_token_claims` (`client_ref_id`, `claim`) VALUES (1, 'USERNAME');
 
 INSERT INTO
   `roles` (

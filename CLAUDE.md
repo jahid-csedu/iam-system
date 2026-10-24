@@ -109,7 +109,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
 - The root user has every tenant-management permission implicitly (not through a role), so root's access can't be edited by anyone.
 
 ### Tokens
-- Token settings are **per client application** inside a tenant. Management users configure, for each application:
+- Token settings are **per client application** inside a tenant (done in step 8b). Management users configure, for each application:
   - access-token expiry,
   - whether refresh tokens are issued (e.g. app X gets refresh tokens, app Y gets access tokens only) and their expiry,
   - which user claims go into the JWT body (user id, username, email, …).
@@ -203,7 +203,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   (`user_permissions`); a user's permissions are the union of both. Root is `MANAGEMENT` and holds every TENANT key implicitly.
 - Login: `POST /api/auth/authenticate` `{ client_id, username, password }`. The client's tenant id travels as the
   authentication details to `TenantAuthenticationProvider`; the console client refuses regular users (403).
-  Refresh: `{ client_id, refresh_token }`, only through the issuing client.
+  Refresh: `{ client_id, refresh_token }`, only through the issuing client, and refused when the client has refresh tokens off.
+- Token settings live on the client (`access_token_ttl_seconds`, `refresh_token_enabled`, `refresh_token_ttl_seconds`,
+  `client_token_claims`). `JwtTokenUtil.generateAccessToken/generateRefreshToken(user, client)` read them; defaults are
+  `ClientService.DEFAULT_TOKEN_SETTINGS` (5 min, refresh on for 24 h, `USERNAME`). Only the signing secrets stay in `JwtConstant`.
 - `POST /api/tenants/signup` (public) creates a tenant + its root user + predefined roles + management console (its `client_id` is in the response). `POST /api/users` (`users:create`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
@@ -216,7 +219,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `JwtRequestFilter` finds it with one query (`UserRepository.findActor`) that only matches the current token version and an
   active, unlocked user; anything else leaves the request unauthenticated (401). Permissions are read from the database on
   every check (`PermissionRepository.isGrantedToUser`). Tokens carry only `sub`, `version`, `iat`, `exp`.
-- Access token 5 min, refresh token 24 h; constants and secrets live in `security/jwt/JwtConstant.java`.
+- Token lifetimes and claims come from the client (see above); the signing secrets live in `security/jwt/JwtConstant.java`.
 - `is_super_user` exists in schema and entity but is never read.
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
@@ -287,4 +290,8 @@ Design debt
   Login/refresh/forgot-password carry `client_id`; `TenantAuthenticationProvider` replaces `DaoAuthenticationProvider`;
   tokens: `sub` = user id + `client_id` claim; lockout listeners by user id; `LockoutProperties`; deactivated accounts → 403.
   Decisions: 24-char URL-safe ids, secrets later, console = management users only, applications = all users.
-  Next: step 8b (per-client token settings).
+- 2026-10-25: Step 8b (token settings). Flyway `V8__client_token_settings.sql`: lifetimes + refresh flag on `clients`,
+  `client_token_claims`. `PUT /api/clients/{id}/token-settings` (`clients:update`); access 1 min–1 h, refresh 1 h–30 days and
+  longer than access (422 otherwise); claims from `TokenClaim` (never roles/permissions); no refresh token when disabled.
+  Decisions: defaults 5 min / refresh on 24 h / username for every client (option A); console settings editable.
+  Next: step 9 (token redesign: asymmetric signing, JWKS, refresh-token store, introspection).

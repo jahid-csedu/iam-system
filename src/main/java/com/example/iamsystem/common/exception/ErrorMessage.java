@@ -20,6 +20,11 @@ public class ErrorMessage {
     public static final String CLIENT_NAME_REQUIRED = "Client name cannot be null or blank";
     public static final String CLIENT_ID_REQUIRED = "client_id is required";
     public static final String INVALID_CLIENT = "Unknown client_id";
+    public static final String REFRESH_TOKENS_DISABLED = "This client doesn't issue refresh tokens";
+    public static final String ACCESS_TOKEN_TTL_RANGE = "Access token lifetime must be between 60 and 3600 seconds";
+    public static final String REFRESH_TOKEN_TTL_RANGE = "Refresh token lifetime must be between 3600 and 2592000 seconds";
+    public static final String REFRESH_TOKEN_TTL_TOO_SHORT = "Refresh tokens must live longer than access tokens";
+    public static final String TOKEN_CLAIMS_REQUIRED = "Token claims are required (an empty list for none)";
     public static final String CONSOLE_CLIENT_NOT_DELETABLE = "The management console client can't be deleted";
     public static final String CONSOLE_CLIENT_MANAGEMENT_ONLY = "Only management users can log in through the management console";
     public static final String ROLES_NOT_FOUND = "Some roles not found";

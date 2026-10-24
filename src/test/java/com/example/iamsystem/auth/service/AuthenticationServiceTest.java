@@ -9,6 +9,7 @@ import com.example.iamsystem.client.service.ClientResolver;
 import com.example.iamsystem.common.exception.InvalidClientException;
 import com.example.iamsystem.common.exception.JwtException;
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
@@ -37,6 +38,7 @@ import java.util.List;
 import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 import static com.example.iamsystem.security.jwt.TokenType.REFRESH_TOKEN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -113,7 +115,7 @@ class AuthenticationServiceTest {
         givenAuthenticated(regular);
 
         assertThrows(NoAccessException.class, () -> service.login(new UserLoginDto(CONSOLE_ID, "carol", "Password1!")));
-        verify(jwtTokenUtil, never()).generateToken(any(), any(), any());
+        verify(jwtTokenUtil, never()).generateAccessToken(any(), any());
     }
 
     @Test
@@ -166,7 +168,32 @@ class AuthenticationServiceTest {
         when(jwtTokenUtil.isIssuedFor(claims, manager)).thenReturn(false);
 
         assertThrows(JwtException.class, () -> service.refresh(new JwtRefreshTokenDto(APP_ID, "refresh-token")));
-        verify(jwtTokenUtil, never()).generateToken(any(), any(), any());
+        verify(jwtTokenUtil, never()).generateAccessToken(any(), any());
+    }
+
+    @Test
+    @DisplayName("A client without refresh tokens issues only an access token at login")
+    void login_clientWithoutRefreshTokens_issuesNoRefreshToken() {
+        app.setRefreshTokenEnabled(false);
+        when(clientResolver.resolve(APP_ID)).thenReturn(app);
+        givenAuthenticated(regular);
+        when(jwtTokenUtil.generateAccessToken(regular, app)).thenReturn("access-token");
+
+        JwtResponse response = service.login(new UserLoginDto(APP_ID, "carol", "Password1!"));
+
+        assertEquals("access-token", response.getAccessToken());
+        assertNull(response.getRefreshToken());
+        verify(jwtTokenUtil, never()).generateRefreshToken(any(), any());
+    }
+
+    @Test
+    @DisplayName("A client without refresh tokens refuses refreshes")
+    void refresh_clientWithoutRefreshTokens_isRefused() {
+        app.setRefreshTokenEnabled(false);
+        when(clientResolver.resolve(APP_ID)).thenReturn(app);
+
+        assertThrows(UserInputNotValidException.class, () -> service.refresh(new JwtRefreshTokenDto(APP_ID, "refresh-token")));
+        verifyNoInteractions(userDetailsService);
     }
 
     @Test
@@ -201,8 +228,9 @@ class AuthenticationServiceTest {
     }
 
     private void givenIssuedTokens(User user, String clientId) {
-        when(jwtTokenUtil.generateToken(user, clientId, ACCESS_TOKEN)).thenReturn("access-token");
-        when(jwtTokenUtil.generateToken(user, clientId, REFRESH_TOKEN)).thenReturn("refresh-token");
+        Client client = clientId.equals(CONSOLE_ID) ? console : app;
+        when(jwtTokenUtil.generateAccessToken(user, client)).thenReturn("access-token");
+        when(jwtTokenUtil.generateRefreshToken(user, client)).thenReturn("refresh-token");
     }
 
     private static void assertTokens(JwtResponse response, String username) {
@@ -216,6 +244,7 @@ class AuthenticationServiceTest {
         client.setClientId(clientId);
         client.setType(type);
         client.setTenant(tenant);
+        client.setRefreshTokenEnabled(true);
         return client;
     }
 

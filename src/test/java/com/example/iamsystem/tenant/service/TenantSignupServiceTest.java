@@ -76,7 +76,8 @@ class TenantSignupServiceTest {
             user.setTenant(invocation.getArgument(1));
             return user;
         });
-        ClientDto console = new ClientDto(1L, "console-client-id-000001", "Management Console", ClientType.MANAGEMENT_CONSOLE);
+        ClientDto console = new ClientDto(1L, "console-client-id-000001", "Management Console", ClientType.MANAGEMENT_CONSOLE,
+                ClientService.DEFAULT_TOKEN_SETTINGS);
         when(clientService.createManagementConsole(any(Tenant.class))).thenReturn(console);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

@@ -1,7 +1,9 @@
 package com.example.iamsystem.client.entity;
 
 import com.example.iamsystem.tenant.entity.Tenant;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -19,9 +21,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * An application of a tenant that users log in through. The public {@code clientId} identifies the tenant at login.
+ * An application of a tenant that users log in through. The public {@code clientId} identifies the tenant at login,
+ * and the token settings decide what the tokens issued through this client look like.
  */
 @Entity
 @Table(name = "clients")
@@ -47,6 +52,24 @@ public class Client {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, updatable = false)
     private ClientType type;
+
+    @Column(name = "access_token_ttl_seconds", nullable = false)
+    private int accessTokenTtlSeconds;
+
+    @Column(name = "refresh_token_enabled", nullable = false)
+    private boolean refreshTokenEnabled;
+
+    @Column(name = "refresh_token_ttl_seconds", nullable = false)
+    private int refreshTokenTtlSeconds;
+
+    /**
+     * The user claims this client's access tokens carry, on top of sub, client_id, version, iat and exp.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "client_token_claims", joinColumns = @JoinColumn(name = "client_ref_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "claim", nullable = false)
+    private Set<TokenClaim> tokenClaims = new HashSet<>();
 
     @CreationTimestamp
     private Instant createdAt;

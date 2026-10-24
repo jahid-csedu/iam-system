@@ -28,6 +28,7 @@ public enum AuditEventType {
     // Client Management
     CLIENT_CREATION,
     CLIENT_UPDATE,
+    CLIENT_TOKEN_SETTINGS_UPDATE,
     CLIENT_DELETE,
 
     // Password Reset

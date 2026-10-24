@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 8a (client applications and `client_id`).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 8b (per-client token settings).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -25,7 +25,7 @@ How to use the system as a developer through Swagger UI or Postman.
 | **No self-modification** | Nobody can change their own roles, change or delete a role they hold, or reset their own password through the management API. Another user with the permission must do it. |
 
 **Important limitations today:**
-- **Token lifetimes are the same for every client** (5 minutes / 24 hours) until per-client token settings arrive (step 8b).
+- **Refresh tokens can't be revoked one by one** (logout arrives with step 9); changing the user revokes all of them.
 
 ### The permission catalog
 
@@ -43,7 +43,7 @@ How to use the system as a developer through Swagger UI or Postman.
 | `roles:delete` | Delete roles |
 | `clients:read` | List clients and view a client |
 | `clients:create` | Register application clients |
-| `clients:update` | Rename clients |
+| `clients:update` | Rename clients and change their token settings |
 | `clients:delete` | Delete application clients (never the management console) |
 | `permissions:read` | List the catalog and view a permission |
 
@@ -196,6 +196,7 @@ and gets `403` on every management endpoint.
 | Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → the OTP is emailed | Public |
 | Forgot password: reset with the OTP | `POST /api/password/reset` `{ "client_id": "...", "identifier": "<username or email>", "otp": "123456" }` → a new password is emailed | Public |
 | Refresh tokens | `POST /api/auth/token/refresh` `{ "client_id": "...", "refresh_token": "..." }` (the client the token was issued through) | Public (needs a valid refresh token) |
+| Client token settings | `PUT /api/clients/{id}/token-settings` (see below); applies to tokens issued from then on | `clients:update` |
 | Clients | `GET /api/clients`, `GET /api/clients/{id}`, `POST /api/clients` `{ "name" }`, `PUT /api/clients/{id}` `{ "name" }` (rename), `DELETE /api/clients/{id}` (never the console) | `clients:read` / `create` / `update` / `delete` |
 | List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `users:read` |
 | Direct permissions | `PUT` / `DELETE /api/users/permissions` `{ "username", "permissionIds" }` (management users only, never yourself) | `users:update` |
@@ -205,6 +206,26 @@ and gets `403` on every management endpoint.
 | Change roles | `POST /api/roles`, `PUT /api/roles/{id}` `{ "name", "description" }`, `DELETE /api/roles/{id}` (also removes it from its users) | `roles:create` / `roles:update` / `roles:delete`, never on a role you hold |
 | Role permissions | `PUT /api/roles/permissions` / `DELETE /api/roles/permissions` `{ "roleId", "permissionIds" }` | `roles:update`, never on a role you hold |
 | Permission catalog | `GET /api/permissions`, `GET /api/permissions/{id}` (read-only) | `permissions:read` |
+
+### Token settings per client
+
+Every client decides how its tokens look. New clients (including the management console) start with the defaults:
+
+```json
+{ "accessTokenTtlSeconds": 300, "refreshTokenEnabled": true, "refreshTokenTtlSeconds": 86400, "claims": ["USERNAME"] }
+```
+
+Change them with `PUT /api/clients/{id}/token-settings` and the same body:
+
+| Field | Allowed |
+|---|---|
+| `accessTokenTtlSeconds` | 60 to 3600 (1 minute to 1 hour) |
+| `refreshTokenEnabled` | `false`: login returns no `refresh_token`, and refreshing through this client gives `400` |
+| `refreshTokenTtlSeconds` | 3600 to 2592000 (1 hour to 30 days), always longer than the access token |
+| `claims` | Any of `USERNAME`, `EMAIL`, `FULL_NAME`, `USER_TYPE`, `TENANT_ID` (an empty list for none). Roles and permissions are never put into tokens. |
+
+Every access token also carries `sub` (the user id), `client_id`, `version`, `iat` and `exp`; refresh tokens carry only those.
+A selected claim the user has no value for (for example no email) is left out.
 
 ## 7. For other applications (verifying users)
 
@@ -218,7 +239,8 @@ The IAM manages only its own permissions; other applications decide their own au
 
 ## 8. Rules worth knowing
 
-- **Token lifetimes:** access token 5 minutes, refresh token 24 hours (hard-coded until step 8/9).
+- **Token lifetimes and claims** come from the client the user logged in through (defaults: 5 minutes / 24 hours / `username`).
+  Tokens already issued keep their lifetime when the settings change.
 - **Lockout:** 5 failed logins lock the account for 15 minutes. While locked, the user's existing tokens are rejected too.
 - **Revocation:** any change to a user (roles, password, profile, lock, deactivation) revokes the access and refresh tokens
   issued before it. Permissions are checked against the database on every request, so role changes apply immediately.
@@ -230,18 +252,18 @@ The IAM manages only its own permissions; other applications decide their own au
 - **Usernames and emails** are unique per tenant: two tenants may both have a `bob`. Exception: a root user's username and
   email are unique across all users of all tenants. Login and forgot-password look the user up only inside the tenant of
   the request's `client_id`.
-- **Tokens** carry the user id as `sub`, the `client_id` they were issued through, and the user's `version`. A refresh token
-  only works through the client it was issued through.
+- **Tokens** carry the user id as `sub`, the `client_id` they were issued through, the user's `version`, and the client's
+  selected claims. A refresh token only works through the client it was issued through.
 
 ## 9. Status codes
 
 | Code | Meaning here |
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
-| `400` | Already exists (tenant, user, role or client name in your tenant), deleting the management console, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
+| `400` | Already exists (tenant, user, role or client name in your tenant), deleting the management console, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
 | `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, wrong username/password, or an unknown `client_id` |
 | `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; or account locked, deactivated or expired |
 | `404` | Not found, including users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
 | `412` | Invalid or expired token on refresh/validation (changes to 401 in step 9) |
-| `422` | Request body failed validation (the `errors` list shows which field) |
+| `422` | Request body failed validation (the `errors` list shows which field), including token lifetimes out of range |

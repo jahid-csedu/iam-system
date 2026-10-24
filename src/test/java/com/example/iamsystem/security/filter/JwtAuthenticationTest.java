@@ -1,5 +1,6 @@
 package com.example.iamsystem.security.filter;
 
+import com.example.iamsystem.client.repository.ClientRepository;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
@@ -22,7 +23,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.function.Consumer;
 
-import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 import static com.example.iamsystem.user.repository.TestUserLookup.findByUsername;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -47,6 +47,8 @@ class JwtAuthenticationTest {
     private UserRepository userRepository;
     @Autowired
     private JwtTokenUtil tokenUtil;
+    @Autowired
+    private ClientRepository clientRepository;
 
     private String consoleClientId;
     private String accessToken;
@@ -129,7 +131,8 @@ class JwtAuthenticationTest {
      * A token for the root user's current version, issued by the same code login uses.
      */
     private String freshToken() {
-        return tokenUtil.generateToken(findByUsername(userRepository, "acme-root").orElseThrow(), consoleClientId, ACCESS_TOKEN);
+        return tokenUtil.generateAccessToken(findByUsername(userRepository, "acme-root").orElseThrow(),
+                clientRepository.findByClientId(consoleClientId).orElseThrow());
     }
 
     private String lockRootAndIssueToken(Instant lockedUntil) {

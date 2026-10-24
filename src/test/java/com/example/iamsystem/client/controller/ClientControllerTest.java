@@ -1,6 +1,8 @@
 package com.example.iamsystem.client.controller;
 
 import com.example.iamsystem.client.dto.ClientRequestDto;
+import com.example.iamsystem.client.dto.TokenSettingsDto;
+import com.example.iamsystem.client.entity.TokenClaim;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
@@ -21,9 +23,13 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.Base64;
+import java.util.Set;
+
 import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
 import static com.example.iamsystem.user.repository.TestUserLookup.findByUsername;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -139,6 +145,75 @@ class ClientControllerTest {
     }
 
     @Test
+    @DisplayName("New clients start with 5-minute access tokens, 24-hour refresh tokens and the username claim")
+    void newClients_haveTheDefaultTokenSettings() throws Exception {
+        send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop"))
+                .andExpect(jsonPath("$.tokenSettings.accessTokenTtlSeconds").value(300))
+                .andExpect(jsonPath("$.tokenSettings.refreshTokenEnabled").value(true))
+                .andExpect(jsonPath("$.tokenSettings.refreshTokenTtlSeconds").value(86400))
+                .andExpect(jsonPath("$.tokenSettings.claims[0]").value("USERNAME"));
+        assertEquals(300, acmeConsole.get("tokenSettings").get("accessTokenTtlSeconds").asInt());
+    }
+
+    @Test
+    @DisplayName("Tokens issued after a settings change follow the client's new lifetime and claims")
+    void tokens_followTheClientsSettings() throws Exception {
+        JsonNode shop = body(send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop")));
+        TokenSettingsDto settings = new TokenSettingsDto(600, true, 7200, Set.of(TokenClaim.EMAIL, TokenClaim.USER_TYPE));
+
+        send(put("/api/clients/{id}/token-settings", shop.get("id").asLong()), acmeRoot, settings)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tokenSettings.accessTokenTtlSeconds").value(600));
+
+        JsonNode tokens = body(login(shop.get("client_id").asString(), "acme-root", "Password1!").andExpect(status().isOk()));
+        JsonNode access = payload(tokens.get("access_token").asString());
+        JsonNode refresh = payload(tokens.get("refresh_token").asString());
+        assertEquals(600, access.get("exp").asLong() - access.get("iat").asLong());
+        assertEquals(7200, refresh.get("exp").asLong() - refresh.get("iat").asLong());
+        assertEquals("root@acme.com", access.get("email").asString());
+        assertEquals("MANAGEMENT", access.get("user_type").asString());
+        assertFalse(access.has("username"));
+    }
+
+    @Test
+    @DisplayName("A client without refresh tokens gives none at login and refuses refreshes")
+    void refreshTokensDisabled_noRefreshToken() throws Exception {
+        String consoleClientId = acmeConsole.get("client_id").asString();
+        String earlierRefreshToken = body(login(consoleClientId, "acme-root", "Password1!")).get("refresh_token").asString();
+
+        send(put("/api/clients/{id}/token-settings", acmeConsole.get("id").asLong()), acmeRoot,
+                new TokenSettingsDto(300, false, 86400, Set.of(TokenClaim.USERNAME))).andExpect(status().isOk());
+
+        login(consoleClientId, "acme-root", "Password1!")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token").isNotEmpty())
+                .andExpect(jsonPath("$.refresh_token").doesNotExist());
+        refresh(consoleClientId, earlierRefreshToken).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Lifetimes outside the allowed ranges, or a refresh token not outliving the access token, fail validation")
+    void tokenSettings_outOfRange_failValidation() throws Exception {
+        long consoleId = acmeConsole.get("id").asLong();
+
+        send(put("/api/clients/{id}/token-settings", consoleId), acmeRoot, new TokenSettingsDto(30, true, 86400, Set.of()))
+                .andExpect(status().isUnprocessableEntity());
+        send(put("/api/clients/{id}/token-settings", consoleId), acmeRoot, new TokenSettingsDto(300, true, 40 * 86400, Set.of()))
+                .andExpect(status().isUnprocessableEntity());
+        send(put("/api/clients/{id}/token-settings", consoleId), acmeRoot, new TokenSettingsDto(3600, true, 3600, Set.of()))
+                .andExpect(status().isUnprocessableEntity());
+        send(put("/api/clients/{id}/token-settings", consoleId), acmeRoot, new TokenSettingsDto(300, true, 3600, null))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    @DisplayName("Another tenant's client settings can't be changed")
+    void tokenSettings_ofAnotherTenant_areNotFound() throws Exception {
+        send(put("/api/clients/{id}/token-settings", acmeConsole.get("id").asLong()), globexRoot,
+                new TokenSettingsDto(300, true, 86400, Set.of())).andExpect(status().isNotFound());
+    }
+
+    @Test
     @DisplayName("Managing clients needs the clients permissions")
     void clients_withoutPermission_areForbidden() throws Exception {
         send(post("/api/users"), acmeRoot, new UserCreationDto("bob", "Bob12345!", "Bob", "bob@acme.com", UserType.MANAGEMENT))
@@ -174,6 +249,10 @@ class ClientControllerTest {
                 .with(actingAs(actor))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(jsonMapper.writeValueAsString(body)));
+    }
+
+    private JsonNode payload(String jwt) {
+        return jsonMapper.readTree(Base64.getUrlDecoder().decode(jwt.split("\\.")[1]));
     }
 
     private JsonNode body(ResultActions result) throws Exception {

@@ -3,6 +3,7 @@ package com.example.iamsystem.client.controller;
 import com.example.iamsystem.authorization.RequirePermission;
 import com.example.iamsystem.client.dto.ClientDto;
 import com.example.iamsystem.client.dto.ClientRequestDto;
+import com.example.iamsystem.client.dto.TokenSettingsDto;
 import com.example.iamsystem.client.service.ClientService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -60,6 +61,13 @@ public class ClientController {
     @Operation(summary = "Rename a client (Requires: clients:update)")
     public ResponseEntity<ClientDto> renameClient(@PathVariable Long id, @RequestBody @Valid ClientRequestDto request) {
         return ResponseEntity.ok(clientService.renameClient(id, request));
+    }
+
+    @PutMapping("/{id}/token-settings")
+    @RequirePermission(CLIENTS_UPDATE)
+    @Operation(summary = "Change a client's token lifetimes, refresh tokens and claims; applies to new tokens (Requires: clients:update)")
+    public ResponseEntity<ClientDto> updateTokenSettings(@PathVariable Long id, @RequestBody @Valid TokenSettingsDto request) {
+        return ResponseEntity.ok(clientService.updateTokenSettings(id, request));
     }
 
     @DeleteMapping("/{id}")

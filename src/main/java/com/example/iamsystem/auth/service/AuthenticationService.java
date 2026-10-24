@@ -10,6 +10,7 @@ import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.client.service.ClientResolver;
 import com.example.iamsystem.common.exception.JwtException;
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
@@ -27,6 +28,7 @@ import java.util.Optional;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.CONSOLE_CLIENT_MANAGEMENT_ONLY;
 import static com.example.iamsystem.common.exception.ErrorMessage.INVALID_TOKEN;
+import static com.example.iamsystem.common.exception.ErrorMessage.REFRESH_TOKENS_DISABLED;
 import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 import static com.example.iamsystem.security.jwt.TokenType.REFRESH_TOKEN;
 
@@ -64,7 +66,8 @@ public class AuthenticationService {
     }
 
     /**
-     * The refresh token must have been issued through this client, for the user's current version.
+     * The refresh token must have been issued through this client, for the user's current version, and the client must
+     * still issue refresh tokens.
      */
     @Auditable(
             value = AuditEventType.TOKEN_REFRESH,
@@ -72,6 +75,9 @@ public class AuthenticationService {
     )
     public JwtResponse refresh(JwtRefreshTokenDto request) {
         Client client = clientResolver.resolve(request.clientId());
+        if (!client.isRefreshTokenEnabled()) {
+            throw new UserInputNotValidException(REFRESH_TOKENS_DISABLED);
+        }
         Claims claims = parseRefreshToken(request.refreshToken())
                 .filter(parsed -> client.getClientId().equals(jwtTokenUtil.clientIdOf(parsed)))
                 .orElseThrow(() -> new JwtException(INVALID_TOKEN));
@@ -104,10 +110,11 @@ public class AuthenticationService {
         }
     }
 
+    /**
+     * A refresh token only when the client issues them.
+     */
     private JwtResponse issueTokens(User user, Client client) {
-        return new JwtResponse(
-                user.getUsername(),
-                jwtTokenUtil.generateToken(user, client.getClientId(), REFRESH_TOKEN),
-                jwtTokenUtil.generateToken(user, client.getClientId(), ACCESS_TOKEN));
+        String refreshToken = client.isRefreshTokenEnabled() ? jwtTokenUtil.generateRefreshToken(user, client) : null;
+        return new JwtResponse(user.getUsername(), refreshToken, jwtTokenUtil.generateAccessToken(user, client));
     }
 }

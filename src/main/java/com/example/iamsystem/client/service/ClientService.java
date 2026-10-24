@@ -4,8 +4,10 @@ import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.client.dto.ClientDto;
 import com.example.iamsystem.client.dto.ClientRequestDto;
+import com.example.iamsystem.client.dto.TokenSettingsDto;
 import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.client.entity.ClientType;
+import com.example.iamsystem.client.entity.TokenClaim;
 import com.example.iamsystem.client.mapper.ClientMapper;
 import com.example.iamsystem.client.repository.ClientRepository;
 import com.example.iamsystem.common.exception.ClientAlreadyExistsException;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.CLIENT_EXISTS;
 import static com.example.iamsystem.common.exception.ErrorMessage.CONSOLE_CLIENT_NOT_DELETABLE;
@@ -31,6 +34,12 @@ import static com.example.iamsystem.common.exception.ErrorMessage.CONSOLE_CLIENT
 public class ClientService {
 
     public static final String MANAGEMENT_CONSOLE_NAME = "Management Console";
+
+    /**
+     * The token settings of every new client: 5-minute access tokens, refresh tokens for 24 hours, the username claim.
+     */
+    public static final TokenSettingsDto DEFAULT_TOKEN_SETTINGS =
+            new TokenSettingsDto(5 * 60, true, 24 * 60 * 60, Set.of(TokenClaim.USERNAME));
 
     private final ClientRepository clientRepository;
     private final TenantRepository tenantRepository;
@@ -77,6 +86,21 @@ public class ClientService {
     }
 
     /**
+     * Applies to tokens issued from now on; tokens already issued keep their lifetime and claims.
+     */
+    @Auditable(
+            value = AuditEventType.CLIENT_TOKEN_SETTINGS_UPDATE,
+            target = "#id",
+            detailsExpression = "T(java.util.Map).of('settings', #request)"
+    )
+    @Transactional
+    public ClientDto updateTokenSettings(Long id, TokenSettingsDto request) {
+        Client client = clientRepository.getRequiredByIdAndTenantId(id, currentUserProvider.requireCurrentTenantId());
+        applyTokenSettings(client, request);
+        return clientMapper.toDto(clientRepository.save(client));
+    }
+
+    /**
      * The management console can't be deleted: it is how the tenant's management users log in.
      */
     @Auditable(
@@ -108,6 +132,15 @@ public class ClientService {
         client.setClientId(clientIdGenerator.newClientId());
         client.setName(name);
         client.setType(type);
+        applyTokenSettings(client, DEFAULT_TOKEN_SETTINGS);
         return client;
+    }
+
+    private static void applyTokenSettings(Client client, TokenSettingsDto settings) {
+        client.setAccessTokenTtlSeconds(settings.accessTokenTtlSeconds());
+        client.setRefreshTokenEnabled(settings.refreshTokenEnabled());
+        client.setRefreshTokenTtlSeconds(settings.refreshTokenTtlSeconds());
+        client.getTokenClaims().clear();
+        client.getTokenClaims().addAll(settings.claims());
     }
 }
