@@ -1,80 +1,90 @@
 package com.example.iamsystem.security.filter;
 
-import com.example.iamsystem.common.exception.ErrorMessage;
-import com.example.iamsystem.security.jwt.JwtConstant;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
-import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
+import com.example.iamsystem.user.repository.UserRepository;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Objects;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
+import static com.example.iamsystem.security.jwt.JwtConstant.BEARER;
+import static com.example.iamsystem.security.jwt.JwtConstant.REQUEST_HEADER;
 import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 
+/**
+ * Authenticates requests that carry a Bearer access token by putting an {@link AuthenticatedActor} into the security
+ * context. A token that is malformed, expired or revoked, or that belongs to an inactive or locked user, leaves the
+ * request unauthenticated, so protected endpoints answer 401.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class JwtRequestFilter extends OncePerRequestFilter {
-    private final DefaultUserDetailsService userDetailsService;
+
     private final JwtTokenUtil tokenUtil;
+    private final UserRepository userRepository;
 
     @Override
-    protected void doFilterInternal(@NonNull HttpServletRequest request,
-                                    @NonNull HttpServletResponse response,
-                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
-        log.debug("Processing request for URI: {}", request.getRequestURI());
-        String jwtToken = extractToken(request);
-        if (Objects.nonNull(jwtToken)) {
-            try {
-                String username = tokenUtil.getUsernameFromToken(jwtToken, ACCESS_TOKEN);
-                if (Objects.nonNull(username) && Objects.isNull(SecurityContextHolder.getContext().getAuthentication())) {
-                    log.debug("Authenticating user: {}", username);
-                    authenticateUser(request, jwtToken, username);
-                    log.info("User '{}' authenticated successfully.", username);
-                }
-            } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
-                log.error("JWT validation failed for URI {}: {}", request.getRequestURI(), e.getMessage());
-                throw new com.example.iamsystem.common.exception.JwtException(ErrorMessage.INVALID_TOKEN);
-            }
-        } else {
-            log.debug("No JWT token found in request for URI: {}", request.getRequestURI());
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            extractToken(request)
+                    .flatMap(this::findActor)
+                    .ifPresent(actor -> authenticate(actor, request));
         }
-
         filterChain.doFilter(request, response);
     }
 
-    private String extractToken(HttpServletRequest request) {
-        final String authorizationHeader = request.getHeader(JwtConstant.REQUEST_HEADER);
-        if (Objects.isNull(authorizationHeader) || !authorizationHeader.startsWith(JwtConstant.BEARER)) {
-            log.error("Authorization header is missing or token doesn't start with Bearer for URI: {}", request.getRequestURI());
-            return null;
+    private static Optional<String> extractToken(HttpServletRequest request) {
+        String header = request.getHeader(REQUEST_HEADER);
+        if (header == null || !header.startsWith(BEARER)) {
+            return Optional.empty();
         }
-        log.debug("JWT token extracted from Authorization header for URI: {}", request.getRequestURI());
-        return authorizationHeader.replace(JwtConstant.BEARER, "");
+        return Optional.of(header.substring(BEARER.length()));
     }
 
-    private void authenticateUser(HttpServletRequest request, String jwtToken, String username) {
-        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-        if (tokenUtil.validateToken(jwtToken, userDetails, ACCESS_TOKEN)) {
-            UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
-                    userDetails, null, userDetails.getAuthorities());
-            authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-            log.debug("SecurityContextHolder updated with authentication for user: {}", username);
-        } else {
-            log.warn("JWT token validation failed for user: {}", username);
+    private Optional<AuthenticatedActor> findActor(String token) {
+        Claims claims;
+        try {
+            claims = tokenUtil.parseClaims(token, ACCESS_TOKEN);
+        } catch (ExpiredJwtException e) {
+            log.debug("Ignoring an expired access token of '{}'", e.getClaims().getSubject());
+            return Optional.empty();
+        } catch (JwtException | IllegalArgumentException e) {
+            log.warn("Ignoring an invalid access token: {}", e.getMessage());
+            return Optional.empty();
         }
+
+        Integer version = tokenUtil.versionOf(claims);
+        Optional<AuthenticatedActor> actor = version == null
+                ? Optional.empty()
+                : userRepository.findActor(claims.getSubject(), version, Instant.now());
+        if (actor.isEmpty()) {
+            log.warn("Rejected the access token of '{}': revoked, or the account is inactive or locked", claims.getSubject());
+        }
+        return actor;
+    }
+
+    private static void authenticate(AuthenticatedActor actor, HttpServletRequest request) {
+        UsernamePasswordAuthenticationToken authentication =
+                UsernamePasswordAuthenticationToken.authenticated(actor, null, List.of());
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 }

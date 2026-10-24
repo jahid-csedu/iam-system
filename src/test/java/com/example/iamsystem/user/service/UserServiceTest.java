@@ -22,6 +22,7 @@ import org.springframework.data.domain.Sort;
 import java.util.List;
 
 import static com.example.iamsystem.user.service.UserTestData.TENANT;
+import static com.example.iamsystem.user.service.UserTestData.actor;
 import static com.example.iamsystem.user.service.UserTestData.createdBy;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -130,21 +131,21 @@ class UserServiceTest {
     @Test
     @DisplayName("An allowed delete deletes the user")
     void deleteUser_whenAllowed_deletesUser() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(child);
 
         service.deleteUser(2L);
 
-        verify(accessPolicy).checkCanDelete(root, child);
+        verify(accessPolicy).checkCanDelete(actor(root), child);
         verify(userRepository).delete(child);
     }
 
     @Test
     @DisplayName("A denied delete keeps the user")
     void deleteUser_whenNotAllowed_keepsUser() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(child);
-        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanDelete(root, child);
+        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanDelete(actor(root), child);
 
         assertThrows(NoAccessException.class, () -> service.deleteUser(2L));
         verify(userRepository, never()).delete(any());
@@ -153,7 +154,7 @@ class UserServiceTest {
     @Test
     @DisplayName("Deleting a user outside the tenant is not found")
     void deleteUser_outsideTheTenant_isNotFound() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenThrow(new DataNotFoundException("User not found"));
 
         assertThrows(DataNotFoundException.class, () -> service.deleteUser(2L));

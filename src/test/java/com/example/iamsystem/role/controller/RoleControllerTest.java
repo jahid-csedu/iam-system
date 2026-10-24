@@ -7,7 +7,6 @@ import com.example.iamsystem.role.dto.RolePermissionDto;
 import com.example.iamsystem.role.dto.RoleRequestDto;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
-import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.tenant.repository.TenantRepository;
@@ -21,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -31,11 +29,11 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.Set;
 
 import static com.example.iamsystem.permission.PermissionConstants.IAM_SERVICE_NAME;
+import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -261,9 +259,7 @@ class RoleControllerTest {
     }
 
     private ResultActions perform(MockHttpServletRequestBuilder request, User actor) throws Exception {
-        DefaultUserDetails userDetails = new DefaultUserDetails(actor);
-        return mockMvc.perform(request.with(authentication(
-                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()))));
+        return mockMvc.perform(request.with(actingAs(actor)));
     }
 
     private ResultActions perform(MockHttpServletRequestBuilder request, User actor, Object body) throws Exception {

@@ -20,7 +20,7 @@ public class AuthorizationAspect {
     @Before("@annotation(requirePermission)")
     public void checkPermission(RequirePermission requirePermission) {
         authorizationService.checkPermission(
-                currentUserProvider.requireCurrentUser(),
+                currentUserProvider.requireCurrentActor(),
                 requirePermission.serviceName(),
                 requirePermission.action());
     }

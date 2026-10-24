@@ -164,7 +164,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `@RequirePermission` + `AuthorizationAspect` enforce it on endpoints
 - `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, validate, authorize) and DTOs
 - `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`),
-  `userdetails/` (incl. `CurrentUserProvider`, the single owner of "who is logged in" and of the current tenant id), `event/` (lockout listeners)
+  `userdetails/` (`AuthenticatedActor` = the request principal; `CurrentUserProvider`, the single owner of "who is logged in"
+  and of the current tenant id; `DefaultUserDetails`/`DefaultUserDetailsService` for login and refresh only), `event/` (lockout listeners)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
 - `application/`, `service/`: entities from PR #10, **not used by any code yet** (become clients / disappear in steps 7–8).
 - `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (mail, OpenAPI), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
@@ -181,7 +182,11 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
 - Changing your own password always requires the old password, also when passing your own `username`.
-- Token revocation = JWT `version` claim vs `User.@Version` (the same column as optimistic locking).
+- Token revocation = JWT `version` claim vs `User.@Version` (the same column as optimistic locking), so any user change revokes tokens.
+- The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`), never the `User` entity.
+  `JwtRequestFilter` finds it with one query (`UserRepository.findActor`) that only matches the current token version and an
+  active, unlocked user; anything else leaves the request unauthenticated (401). Permissions are read from the database on
+  every check (`PermissionRepository.isGrantedToUser`). Tokens carry only `sub`, `version`, `iat`, `exp`.
 - Access token 5 min, refresh token 24 h; constants and secrets live in `security/jwt/JwtConstant.java`.
 - `is_super_user` exists in schema and entity but is never read.
 
@@ -196,12 +201,10 @@ Security
 Broken / drift
 - `users.username` has no DB unique key (only an app check); step 8 adds per-tenant uniqueness plus the global root rule.
 - A root user can delete itself, which leaves its tenant without a root (decide with the platform/tenant lifecycle work).
-- JWT errors thrown inside the filter become 500 instead of 401.
+- Refresh-token errors answer 412 instead of 401 (step 9). Audit events for failures are logged at ERROR level.
 - Deleting a permission that is assigned to a role fails (FK `fk_role_permissions_permission`, no ON DELETE rule).
 
 Design debt
-- `DefaultUserDetails` still builds `service:action` authority strings for an unused JWT `authorities` claim (goes away with the token redesign).
-- The JPA entity is used as the security principal and is reloaded on every request.
 - Permission model (free-text `serviceName` + CRUD enum, created through the API) contradicts the target design (fixed, migration-defined permissions).
 
 ## Progress log
@@ -231,4 +234,8 @@ Design debt
   no self role changes and no changes to a held role. `RoleService` split (`RolePermissionService`, `RoleAccessPolicy`),
   role DTOs as records, create role → 201. Decisions: usernames stay global until step 8, then per tenant, except root
   username/email unique across all users; `AuthenticatedActor` moved to step 6b; permissions untouched until step 7.
-  Next: step 6b (`AuthenticatedActor`).
+- 2026-10-25: Step 6b (lightweight principal). `AuthenticatedActor` replaces the `User` entity in the security context; the JWT
+  filter loads it with one query that also rejects revoked tokens and inactive or locked users (bad tokens → 401, no more 500);
+  `AuthorizationService` checks permissions with a DB query (changes apply immediately); unused `authorities` claim and
+  Spring authorities removed; `JwtTokenUtil` slimmed; shared test helper `TestActors.actingAs`.
+  Next: step 7 (fixed permission catalog, user types, predefined roles).

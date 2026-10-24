@@ -1,7 +1,6 @@
 package com.example.iamsystem.security.userdetails;
 
 import com.example.iamsystem.common.exception.NoAccessException;
-import com.example.iamsystem.user.entity.User;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -16,22 +15,22 @@ import static com.example.iamsystem.common.exception.ErrorMessage.USER_NOT_LOGGE
 @Component
 public class CurrentUserProvider {
 
-    public Optional<User> currentUser() {
+    public Optional<AuthenticatedActor> currentActor() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof DefaultUserDetails userDetails) {
-            return Optional.ofNullable(userDetails.user());
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedActor actor) {
+            return Optional.of(actor);
         }
         return Optional.empty();
     }
 
-    public User requireCurrentUser() {
-        return currentUser().orElseThrow(() -> new NoAccessException(USER_NOT_LOGGED_IN));
+    public AuthenticatedActor requireCurrentActor() {
+        return currentActor().orElseThrow(() -> new NoAccessException(USER_NOT_LOGGED_IN));
     }
 
     /**
      * The tenant of the current user: the boundary for every tenant-owned read and write.
      */
     public Long requireCurrentTenantId() {
-        return requireCurrentUser().getTenant().getId();
+        return requireCurrentActor().tenantId();
     }
 }

@@ -13,13 +13,14 @@ import com.example.iamsystem.common.exception.JwtException;
 import com.example.iamsystem.permission.entity.PermissionAction;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
+import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
 import com.example.iamsystem.user.dto.UserLoginDto;
+import com.example.iamsystem.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.INVALID_TOKEN;
@@ -46,7 +47,7 @@ public class AuthenticationService {
     public JwtResponse login(UserLoginDto request) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
-        return issueTokens((UserDetails) authentication.getPrincipal());
+        return issueTokens(((DefaultUserDetails) authentication.getPrincipal()).user());
     }
 
     @Auditable(
@@ -54,15 +55,15 @@ public class AuthenticationService {
             target = "#request.username"
     )
     public JwtResponse refresh(JwtRefreshTokenDto request) {
-        UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
-        if (!isValidRefreshToken(request.getRefreshToken(), userDetails)) {
+        User user = userDetailsService.loadUserByUsername(request.getUsername()).user();
+        if (!isValidRefreshToken(request.getRefreshToken(), user)) {
             throw new JwtException(INVALID_TOKEN);
         }
-        return issueTokens(userDetails);
+        return issueTokens(user);
     }
 
     public TokenValidationResponse validate(TokenValidationRequest request) {
-        return new TokenValidationResponse(jwtTokenUtil.validateToken(request.getToken(), ACCESS_TOKEN));
+        return new TokenValidationResponse(jwtTokenUtil.isValid(request.getToken(), ACCESS_TOKEN));
     }
 
     /**
@@ -70,24 +71,27 @@ public class AuthenticationService {
      */
     public AuthorizationResponse authorize(AuthorizationRequest request) {
         boolean authorized = authorizationService.hasPermission(
-                currentUserProvider.requireCurrentUser(),
+                currentUserProvider.requireCurrentActor(),
                 request.getServiceName(),
                 PermissionAction.valueOf(request.getAction()));
         return new AuthorizationResponse(authorized);
     }
 
-    private boolean isValidRefreshToken(String token, UserDetails userDetails) {
+    /**
+     * The refresh token must be correctly signed, unexpired, and issued for the user's current version.
+     */
+    private boolean isValidRefreshToken(String token, User user) {
         try {
-            return jwtTokenUtil.validateToken(token, userDetails, REFRESH_TOKEN);
+            return jwtTokenUtil.isIssuedFor(jwtTokenUtil.parseClaims(token, REFRESH_TOKEN), user);
         } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
             return false;
         }
     }
 
-    private JwtResponse issueTokens(UserDetails userDetails) {
+    private JwtResponse issueTokens(User user) {
         return new JwtResponse(
-                userDetails.getUsername(),
-                jwtTokenUtil.generateToken(userDetails, REFRESH_TOKEN),
-                jwtTokenUtil.generateToken(userDetails, ACCESS_TOKEN));
+                user.getUsername(),
+                jwtTokenUtil.generateToken(user, REFRESH_TOKEN),
+                jwtTokenUtil.generateToken(user, ACCESS_TOKEN));
     }
 }

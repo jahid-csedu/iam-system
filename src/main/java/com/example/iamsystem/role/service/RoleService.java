@@ -8,9 +8,9 @@ import com.example.iamsystem.role.dto.RoleRequestDto;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.mapper.RoleMapper;
 import com.example.iamsystem.role.repository.RoleRepository;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.tenant.repository.TenantRepository;
-import com.example.iamsystem.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,8 +55,8 @@ public class RoleService {
     )
     @Transactional
     public RoleDto updateRole(Long id, RoleRequestDto request) {
-        User actor = currentUserProvider.requireCurrentUser();
-        Long tenantId = actor.getTenant().getId();
+        AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
+        Long tenantId = actor.tenantId();
         Role role = roleRepository.getRequiredByIdAndTenantId(id, tenantId);
         accessPolicy.checkCanModify(actor, role);
         if (roleRepository.existsByNameAndTenantIdAndIdNot(request.name(), tenantId, id)) {
@@ -75,8 +75,8 @@ public class RoleService {
     )
     @Transactional
     public void deleteRole(Long id) {
-        User actor = currentUserProvider.requireCurrentUser();
-        Role role = roleRepository.getRequiredByIdAndTenantId(id, actor.getTenant().getId());
+        AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
+        Role role = roleRepository.getRequiredByIdAndTenantId(id, actor.tenantId());
         accessPolicy.checkCanModify(actor, role);
         roleRepository.delete(role);
     }

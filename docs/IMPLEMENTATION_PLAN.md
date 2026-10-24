@@ -43,7 +43,9 @@ This file lets any new session pick up the work without the conversation that pr
 | 4b | `AuthorizationService` is the single owner of permission checks; `AuthenticationService` | `9c8fe14` |
 | Docs | This plan; user manual (`docs/USER_MANUAL.md`) | `d188c69`, `dc3482a` |
 | 5 | Tenants: `V2__tenants.sql`, `POST /api/tenants/signup` (tenant + root atomically, one root per tenant), `POST /api/users` | `c104519` |
-| 6 | Tenant isolation: `V3__tenant_isolation.sql`, tenant-scoped user/role lookups, paged user list, no self role changes, `RoleService` split | step 6 commit |
+| 6 | Tenant isolation: `V3__tenant_isolation.sql`, tenant-scoped user/role lookups, paged user list, no self role changes, `RoleService` split | `a687558` |
+| Tests | `@DisplayName` on every test (now a rule) | `fa06792` |
+| 6b | `AuthenticatedActor` principal, one-query JWT filter (revoked/inactive/locked → 401), DB permission checks | step 6b commit |
 
 ---
 
@@ -99,17 +101,20 @@ What was built:
   (`RoleAccessPolicy`). Changing another user's password stays root-only until step 7 turns it into a permission.
 - `TenantIsolationTest` proves tenant A's root gets 404 on every tenant B user and role endpoint.
 
-### Step 6b: `AuthenticatedActor` as the security principal
+### Step 6b: `AuthenticatedActor` as the security principal (DONE, kept for reference)
 
-**Goal:** stop using the JPA `User` entity as the security principal (it is reloaded on every request and carries lazy state).
+Decisions taken: permissions are read from the **database on every check** (changes apply immediately); the unused
+`authorities` claim is removed now; a **locked or deactivated** user's existing tokens are rejected (401).
 
-Proposed design:
-- An `AuthenticatedActor` record (`userId`, `username`, `tenantId`, `rootUser`, role ids or permission set) built by the JWT
-  filter / `DefaultUserDetails`. `CurrentUserProvider` returns it; services load the `User` entity only when they change it.
-- `AuthorizationService`, the access policies and `AuditAspect` take the actor instead of the entity.
-- `DefaultUserDetails` stops building the unused `service:action` authority strings if nothing needs them.
-- **Open decisions:** whether permissions are resolved per request (DB) or carried in the token (affects step 9 revocation).
-- **Done when:** no request path reads the `User` entity from the security context; tests cover the filter and provider.
+What was built:
+- `AuthenticatedActor` record (`userId`, `username`, `tenantId`, `rootUser`) is the only principal; services load the
+  `User` entity only when they change it. Policies compare ids; "holds this role" is a query.
+- `JwtRequestFilter`: one query (`UserRepository.findActor`) matching username + token version + active + unlocked.
+  Malformed, expired or revoked tokens leave the request unauthenticated → 401 (previously 500).
+- `AuthorizationService` → `PermissionRepository.isGrantedToUser` (root short-circuits).
+- `JwtTokenUtil` slimmed (tokens carry `sub`, `version`, `iat`, `exp`); `DefaultUserDetails` only for login/refresh.
+- Tests: `TestActors.actingAs(user)` replaces the per-class token helpers; `JwtAuthenticationTest` covers real tokens
+  end to end (valid, malformed, revoked, inactive, locked, expired lock).
 
 ### Step 7: Fixed permission catalog, user types, predefined roles
 
@@ -164,11 +169,10 @@ Proposed design:
 - Sign with RS256 (or ES256). Keys come from configuration/keystore with a `kid`; publish `GET /.well-known/jwks.json`.
   Remove the hard-coded HMAC secrets in `JwtConstant`.
 - Claims: `iss` (identifies the tenant), `sub` (user id), `aud`/`azp` (client), plus the per-client user claims.
-  Drop the unused `authorities` claim.
 - Refresh tokens: random opaque values stored **hashed** in a `refresh_tokens`/`sessions` table (user, client, expiry,
   revoked), rotated on use. `POST /api/auth/logout` revokes them. This replaces the `@Version`-based revocation.
 - `POST /api/auth/introspect` (RFC 7662 style): active only if the token is valid, the user is active, and the tenant is ACTIVE.
-- Bad or expired tokens in the JWT filter answer **401** (via the authentication entry point), not 500.
+- Refresh-token errors answer 401 instead of 412 (access tokens already answer 401 since step 6b).
 - Rework `/token/validate` (fold into introspection) and the `/authorize` endpoint (decide whether it stays).
 - **Open decisions:** key per tenant or one platform key; access-token default TTL; whether `/authorize` survives.
 
@@ -191,7 +195,7 @@ Proposed design:
 |---|---|
 | Public registration lets anyone become root with global power | Done: step 5 (signup creates an own tenant), step 6 (tenant isolation) |
 | Hard-coded HMAC JWT secrets | Step 9 |
-| JWT filter errors → 500 instead of 401 | Step 9 (or earlier as a small fix) |
+| JWT filter errors → 500 instead of 401 | Done in step 6b |
 | `/token/validate` ignores revocation | Step 9 |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
 | `mail.debug=true`, `logging.level.root=DEBUG`, DB credentials in `application.properties` | Small config step (profiles + env) |

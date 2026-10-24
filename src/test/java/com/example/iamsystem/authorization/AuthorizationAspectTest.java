@@ -1,8 +1,8 @@
 package com.example.iamsystem.authorization;
 
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
-import com.example.iamsystem.user.entity.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,21 +28,22 @@ class AuthorizationAspectTest {
     @InjectMocks
     private AuthorizationAspect aspect;
 
+    private final AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 100L, false);
+
     @Test
     @DisplayName("The annotated permission is checked for the current user")
     void checkPermission_checksTheAnnotatedPermissionForTheCurrentUser() throws NoSuchMethodException {
-        User user = new User();
-        when(currentUserProvider.requireCurrentUser()).thenReturn(user);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor);
 
         aspect.checkPermission(annotationOf("protectedEndpoint"));
 
-        verify(authorizationService).checkPermission(user, "IAM", UPDATE);
+        verify(authorizationService).checkPermission(actor, "IAM", UPDATE);
     }
 
     @Test
     @DisplayName("Without a logged-in user, access is denied")
     void checkPermission_whenNobodyLoggedIn_isDenied() {
-        when(currentUserProvider.requireCurrentUser()).thenThrow(new NoAccessException("No logged in user found"));
+        when(currentUserProvider.requireCurrentActor()).thenThrow(new NoAccessException("No logged in user found"));
 
         assertThrows(NoAccessException.class, () -> aspect.checkPermission(annotationOf("protectedEndpoint")));
         verifyNoInteractions(authorizationService);
@@ -51,9 +52,8 @@ class AuthorizationAspectTest {
     @Test
     @DisplayName("A missing permission propagates the denial")
     void checkPermission_whenPermissionMissing_propagatesDenial() throws NoSuchMethodException {
-        User user = new User();
-        when(currentUserProvider.requireCurrentUser()).thenReturn(user);
-        doThrow(new NoAccessException("denied")).when(authorizationService).checkPermission(user, "IAM", UPDATE);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor);
+        doThrow(new NoAccessException("denied")).when(authorizationService).checkPermission(actor, "IAM", UPDATE);
         RequirePermission annotation = annotationOf("protectedEndpoint");
 
         assertThrows(NoAccessException.class, () -> aspect.checkPermission(annotation));

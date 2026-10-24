@@ -1,11 +1,9 @@
 package com.example.iamsystem.role.service;
 
 import com.example.iamsystem.role.entity.Role;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantStatus;
-import com.example.iamsystem.user.entity.User;
-
-import java.util.Set;
 
 /**
  * Builds {@link Role} fixtures for the role service tests. All fixtures belong to the same tenant.
@@ -25,13 +23,8 @@ final class RoleTestData {
         return role;
     }
 
-    static User userWithRoles(Role... roles) {
-        User user = new User();
-        user.setId(1L);
-        user.setUsername("actor");
-        user.setTenant(TENANT);
-        user.getRoles().addAll(Set.of(roles));
-        return user;
+    static AuthenticatedActor actor() {
+        return new AuthenticatedActor(1L, "actor", TENANT.getId(), false);
     }
 
     private static Tenant tenant() {

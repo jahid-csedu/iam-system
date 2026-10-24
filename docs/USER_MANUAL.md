@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 6 (tenant isolation).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 6b (lightweight security principal).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -135,8 +135,8 @@ tenant gives `400`. Then attach permissions:
 ```
 → `204`. Bob now acts as a "management" user with `IAM:READ` + `IAM:WRITE`: he can create users and see every user of the tenant.
 Bob can't change his own roles, or change the `USER_MANAGER` role while he holds it (`403`).
-(`DELETE /api/users/roles` with the same body removes roles.) Changing a user's roles can invalidate the tokens they already
-hold, so they may need to log in again.
+(`DELETE /api/users/roles` with the same body removes roles.) Changing a user's roles revokes the tokens they already
+hold (`401`), so they log in again. Changing the permissions of a role applies to its users immediately, without new tokens.
 
 ### Step 7: Create a "regular" user
 Log in as Bob and `POST /api/users` again (e.g. `carol`), without assigning roles. Carol can log in, refresh her tokens and
@@ -171,7 +171,9 @@ change her own password, and gets `403` on every management endpoint.
 ## 8. Rules worth knowing
 
 - **Token lifetimes:** access token 5 minutes, refresh token 24 hours (hard-coded until step 8/9).
-- **Lockout:** 5 failed logins lock the account for 15 minutes.
+- **Lockout:** 5 failed logins lock the account for 15 minutes. While locked, the user's existing tokens are rejected too.
+- **Revocation:** any change to a user (roles, password, profile, lock, deactivation) revokes the access and refresh tokens
+  issued before it. Permissions are checked against the database on every request, so role changes apply immediately.
 - **Password expiry:** passwords expire after 90 days; an expired password blocks login.
 - **One root per tenant**, created only by signup; a root user can't be deleted by anyone else.
 - **Tenant isolation:** users and roles of another tenant are reported as not found (`404`), never as forbidden.
@@ -184,7 +186,7 @@ change her own password, and gets `403` on every management endpoint.
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
 | `400` | Already exists (tenant, user, role name in your tenant, permission), bad password policy, wrong old password, invalid OTP, negative page or page size below 1 |
-| `401` | Not logged in (missing or invalid token) or wrong username/password |
+| `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, or wrong username/password |
 | `403` | Logged in but missing the required permission, changing your own roles or a role you hold, or account locked or expired |
 | `404` | Not found, including users and roles of other tenants |
 | `412` | Invalid or expired token on refresh/validation (changes to 401 in step 9) |

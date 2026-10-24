@@ -1,9 +1,6 @@
 package com.example.iamsystem.security.userdetails;
 
 import com.example.iamsystem.common.exception.NoAccessException;
-import com.example.iamsystem.tenant.entity.Tenant;
-import com.example.iamsystem.tenant.entity.TenantStatus;
-import com.example.iamsystem.user.entity.User;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +8,8 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -20,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CurrentUserProviderTest {
 
     private final CurrentUserProvider currentUserProvider = new CurrentUserProvider();
+    private final AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 7L, false);
 
     @AfterEach
     void clearContext() {
@@ -27,46 +27,40 @@ class CurrentUserProviderTest {
     }
 
     @Test
-    @DisplayName("Without authentication there is no current user")
-    void currentUser_whenNoAuthentication_isEmpty() {
-        assertTrue(currentUserProvider.currentUser().isEmpty());
+    @DisplayName("Without authentication there is no current actor")
+    void currentActor_whenNoAuthentication_isEmpty() {
+        assertTrue(currentUserProvider.currentActor().isEmpty());
     }
 
     @Test
-    @DisplayName("An anonymous caller is not a current user")
-    void currentUser_whenAnonymous_isEmpty() {
+    @DisplayName("An anonymous caller is not a current actor")
+    void currentActor_whenAnonymous_isEmpty() {
         SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken(
                 "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
 
-        assertTrue(currentUserProvider.currentUser().isEmpty());
+        assertTrue(currentUserProvider.currentActor().isEmpty());
     }
 
     @Test
-    @DisplayName("An authenticated caller is the current user")
-    void currentUser_whenAuthenticated_returnsUser() {
-        User user = new User();
-        user.setUsername("alice");
-        authenticate(user);
+    @DisplayName("An authenticated caller is the current actor")
+    void currentActor_whenAuthenticated_returnsActor() {
+        authenticate();
 
-        assertSame(user, currentUserProvider.currentUser().orElseThrow());
-        assertSame(user, currentUserProvider.requireCurrentUser());
+        assertSame(actor, currentUserProvider.currentActor().orElseThrow());
+        assertSame(actor, currentUserProvider.requireCurrentActor());
     }
 
     @Test
-    @DisplayName("Requiring a current user without authentication throws")
-    void requireCurrentUser_whenNotAuthenticated_throws() {
-        NoAccessException exception = assertThrows(NoAccessException.class, currentUserProvider::requireCurrentUser);
+    @DisplayName("Requiring a current actor without authentication throws")
+    void requireCurrentActor_whenNotAuthenticated_throws() {
+        NoAccessException exception = assertThrows(NoAccessException.class, currentUserProvider::requireCurrentActor);
         assertEquals("No logged in user found", exception.getMessage());
     }
 
     @Test
-    @DisplayName("The current tenant is the current user's tenant")
-    void requireCurrentTenantId_returnsTheCurrentUsersTenant() {
-        Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
-        tenant.setId(7L);
-        User user = new User();
-        user.setTenant(tenant);
-        authenticate(user);
+    @DisplayName("The current tenant is the current actor's tenant")
+    void requireCurrentTenantId_returnsTheCurrentActorsTenant() {
+        authenticate();
 
         assertEquals(7L, currentUserProvider.requireCurrentTenantId());
     }
@@ -77,9 +71,8 @@ class CurrentUserProviderTest {
         assertThrows(NoAccessException.class, currentUserProvider::requireCurrentTenantId);
     }
 
-    private void authenticate(User user) {
-        DefaultUserDetails userDetails = new DefaultUserDetails(user);
+    private void authenticate() {
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
+                UsernamePasswordAuthenticationToken.authenticated(actor, null, List.of()));
     }
 }

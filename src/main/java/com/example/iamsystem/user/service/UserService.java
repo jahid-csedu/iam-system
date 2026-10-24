@@ -2,6 +2,7 @@ package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.user.dto.UserDto;
 import com.example.iamsystem.user.entity.User;
@@ -61,8 +62,8 @@ public class UserService {
     )
     @Transactional
     public void deleteUser(Long id) {
-        User actor = currentUserProvider.requireCurrentUser();
-        User user = userRepository.getRequiredByIdAndTenantId(id, actor.getTenant().getId());
+        AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
+        User user = userRepository.getRequiredByIdAndTenantId(id, actor.tenantId());
         accessPolicy.checkCanDelete(actor, user);
         userRepository.delete(user);
     }

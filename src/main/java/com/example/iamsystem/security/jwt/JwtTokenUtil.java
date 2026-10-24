@@ -1,21 +1,14 @@
 package com.example.iamsystem.security.jwt;
 
-import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.user.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
-import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Function;
 import javax.crypto.SecretKey;
 
 import static com.example.iamsystem.security.jwt.JwtConstant.ACCESS_TOKEN_SECRET_KEY;
@@ -24,118 +17,70 @@ import static com.example.iamsystem.security.jwt.JwtConstant.JWT_REFRESH_TOKEN_V
 import static com.example.iamsystem.security.jwt.JwtConstant.REFRESH_TOKEN_SECRET;
 import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 
+/**
+ * Issues and reads the signed tokens. Access and refresh tokens use different keys. Both carry the user's
+ * {@code version}, so any change to the user (roles, password) invalidates the tokens issued before it.
+ */
 @Component
-@Slf4j
-public class JwtTokenUtil implements Serializable {
+public class JwtTokenUtil {
 
-    public static final String VERSION = "version";
-    public static final String AUTHORITIES = "authorities";
+    static final String VERSION = "version";
 
-    public String getUsernameFromToken(String token, TokenType tokenType) {
-        log.debug("Extracting username from token of type: {}", tokenType);
-        return getClaimFromToken(token, Claims::getSubject, tokenType);
+    public String generateToken(User user, TokenType tokenType) {
+        long validitySeconds = tokenType == ACCESS_TOKEN ? JWT_ACCESS_TOKEN_VALIDITY : JWT_REFRESH_TOKEN_VALIDITY;
+        long now = System.currentTimeMillis();
+        return Jwts.builder()
+                .subject(user.getUsername())
+                .claim(VERSION, user.getVersion())
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + validitySeconds * 1000))
+                .signWith(secretKey(tokenType))
+                .compact();
     }
 
-    public Date getExpirationDateFromToken(String token, TokenType tokenType) {
-        log.debug("Extracting expiration date from token of type: {}", tokenType);
-        return getClaimFromToken(token, Claims::getExpiration, tokenType);
-    }
-
-    public int getVersionFromToken(String token, TokenType tokenType) {
-        int version = (int) getClaimFromToken(token, claims -> claims.getOrDefault(VERSION, 0), tokenType);
-        log.debug("Extracted version from token: {}", version);
-        return version;
-    }
-
-    public <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver, TokenType tokenType) {
-        final Claims claims = getAllClaimsFromToken(token, tokenType);
-        return claimsResolver.apply(claims);
-    }
-
-    private Claims getAllClaimsFromToken(String token, TokenType tokenType) {
-        log.debug("Getting all claims from token of type: {}", tokenType);
+    /**
+     * Verifies the signature and expiry and returns the claims.
+     *
+     * @throws JwtException             if the token is malformed, wrongly signed or expired
+     * @throws IllegalArgumentException if the token is blank
+     */
+    public Claims parseClaims(String token, TokenType tokenType) {
         return Jwts.parser()
-                .verifyWith(getSecretKey(tokenType))
+                .verifyWith(secretKey(tokenType))
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
     }
 
-    private Boolean isTokenExpired(String token, TokenType tokenType) {
-        final Date expiration = getExpirationDateFromToken(token, tokenType);
-        boolean expired = expiration.before(new Date());
-        if (expired) {
-            log.debug("Token of type {} is expired.", tokenType);
-        } else {
-            log.debug("Token of type {} is not expired.", tokenType);
-        }
-        return expired;
+    /**
+     * The user version the token was issued for, or {@code null} if the token carries none.
+     */
+    public Integer versionOf(Claims claims) {
+        return claims.get(VERSION, Integer.class);
     }
 
-    public String generateToken(UserDetails userDetails, TokenType tokenType) {
-        log.debug("Generating {} token for user: {}", tokenType, userDetails.getUsername());
-        Map<String, Object> claims = new HashMap<>();
-        if (tokenType.equals(ACCESS_TOKEN)) {
-            claims.put(AUTHORITIES, userDetails.getAuthorities());
-        }
-        User user = getUser(userDetails);
-        claims.put(VERSION, user.getVersion());
-        String token = doGenerateToken(claims, userDetails.getUsername(), tokenType);
-        log.info("Successfully generated {} token for user: {}", tokenType, userDetails.getUsername());
-        return token;
+    /**
+     * Whether verified claims were issued for this user and its current version (not revoked since).
+     */
+    public boolean isIssuedFor(Claims claims, User user) {
+        return user.getUsername().equals(claims.getSubject())
+                && Integer.valueOf(user.getVersion()).equals(versionOf(claims));
     }
 
-    private String doGenerateToken(Map<String, Object> claims, String subject, TokenType tokenType) {
-        long expiryTime = tokenType.equals(ACCESS_TOKEN) ? JWT_ACCESS_TOKEN_VALIDITY : JWT_REFRESH_TOKEN_VALIDITY;
-
-        return Jwts.builder()
-                .claims(claims)
-                .subject(subject)
-                .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + expiryTime * 1000))
-                .signWith(getSecretKey(tokenType))
-                .compact();
-    }
-
-    public boolean validateToken(String token, UserDetails userDetails, TokenType tokenType) {
-        log.debug("Validating {} token for user: {}", tokenType, userDetails.getUsername());
-        final String username = getUsernameFromToken(token, tokenType);
-        User user = getUser(userDetails);
-        int version = getVersionFromToken(token, tokenType);
-        if(user.getVersion() != version) {
-            log.error("Token version mismatch. Extracted version: {}, user version: {}", version, user.getVersion());
-            return false;
-        }
-        boolean isValid = (username.equals(userDetails.getUsername()) && !isTokenExpired(token, tokenType));
-        if (isValid) {
-            log.info("{} token is valid for user: {}", tokenType, userDetails.getUsername());
-        } else {
-            log.warn("{} token is invalid for user: {}", tokenType, userDetails.getUsername());
-        }
-        return isValid;
-    }
-
-    private static User getUser(UserDetails userDetails) {
-        DefaultUserDetails defaultUserDetails = (DefaultUserDetails) userDetails;
-        return defaultUserDetails.user();
-    }
-
-    public boolean validateToken(String token, TokenType tokenType) {
-        log.debug("Validating {} token without user details.", tokenType);
+    /**
+     * Checks signature and expiry only.
+     */
+    public boolean isValid(String token, TokenType tokenType) {
         try {
-            getAllClaimsFromToken(token, tokenType);
-            log.info("{} token is valid.", tokenType);
+            parseClaims(token, tokenType);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
-            log.warn("{} token validation failed: {}", tokenType, e.getMessage());
             return false;
         }
     }
 
-    private SecretKey getSecretKey(TokenType tokenType) {
-        if (tokenType.equals(ACCESS_TOKEN)) {
-            return Keys.hmacShaKeyFor(ACCESS_TOKEN_SECRET_KEY.getBytes(StandardCharsets.UTF_8));
-        }
-        return Keys.hmacShaKeyFor(REFRESH_TOKEN_SECRET.getBytes(StandardCharsets.UTF_8));
+    private static SecretKey secretKey(TokenType tokenType) {
+        String secret = tokenType == ACCESS_TOKEN ? ACCESS_TOKEN_SECRET_KEY : REFRESH_TOKEN_SECRET;
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 }

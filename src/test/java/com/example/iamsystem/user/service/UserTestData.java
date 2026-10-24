@@ -1,5 +1,6 @@
 package com.example.iamsystem.user.service;
 
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.user.entity.User;
@@ -34,6 +35,10 @@ final class UserTestData {
         User user = user(id, username);
         user.setRootUser(true);
         return user;
+    }
+
+    static AuthenticatedActor actor(User user) {
+        return new AuthenticatedActor(user.getId(), user.getUsername(), user.getTenant().getId(), user.isRootUser());
     }
 
     static User createdBy(User creator, long id, String username) {

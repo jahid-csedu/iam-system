@@ -4,8 +4,8 @@ import com.example.iamsystem.audit.AuditService;
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.audit.enums.AuditOutcome;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
-import com.example.iamsystem.user.entity.User;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
@@ -95,7 +95,7 @@ class AuditAspectTest {
     @Test
     @DisplayName("Without a logged-in user, placeholders are logged")
     void audit_withoutLoggedInUser_usesPlaceholders() throws Throwable {
-        when(currentUserProvider.currentUser()).thenReturn(Optional.empty());
+        when(currentUserProvider.currentActor()).thenReturn(Optional.empty());
 
         aspect.audit(joinPoint, annotationOf("withoutTarget"));
 
@@ -116,9 +116,7 @@ class AuditAspectTest {
     }
 
     private void givenCurrentUser(String username) {
-        User user = new User();
-        user.setUsername(username);
-        when(currentUserProvider.currentUser()).thenReturn(Optional.of(user));
+        when(currentUserProvider.currentActor()).thenReturn(Optional.of(new AuthenticatedActor(1L, username, 100L, false)));
     }
 
     private static Auditable annotationOf(String methodName) throws NoSuchMethodException {

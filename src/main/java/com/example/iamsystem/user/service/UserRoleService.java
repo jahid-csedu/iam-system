@@ -5,6 +5,7 @@ import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
 import com.example.iamsystem.user.entity.User;
@@ -37,9 +38,9 @@ public class UserRoleService {
     )
     @Transactional
     public void assignRoles(UserRoleAttachmentDto request) {
-        User actor = currentUserProvider.requireCurrentUser();
+        AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User user = getManageableUser(actor, request.getUsername());
-        user.getRoles().addAll(getTenantRoles(request.getRoleIds(), actor.getTenant().getId()));
+        user.getRoles().addAll(getTenantRoles(request.getRoleIds(), actor.tenantId()));
         userRepository.save(user);
     }
 
@@ -50,14 +51,14 @@ public class UserRoleService {
     )
     @Transactional
     public void removeRoles(UserRoleAttachmentDto request) {
-        User actor = currentUserProvider.requireCurrentUser();
+        AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User user = getManageableUser(actor, request.getUsername());
-        getTenantRoles(request.getRoleIds(), actor.getTenant().getId()).forEach(user.getRoles()::remove);
+        getTenantRoles(request.getRoleIds(), actor.tenantId()).forEach(user.getRoles()::remove);
         userRepository.save(user);
     }
 
-    private User getManageableUser(User actor, String username) {
-        User user = userRepository.getRequiredByUsernameAndTenantId(username, actor.getTenant().getId());
+    private User getManageableUser(AuthenticatedActor actor, String username) {
+        User user = userRepository.getRequiredByUsernameAndTenantId(username, actor.tenantId());
         accessPolicy.checkCanManageRoles(actor, user);
         return user;
     }

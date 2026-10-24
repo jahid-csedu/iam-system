@@ -2,6 +2,7 @@ package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.UserCreationDto;
@@ -33,9 +34,9 @@ public class UserCreationService {
     )
     @Transactional
     public UserDto createUser(UserCreationDto request) {
-        User creator = currentUserProvider.requireCurrentUser();
-        User user = userFactory.newUser(request, tenantRepository.getReferenceById(creator.getTenant().getId()));
-        user.setCreatedBy(creator);
+        AuthenticatedActor creator = currentUserProvider.requireCurrentActor();
+        User user = userFactory.newUser(request, tenantRepository.getReferenceById(creator.tenantId()));
+        user.setCreatedBy(userRepository.getReferenceById(creator.userId()));
         return userMapper.toDto(userRepository.save(user));
     }
 }

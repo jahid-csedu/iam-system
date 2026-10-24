@@ -3,8 +3,8 @@ package com.example.iamsystem.audit.aspect;
 import com.example.iamsystem.audit.AuditService;
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditOutcome;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
-import com.example.iamsystem.user.entity.User;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +52,7 @@ public class AuditAspect {
     public Object audit(ProceedingJoinPoint joinPoint, Auditable auditable) throws Throwable {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         EvaluationContext context = argumentsContext(signature.getParameterNames(), joinPoint.getArgs());
-        Optional<String> username = currentUserProvider.currentUser().map(User::getUsername);
+        Optional<String> username = currentUserProvider.currentActor().map(AuthenticatedActor::username);
         String actor = username.orElse(UNKNOWN_ACTOR);
         String target = resolveTarget(auditable.target(), context);
 

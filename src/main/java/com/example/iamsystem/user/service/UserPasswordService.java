@@ -3,6 +3,7 @@ package com.example.iamsystem.user.service;
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.common.exception.InvalidPasswordException;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.user.config.PasswordExpirationProperties;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
@@ -38,14 +39,14 @@ public class UserPasswordService {
     )
     @Transactional
     public void changePassword(PasswordChangeDto request, String username) {
-        User actor = currentUserProvider.requireCurrentUser();
+        AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User target = username == null
-                ? actor
-                : userRepository.getRequiredByUsernameAndTenantId(username, actor.getTenant().getId());
+                ? userRepository.getRequiredByIdAndTenantId(actor.userId(), actor.tenantId())
+                : userRepository.getRequiredByUsernameAndTenantId(username, actor.tenantId());
 
         accessPolicy.checkCanChangePassword(actor, target);
-        if (target.equals(actor)) {
-            verifyOldPassword(actor, request.oldPassword());
+        if (actor.isUser(target.getId())) {
+            verifyOldPassword(target, request.oldPassword());
         }
         userValidator.validatePasswordPolicy(request.newPassword());
 

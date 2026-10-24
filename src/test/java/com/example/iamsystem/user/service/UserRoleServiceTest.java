@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Set;
 
 import static com.example.iamsystem.user.service.UserTestData.TENANT;
+import static com.example.iamsystem.user.service.UserTestData.actor;
 import static com.example.iamsystem.user.service.UserTestData.createdBy;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,7 +70,7 @@ class UserRoleServiceTest {
 
         service.assignRoles(request(10L, 11L));
 
-        verify(accessPolicy).checkCanManageRoles(root, child);
+        verify(accessPolicy).checkCanManageRoles(actor(root), child);
         assertEquals(Set.of(admin, viewer), child.getRoles());
         verify(userRepository).save(child);
     }
@@ -101,7 +102,7 @@ class UserRoleServiceTest {
     @Test
     @DisplayName("Assigning roles to an unknown user is rejected")
     void assignRoles_whenUserNotFound_isRejected() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenThrow(new DataNotFoundException("User not found"));
 
         assertThrows(DataNotFoundException.class, () -> service.assignRoles(request(10L)));
@@ -110,9 +111,9 @@ class UserRoleServiceTest {
     @Test
     @DisplayName("A denied role assignment changes nothing")
     void assignRoles_whenNotAllowed_isDenied() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenReturn(child);
-        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanManageRoles(root, child);
+        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanManageRoles(actor(root), child);
 
         assertThrows(NoAccessException.class, () -> service.assignRoles(request(10L)));
         verify(roleRepository, never()).findAllByIdInAndTenantId(any(), any());
@@ -120,7 +121,7 @@ class UserRoleServiceTest {
     }
 
     private void givenManageableChild() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT_ID)).thenReturn(child);
     }
 

@@ -19,6 +19,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.Instant;
 
 import static com.example.iamsystem.user.service.UserTestData.TENANT;
+import static com.example.iamsystem.user.service.UserTestData.actor;
 import static com.example.iamsystem.user.service.UserTestData.createdBy;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static com.example.iamsystem.user.service.UserTestData.user;
@@ -60,7 +61,8 @@ class UserPasswordServiceTest {
     @Test
     @DisplayName("The correct old password updates the password and its expiry")
     void changeOwnPassword_withCorrectOldPassword_updatesPasswordAndExpiry() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(child);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(child));
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT.getId())).thenReturn(child);
         when(passwordEncoder.matches("old", "encoded-child")).thenReturn(true);
         when(passwordEncoder.encode("NewPassword1!")).thenReturn("encoded-new");
 
@@ -74,7 +76,8 @@ class UserPasswordServiceTest {
     @Test
     @DisplayName("A wrong old password is rejected")
     void changeOwnPassword_withWrongOldPassword_isRejected() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(child);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(child));
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT.getId())).thenReturn(child);
         when(passwordEncoder.matches("wrong", "encoded-child")).thenReturn(false);
 
         assertThrows(InvalidPasswordException.class,
@@ -85,7 +88,7 @@ class UserPasswordServiceTest {
     @Test
     @DisplayName("Passing your own username still requires the old password")
     void changeOwnPassword_byOwnUsername_stillRequiresOldPassword() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(child);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(child));
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT.getId())).thenReturn(child);
 
         assertThrows(InvalidPasswordException.class,
@@ -96,13 +99,13 @@ class UserPasswordServiceTest {
     @Test
     @DisplayName("Root changing another user's password needs no old password")
     void changePassword_byRootForAnotherUser_doesNotNeedOldPassword() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(root);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByUsernameAndTenantId("child", TENANT.getId())).thenReturn(child);
         when(passwordEncoder.encode("NewPassword1!")).thenReturn("encoded-new");
 
         service.changePassword(new PasswordChangeDto(null, "NewPassword1!"), "child");
 
-        verify(accessPolicy).checkCanChangePassword(root, child);
+        verify(accessPolicy).checkCanChangePassword(actor(root), child);
         assertEquals("encoded-new", child.getPassword());
         verify(userRepository).save(child);
     }
@@ -111,9 +114,9 @@ class UserPasswordServiceTest {
     @DisplayName("Changing the password of a user you may not manage is denied")
     void changePassword_forUserNotAllowed_isDenied() {
         User stranger = user(3, "stranger");
-        when(currentUserProvider.requireCurrentUser()).thenReturn(child);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(child));
         when(userRepository.getRequiredByUsernameAndTenantId("stranger", TENANT.getId())).thenReturn(stranger);
-        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanChangePassword(child, stranger);
+        doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanChangePassword(actor(child), stranger);
 
         assertThrows(NoAccessException.class,
                 () -> service.changePassword(new PasswordChangeDto(null, "NewPassword1!"), "stranger"));
@@ -123,7 +126,8 @@ class UserPasswordServiceTest {
     @Test
     @DisplayName("A new password violating the policy is rejected")
     void changePassword_violatingPasswordPolicy_isRejected() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(child);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(child));
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT.getId())).thenReturn(child);
         when(passwordEncoder.matches("old", "encoded-child")).thenReturn(true);
         doThrow(new UserInputNotValidException("policy")).when(userValidator).validatePasswordPolicy("weak");
 

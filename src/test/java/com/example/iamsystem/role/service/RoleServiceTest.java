@@ -10,7 +10,7 @@ import com.example.iamsystem.role.mapper.RoleMapper;
 import com.example.iamsystem.role.repository.RoleRepository;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.tenant.repository.TenantRepository;
-import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ import java.util.List;
 
 import static com.example.iamsystem.role.service.RoleTestData.TENANT;
 import static com.example.iamsystem.role.service.RoleTestData.role;
-import static com.example.iamsystem.role.service.RoleTestData.userWithRoles;
+import static com.example.iamsystem.role.service.RoleTestData.actor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,7 +49,7 @@ class RoleServiceTest {
     private CurrentUserProvider currentUserProvider;
 
     private RoleService service;
-    private User actor;
+    private AuthenticatedActor actor;
     private Role role;
     private RoleRequestDto request;
 
@@ -57,7 +57,7 @@ class RoleServiceTest {
     void setUp() {
         service = new RoleService(roleRepository, tenantRepository, accessPolicy, currentUserProvider,
                 Mappers.getMapper(RoleMapper.class));
-        actor = userWithRoles();
+        actor = actor();
         role = role(10, "VIEWER");
         request = new RoleRequestDto("AUDITOR", "Reads audit data");
     }
@@ -126,7 +126,7 @@ class RoleServiceTest {
     @Test
     @DisplayName("Updating a role outside the tenant is not found")
     void updateRole_outsideTheTenant_isNotFound() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(actor);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor);
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenThrow(new DataNotFoundException("Role not found"));
 
         assertThrows(DataNotFoundException.class, () -> service.updateRole(10L, request));
@@ -181,7 +181,7 @@ class RoleServiceTest {
     }
 
     private void givenActorAndRole() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(actor);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor);
         when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
     }
 }

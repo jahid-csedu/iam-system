@@ -2,7 +2,6 @@ package com.example.iamsystem.user.controller;
 
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
-import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
@@ -17,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.jdbc.Sql;
@@ -26,9 +24,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Set;
 
+import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -70,10 +68,6 @@ class UserControllerTest {
         SecurityContextHolder.clearContext();
     }
 
-    private UsernamePasswordAuthenticationToken getAuthenticationToken(User user) {
-        DefaultUserDetails userDetails = new DefaultUserDetails(user);
-        return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-    }
 
     @Test
     @DisplayName("Root creates a user in its own tenant")
@@ -83,7 +77,7 @@ class UserControllerTest {
         UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com");
 
         mockMvc.perform(post("/api/users")
-                        .with(authentication(getAuthenticationToken(root)))
+                        .with(actingAs(root))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -101,7 +95,7 @@ class UserControllerTest {
         UserCreationDto request = new UserCreationDto("newUser", "NewUser1!", "New User", "newuser@example.com");
 
         mockMvc.perform(post("/api/users")
-                        .with(authentication(getAuthenticationToken(plainUser)))
+                        .with(actingAs(plainUser))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
@@ -118,7 +112,7 @@ class UserControllerTest {
         userRoleAttachmentDto.setRoleIds(Set.of(1L));
 
         mockMvc.perform(put("/api/users/roles")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(userRoleAttachmentDto)))
                 .andExpect(status().isNoContent())
@@ -136,7 +130,7 @@ class UserControllerTest {
         userRoleAttachmentDto.setRoleIds(Set.of(1L));
 
         mockMvc.perform(put("/api/users/roles")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(userRoleAttachmentDto)))
                 .andExpect(status().isForbidden());
@@ -161,7 +155,7 @@ class UserControllerTest {
         userRoleAttachmentDto.setRoleIds(Set.of(testRole.getId()));
 
         mockMvc.perform(delete("/api/users/roles")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(userRoleAttachmentDto)))
                 .andExpect(status().isNoContent())
@@ -175,7 +169,7 @@ class UserControllerTest {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
 
         mockMvc.perform(get("/api/users")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[*].username").value(contains("root", "user")))
@@ -189,7 +183,7 @@ class UserControllerTest {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
 
         mockMvc.perform(get("/api/users")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .param("page", "1")
                         .param("size", "1"))
                 .andExpect(status().isOk())
@@ -204,7 +198,7 @@ class UserControllerTest {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
 
         mockMvc.perform(get("/api/users")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .param("page", "-1"))
                 .andExpect(status().isBadRequest());
     }
@@ -217,7 +211,7 @@ class UserControllerTest {
         User targetUser = userRepository.findByUsername("user").orElseThrow();
 
         mockMvc.perform(get("/api/users/{id}", targetUser.getId())
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                 )
                 .andExpect(status().isOk())
                 .andDo(print());
@@ -230,7 +224,7 @@ class UserControllerTest {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
 
         mockMvc.perform(get("/api/users/by-username")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .param("username", "user"))
                 .andExpect(status().isOk())
                 .andDo(print());
@@ -243,7 +237,7 @@ class UserControllerTest {
         User currentUser = userRepository.findByUsername("root").orElseThrow();
 
         mockMvc.perform(get("/api/users/by-email")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .param("email", "user@test.com"))
                 .andExpect(status().isOk())
                 .andDo(print());
@@ -257,7 +251,7 @@ class UserControllerTest {
         User targetUser = userRepository.findByUsername("user").orElseThrow();
 
         mockMvc.perform(delete("/api/users/{id}", targetUser.getId())
-                        .with(authentication(getAuthenticationToken(currentUser))))
+                        .with(actingAs(currentUser)))
                 .andExpect(status().isNoContent())
                 .andDo(print());
     }
@@ -276,7 +270,7 @@ class UserControllerTest {
         userRepository.save(created);
 
         mockMvc.perform(delete("/api/users/{id}", creator.getId())
-                        .with(authentication(getAuthenticationToken(root))))
+                        .with(actingAs(root)))
                 .andExpect(status().isNoContent());
 
         assertNull(userRepository.findByUsername("created").orElseThrow().getCreatedBy());
@@ -290,7 +284,7 @@ class UserControllerTest {
         User root = userRepository.findByUsername("root").orElseThrow();
 
         mockMvc.perform(delete("/api/users/{id}", root.getId())
-                        .with(authentication(getAuthenticationToken(currentUser))))
+                        .with(actingAs(currentUser)))
                 .andExpect(status().isForbidden());
     }
 
@@ -303,7 +297,7 @@ class UserControllerTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("P@ssw0rd", "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(passwordChangeDto)))
                 .andExpect(status().isNoContent())
@@ -320,7 +314,7 @@ class UserControllerTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
-                        .with(authentication(getAuthenticationToken(currentRootUser)))
+                        .with(actingAs(currentRootUser))
                         .param("username", subordinateUser.getUsername())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(passwordChangeDto)))
@@ -337,7 +331,7 @@ class UserControllerTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto("wrongPassword", "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(passwordChangeDto)))
                 .andExpect(status().isBadRequest());
@@ -353,7 +347,7 @@ class UserControllerTest {
         PasswordChangeDto passwordChangeDto = new PasswordChangeDto(null, "NewPassword1!");
 
         mockMvc.perform(patch("/api/users/password")
-                        .with(authentication(getAuthenticationToken(currentUser)))
+                        .with(actingAs(currentUser))
                         .param("username", rootUserForTest.getUsername())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(passwordChangeDto)))

@@ -8,8 +8,8 @@ import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.role.dto.RolePermissionDto;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
-import com.example.iamsystem.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,8 +56,8 @@ public class RolePermissionService {
     }
 
     private Role getModifiableRole(Long roleId) {
-        User actor = currentUserProvider.requireCurrentUser();
-        Role role = roleRepository.getRequiredByIdAndTenantId(roleId, actor.getTenant().getId());
+        AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
+        Role role = roleRepository.getRequiredByIdAndTenantId(roleId, actor.tenantId());
         accessPolicy.checkCanModify(actor, role);
         return role;
     }

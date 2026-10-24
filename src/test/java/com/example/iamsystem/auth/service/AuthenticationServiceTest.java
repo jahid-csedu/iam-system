@@ -7,12 +7,15 @@ import com.example.iamsystem.auth.dto.TokenValidationRequest;
 import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.JwtException;
 import com.example.iamsystem.security.jwt.JwtTokenUtil;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
 import com.example.iamsystem.user.dto.UserLoginDto;
 import com.example.iamsystem.user.entity.User;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +26,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+
+import java.util.List;
 
 import static com.example.iamsystem.permission.entity.PermissionAction.READ;
 import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
@@ -53,6 +58,7 @@ class AuthenticationServiceTest {
     @InjectMocks
     private AuthenticationService service;
 
+    private final Claims claims = Jwts.claims().subject("alice").build();
     private User user;
     private DefaultUserDetails userDetails;
 
@@ -67,7 +73,7 @@ class AuthenticationServiceTest {
     @DisplayName("Login issues tokens for the authenticated principal without reloading the user")
     void login_issuesTokensForTheAuthenticatedPrincipalWithoutReloadingTheUser() {
         when(authenticationManager.authenticate(any()))
-                .thenReturn(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
+                .thenReturn(UsernamePasswordAuthenticationToken.authenticated(userDetails, null, List.of()));
         givenIssuedTokens();
 
         JwtResponse response = service.login(new UserLoginDto("alice", "Password1!"));
@@ -89,17 +95,19 @@ class AuthenticationServiceTest {
     @DisplayName("A valid refresh token gets new tokens")
     void refresh_withValidRefreshToken_issuesNewTokens() {
         when(userDetailsService.loadUserByUsername("alice")).thenReturn(userDetails);
-        when(jwtTokenUtil.validateToken("refresh-token", userDetails, REFRESH_TOKEN)).thenReturn(true);
+        when(jwtTokenUtil.parseClaims("refresh-token", REFRESH_TOKEN)).thenReturn(claims);
+        when(jwtTokenUtil.isIssuedFor(claims, user)).thenReturn(true);
         givenIssuedTokens();
 
         assertTokens(service.refresh(new JwtRefreshTokenDto("alice", "refresh-token")));
     }
 
     @Test
-    @DisplayName("An invalid refresh token is rejected")
-    void refresh_withInvalidRefreshToken_isRejected() {
+    @DisplayName("A refresh token issued for another user or an older user version is rejected")
+    void refresh_withRevokedRefreshToken_isRejected() {
         when(userDetailsService.loadUserByUsername("alice")).thenReturn(userDetails);
-        when(jwtTokenUtil.validateToken("refresh-token", userDetails, REFRESH_TOKEN)).thenReturn(false);
+        when(jwtTokenUtil.parseClaims("refresh-token", REFRESH_TOKEN)).thenReturn(claims);
+        when(jwtTokenUtil.isIssuedFor(claims, user)).thenReturn(false);
 
         assertThrows(JwtException.class, () -> service.refresh(new JwtRefreshTokenDto("alice", "refresh-token")));
         verify(jwtTokenUtil, never()).generateToken(any(), any());
@@ -109,8 +117,7 @@ class AuthenticationServiceTest {
     @DisplayName("An expired refresh token is rejected as an invalid token")
     void refresh_withExpiredRefreshToken_isRejectedAsInvalidToken() {
         when(userDetailsService.loadUserByUsername("alice")).thenReturn(userDetails);
-        when(jwtTokenUtil.validateToken("expired", userDetails, REFRESH_TOKEN))
-                .thenThrow(new ExpiredJwtException(null, null, "expired"));
+        when(jwtTokenUtil.parseClaims("expired", REFRESH_TOKEN)).thenThrow(new ExpiredJwtException(null, null, "expired"));
 
         assertThrows(JwtException.class, () -> service.refresh(new JwtRefreshTokenDto("alice", "expired")));
     }
@@ -120,7 +127,7 @@ class AuthenticationServiceTest {
     void validate_reportsWhetherTheAccessTokenIsValid() {
         TokenValidationRequest request = new TokenValidationRequest();
         request.setToken("access-token");
-        when(jwtTokenUtil.validateToken("access-token", ACCESS_TOKEN)).thenReturn(true);
+        when(jwtTokenUtil.isValid("access-token", ACCESS_TOKEN)).thenReturn(true);
 
         assertTrue(service.validate(request).isStatus());
     }
@@ -131,15 +138,16 @@ class AuthenticationServiceTest {
         AuthorizationRequest request = new AuthorizationRequest();
         request.setServiceName("BILLING");
         request.setAction("READ");
-        when(currentUserProvider.requireCurrentUser()).thenReturn(user);
-        when(authorizationService.hasPermission(user, "BILLING", READ)).thenReturn(true);
+        AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 100L, false);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor);
+        when(authorizationService.hasPermission(actor, "BILLING", READ)).thenReturn(true);
 
         assertTrue(service.authorize(request).isAuthorized());
     }
 
     private void givenIssuedTokens() {
-        when(jwtTokenUtil.generateToken(userDetails, ACCESS_TOKEN)).thenReturn("access-token");
-        when(jwtTokenUtil.generateToken(userDetails, REFRESH_TOKEN)).thenReturn("refresh-token");
+        when(jwtTokenUtil.generateToken(user, ACCESS_TOKEN)).thenReturn("access-token");
+        when(jwtTokenUtil.generateToken(user, REFRESH_TOKEN)).thenReturn("refresh-token");
     }
 
     private static void assertTokens(JwtResponse response) {

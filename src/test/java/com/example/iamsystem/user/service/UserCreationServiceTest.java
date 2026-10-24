@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static com.example.iamsystem.user.service.UserTestData.TENANT;
+import static com.example.iamsystem.user.service.UserTestData.actor;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static com.example.iamsystem.user.service.UserTestData.user;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,8 +57,9 @@ class UserCreationServiceTest {
     void createUser_putsNewUserInCreatorsTenantWithCreatorRecorded() {
         User creator = rootUser(1, "root");
         User newUser = user(2, "alice");
-        when(currentUserProvider.requireCurrentUser()).thenReturn(creator);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(creator));
         when(tenantRepository.getReferenceById(TENANT.getId())).thenReturn(TENANT);
+        when(userRepository.getReferenceById(1L)).thenReturn(creator);
         when(userFactory.newUser(request, TENANT)).thenReturn(newUser);
         when(userRepository.save(newUser)).thenReturn(newUser);
 
@@ -72,7 +74,7 @@ class UserCreationServiceTest {
     @Test
     @DisplayName("Creating a user without a logged-in user is denied")
     void createUser_whenNobodyLoggedIn_isDenied() {
-        when(currentUserProvider.requireCurrentUser()).thenThrow(new NoAccessException("No logged in user found"));
+        when(currentUserProvider.requireCurrentActor()).thenThrow(new NoAccessException("No logged in user found"));
 
         assertThrows(NoAccessException.class, () -> service.createUser(request));
         verifyNoInteractions(userFactory, userRepository);
@@ -81,7 +83,7 @@ class UserCreationServiceTest {
     @Test
     @DisplayName("An invalid new user saves nothing")
     void createUser_whenUserIsInvalid_savesNothing() {
-        when(currentUserProvider.requireCurrentUser()).thenReturn(rootUser(1, "root"));
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(rootUser(1, "root")));
         when(tenantRepository.getReferenceById(TENANT.getId())).thenReturn(TENANT);
         when(userFactory.newUser(request, TENANT)).thenThrow(new UserAlreadyExistsException("Username not available"));
 

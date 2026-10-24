@@ -1,6 +1,7 @@
 package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.user.entity.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,9 +20,9 @@ public class UserAccessPolicy {
     /**
      * Nobody changes their own roles; another user with the permission has to do it.
      */
-    public void checkCanManageRoles(User actor, User target) {
-        if (actor.equals(target)) {
-            log.warn("User '{}' tried to change their own roles", actor.getUsername());
+    public void checkCanManageRoles(AuthenticatedActor actor, User target) {
+        if (actor.isUser(target.getId())) {
+            log.warn("User '{}' tried to change their own roles", actor.username());
             throw new NoAccessException(OWN_ROLES_CHANGE);
         }
     }
@@ -29,8 +30,8 @@ public class UserAccessPolicy {
     /**
      * A user may change their own password; the root user may also change anyone else's password.
      */
-    public void checkCanChangePassword(User actor, User target) {
-        if (!actor.equals(target) && !actor.isRootUser()) {
+    public void checkCanChangePassword(AuthenticatedActor actor, User target) {
+        if (!actor.isUser(target.getId()) && !actor.rootUser()) {
             deny(actor, "change the password of", target);
         }
     }
@@ -38,14 +39,14 @@ public class UserAccessPolicy {
     /**
      * The root user can only be deleted by themselves.
      */
-    public void checkCanDelete(User actor, User target) {
-        if (target.isRootUser() && !actor.equals(target)) {
+    public void checkCanDelete(AuthenticatedActor actor, User target) {
+        if (target.isRootUser() && !actor.isUser(target.getId())) {
             deny(actor, "delete", target);
         }
     }
 
-    private void deny(User actor, String operation, User target) {
-        log.warn("User '{}' is not allowed to {} user '{}'", actor.getUsername(), operation, target.getUsername());
+    private void deny(AuthenticatedActor actor, String operation, User target) {
+        log.warn("User '{}' is not allowed to {} user '{}'", actor.username(), operation, target.getUsername());
         throw new NoAccessException(NO_PERMISSION);
     }
 }

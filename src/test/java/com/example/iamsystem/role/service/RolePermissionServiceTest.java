@@ -8,7 +8,7 @@ import com.example.iamsystem.role.dto.RolePermissionDto;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
-import com.example.iamsystem.user.entity.User;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,7 +22,7 @@ import java.util.Set;
 
 import static com.example.iamsystem.role.service.RoleTestData.TENANT;
 import static com.example.iamsystem.role.service.RoleTestData.role;
-import static com.example.iamsystem.role.service.RoleTestData.userWithRoles;
+import static com.example.iamsystem.role.service.RoleTestData.actor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,18 +49,18 @@ class RolePermissionServiceTest {
     @InjectMocks
     private RolePermissionService service;
 
-    private User actor;
+    private AuthenticatedActor actor;
     private Role role;
     private Permission read;
     private Permission write;
 
     @BeforeEach
     void setUp() {
-        actor = userWithRoles();
+        actor = actor();
         role = role(10, "VIEWER");
         read = permission(1);
         write = permission(2);
-        when(currentUserProvider.requireCurrentUser()).thenReturn(actor);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor);
     }
 
     @Test
