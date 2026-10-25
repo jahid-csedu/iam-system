@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10i+ (platform tenant: management users and console only).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10j (platform permissions per tenant).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -48,7 +48,8 @@ How to use the system as a developer through Swagger UI or Postman.
 | `clients:delete` | Delete application clients (never the management console) |
 | `permissions:read` | List the catalog and view a permission |
 
-PLATFORM keys, for super users only. The platform root holds them all. Only the Platform tenant's roles can hold them
+PLATFORM keys, for super users only. The platform root holds them all, on every tenant; other platform users hold them
+on the tenants their grants cover (a grant on all tenants covers every tenant). Only the Platform tenant's roles can hold them
 (a standard tenant gets `404` "Some permissions not found"), and even there they take effect only when the role is
 **granted** on tenants, never through a normal role assignment:
 
@@ -271,11 +272,11 @@ Log in as the platform root through the Platform tenant's console `client_id`, t
 
 | What | Request | Who |
 |---|---|---|
-| Create a tenant | `POST /api/platform/tenants` with the signup body `{ "tenantName", "rootUser": {...} }` → `201` with the tenant, its root user and its management console, exactly like signup (same rules; audited with you as the actor) | `tenants:create` |
-| List all tenants | `GET /api/platform/tenants?page=0&size=20` → paged like `GET /api/users`, each `{ "id", "name", "type": "PLATFORM"/"STANDARD", "status" }` | `tenants:read` |
-| View a tenant | `GET /api/platform/tenants/{id}` (`404` if unknown) | `tenants:read` |
-| Suspend a tenant | `PUT /api/platform/tenants/{id}/suspend` → the tenant with `"status": "SUSPENDED"`. At once, its users can't log in, refresh or reset passwords (`403` "Tenant is suspended"), their tokens get `401` and introspection says `active: false`. Sessions are kept. The platform tenant can't be suspended (`400`). | `tenants:suspend` |
-| Activate a tenant | `PUT /api/platform/tenants/{id}/activate` → `"status": "ACTIVE"`; logins work again, and tokens of unexpired sessions work again | `tenants:activate` |
+| Create a tenant | `POST /api/platform/tenants` with the signup body `{ "tenantName", "rootUser": {...} }` → `201` with the tenant, its root user and its management console, exactly like signup (same rules; audited with you as the actor) | `tenants:create` on all tenants |
+| List tenants | `GET /api/platform/tenants?page=0&size=20` → paged like `GET /api/users`, each `{ "id", "name", "type": "PLATFORM"/"STANDARD", "status" }` | the tenants you hold `tenants:read` on (all of them for the platform root; an empty page without grants) |
+| View a tenant | `GET /api/platform/tenants/{id}` (`404` if unknown) | `tenants:read` on that tenant |
+| Suspend a tenant | `PUT /api/platform/tenants/{id}/suspend` → the tenant with `"status": "SUSPENDED"`. At once, its users can't log in, refresh or reset passwords (`403` "Tenant is suspended"), their tokens get `401` and introspection says `active: false`. Sessions are kept. The platform tenant can't be suspended (`400`). | `tenants:suspend` on that tenant |
+| Activate a tenant | `PUT /api/platform/tenants/{id}/activate` → `"status": "ACTIVE"`; logins work again, and tokens of unexpired sessions work again | `tenants:activate` on that tenant |
 
 Tenant users (their root included) get `403` on every `/api/platform/**` endpoint.
 

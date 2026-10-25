@@ -59,23 +59,23 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
      * granted role that contains it, or the permission granted directly.
      */
     default boolean isGrantedToPlatformUserInTenant(Long userId, String name, Long tenantId) {
-        return countPlatformGrants(userId, name, tenantId) > 0;
+        List<Long> grantedTenantIds = findGrantedTenantIds(userId, name);
+        return grantedTenantIds.stream().anyMatch(id -> id == null || id.equals(tenantId));
     }
 
     /**
-     * MySQL returns EXISTS as a number, which a native query can't map to boolean; hence a count.
+     * The tenants a platform user's grants give a permission on, through a granted role that contains it or the
+     * permission granted directly. A {@code null} entry is a grant on all tenants.
      */
     @Query(nativeQuery = true, value = """
-            SELECT COUNT(*) FROM (
-                SELECT 1 FROM platform_role_grants g
-                JOIN role_permissions rp ON rp.role_id = g.role_id
-                JOIN permissions p ON p.id = rp.permission_id
-                WHERE g.user_id = :userId AND p.name = :name AND (g.tenant_id = :tenantId OR g.tenant_id IS NULL)
-                UNION ALL
-                SELECT 1 FROM platform_permission_grants g
-                JOIN permissions p ON p.id = g.permission_id
-                WHERE g.user_id = :userId AND p.name = :name AND (g.tenant_id = :tenantId OR g.tenant_id IS NULL)
-            ) grants
+            SELECT g.tenant_id FROM platform_role_grants g
+            JOIN role_permissions rp ON rp.role_id = g.role_id
+            JOIN permissions p ON p.id = rp.permission_id
+            WHERE g.user_id = :userId AND p.name = :name
+            UNION
+            SELECT g.tenant_id FROM platform_permission_grants g
+            JOIN permissions p ON p.id = g.permission_id
+            WHERE g.user_id = :userId AND p.name = :name
             """)
-    long countPlatformGrants(@Param("userId") Long userId, @Param("name") String name, @Param("tenantId") Long tenantId);
+    List<Long> findGrantedTenantIds(@Param("userId") Long userId, @Param("name") String name);
 }

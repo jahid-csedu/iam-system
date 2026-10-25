@@ -12,10 +12,17 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+
+import static com.example.iamsystem.permission.PermissionKey.TENANTS_CREATE;
 import static com.example.iamsystem.permission.PermissionKey.TENANTS_READ;
+import static com.example.iamsystem.permission.PermissionKey.TENANTS_SUSPEND;
 import static com.example.iamsystem.permission.PermissionKey.USERS_CREATE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_READ;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -119,6 +126,50 @@ class AuthorizationServiceTest {
     void hasPermission_platformPermissionThroughNormalRole_isNotHeld() {
         assertFalse(authorizationService.hasPermission(ALICE, TENANTS_READ));
         verifyNoInteractions(permissionRepository);
+    }
+
+    @Test
+    @DisplayName("The platform root holds PLATFORM permissions on all tenants")
+    void platformScope_ofPlatformRoot_isAllTenants() {
+        when(tenantRepository.existsByIdAndType(100L, TenantType.PLATFORM)).thenReturn(true);
+
+        assertEquals(TenantScope.ALL, authorizationService.platformScope(ROOT, TENANTS_READ));
+        verifyNoInteractions(permissionRepository);
+    }
+
+    @Test
+    @DisplayName("Another platform user holds PLATFORM permissions on the tenants of their grants, or on all with an all-tenants grant")
+    void platformScope_ofPlatformUser_followsTheGrants() {
+        when(tenantRepository.existsByIdAndType(100L, TenantType.PLATFORM)).thenReturn(true);
+        when(permissionRepository.findGrantedTenantIds(1L, "tenants:read")).thenReturn(Arrays.asList(5L, 9L));
+        when(permissionRepository.findGrantedTenantIds(1L, "tenants:suspend")).thenReturn(Arrays.asList(5L, null));
+
+        TenantScope readable = authorizationService.platformScope(ALICE, TENANTS_READ);
+
+        assertEquals(TenantScope.of(Set.of(5L, 9L)), readable);
+        assertTrue(readable.covers(9L));
+        assertFalse(readable.covers(7L));
+        assertTrue(authorizationService.platformScope(ALICE, TENANTS_SUSPEND).allTenants());
+    }
+
+    @Test
+    @DisplayName("Tenant users never hold PLATFORM permissions, not even a tenant's root")
+    void platformScope_ofTenantUser_isDenied() {
+        when(tenantRepository.existsByIdAndType(100L, TenantType.PLATFORM)).thenReturn(false);
+
+        assertThrows(NoAccessException.class, () -> authorizationService.platformScope(ROOT, TENANTS_READ));
+        assertThrows(NoAccessException.class, () -> authorizationService.platformScope(ALICE, TENANTS_READ));
+    }
+
+    @Test
+    @DisplayName("A per-tenant check needs the tenant in scope, and an all-tenants check needs all tenants")
+    void platformChecks_followTheScope() {
+        when(tenantRepository.existsByIdAndType(100L, TenantType.PLATFORM)).thenReturn(true);
+        when(permissionRepository.findGrantedTenantIds(1L, "tenants:create")).thenReturn(List.of(5L));
+
+        assertDoesNotThrow(() -> authorizationService.checkPlatformPermission(ALICE, TENANTS_CREATE, 5L));
+        assertThrows(NoAccessException.class, () -> authorizationService.checkPlatformPermission(ALICE, TENANTS_CREATE, 6L));
+        assertThrows(NoAccessException.class, () -> authorizationService.checkPlatformPermissionOnAllTenants(ALICE, TENANTS_CREATE));
     }
 
     @Test

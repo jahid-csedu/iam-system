@@ -202,7 +202,9 @@ class ActingTenantTest {
         send(put("/api/users/roles"), platformRootToken, Map.of("username", "support", "roleIds", Set.of(viewerId)))
                 .andExpect(status().isNoContent());
 
-        send(get("/api/platform/tenants"), support, null).andExpect(status().isForbidden());
+        send(get("/api/platform/tenants"), support, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(0));
     }
 
     @Test

@@ -10,6 +10,7 @@ import com.example.iamsystem.tenant.entity.TenantType;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
+import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import com.example.iamsystem.user.service.UserFactory;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -61,6 +63,8 @@ class PlatformTenantControllerTest {
     private UserFactory userFactory;
     @Autowired
     private TransactionTemplate transactionTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private User platformRoot;
     private User acmeRoot;
@@ -195,6 +199,65 @@ class PlatformTenantControllerTest {
     @DisplayName("A tenant's root can't create tenants through the platform endpoint")
     void tenantRoot_cannotCreateTenants() throws Exception {
         createTenant("Globex", "globex-root", "root@globex.com", acmeRoot).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("A platform user sees only the tenants they hold tenants:read on, and none without a grant")
+    void platformUser_listsOnlyGrantedTenants() throws Exception {
+        User support = createSupportUser();
+        mockMvc.perform(get("/api/platform/tenants").with(actingAs(support)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(0));
+
+        grant("tenants:read", acmeId);
+        createTenant("Globex", "globex-root", "root@globex.com", platformRoot).andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/platform/tenants").with(actingAs(support)))
+                .andExpect(jsonPath("$.content[*].name", contains("Acme")));
+        mockMvc.perform(get("/api/platform/tenants/{id}", acmeId).with(actingAs(support))).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("A platform user suspends only the tenants their grants cover")
+    void platformUser_suspendsOnlyGrantedTenants() throws Exception {
+        User support = createSupportUser();
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", acmeId).with(actingAs(support))).andExpect(status().isForbidden());
+
+        grant("tenants:suspend", acmeId);
+
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", acmeId).with(actingAs(support)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUSPENDED"));
+        mockMvc.perform(put("/api/platform/tenants/{id}/activate", acmeId).with(actingAs(support))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Creating tenants needs tenants:create on all tenants, not on a single one")
+    void platformUser_createsTenantsOnlyWithAnAllTenantsGrant() throws Exception {
+        User support = createSupportUser();
+        grant("tenants:create", acmeId);
+        createTenant("Globex", "globex-root", "root@globex.com", support).andExpect(status().isForbidden());
+
+        grant("tenants:create", null);
+        createTenant("Globex", "globex-root", "root@globex.com", support).andExpect(status().isCreated());
+    }
+
+    private User createSupportUser() throws Exception {
+        mockMvc.perform(post("/api/users").with(actingAs(platformRoot)).contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(
+                                new UserCreationDto("support", "Password1!", null, "support@platform.test", UserType.MANAGEMENT))))
+                .andExpect(status().isCreated());
+        return findByUsername(userRepository, "support").orElseThrow();
+    }
+
+    /**
+     * Grants a permission to the support user on one tenant, or on all tenants when {@code tenantId} is null.
+     */
+    private void grant(String permission, Long tenantId) {
+        jdbcTemplate.update("""
+                INSERT INTO platform_permission_grants (user_id, permission_id, tenant_id, created_at)
+                SELECT u.id, p.id, ?, NOW(6) FROM users u, permissions p WHERE u.username = 'support' AND p.name = ?
+                """, tenantId, permission);
     }
 
     private ResultActions createTenant(String name, String rootUsername, String rootEmail, User actor) throws Exception {

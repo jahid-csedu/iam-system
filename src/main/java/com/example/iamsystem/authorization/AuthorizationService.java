@@ -10,6 +10,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
 import static com.example.iamsystem.common.exception.ErrorMessage.NO_PERMISSION;
 import static com.example.iamsystem.permission.entity.PermissionScope.TENANT;
 
@@ -43,14 +47,56 @@ public class AuthorizationService {
         return permission.scope() == TENANT && permissionRepository.isGrantedToUser(actor.userId(), permission.key());
     }
 
+    /**
+     * The tenants a platform user holds a PLATFORM permission on: every tenant for the platform root, otherwise the
+     * tenants their grants give it on (all tenants with an all-tenants grant, possibly none).
+     *
+     * @throws NoAccessException for tenant users, who never hold PLATFORM permissions
+     */
+    public TenantScope platformScope(AuthenticatedActor actor, PermissionKey permission) {
+        if (isPlatformRoot(actor)) {
+            return TenantScope.ALL;
+        }
+        if (!tenantRepository.existsByIdAndType(actor.homeTenantId(), TenantType.PLATFORM)) {
+            throw denied(actor, permission);
+        }
+        List<Long> grantedTenantIds = permissionRepository.findGrantedTenantIds(actor.userId(), permission.key());
+        if (grantedTenantIds.stream().anyMatch(Objects::isNull)) {
+            return TenantScope.ALL;
+        }
+        return TenantScope.of(grantedTenantIds.stream().filter(Objects::nonNull).collect(Collectors.toSet()));
+    }
+
+    /**
+     * @throws NoAccessException unless the user holds the PLATFORM permission on this tenant
+     */
+    public void checkPlatformPermission(AuthenticatedActor actor, PermissionKey permission, Long tenantId) {
+        if (!platformScope(actor, permission).covers(tenantId)) {
+            throw denied(actor, permission);
+        }
+    }
+
+    /**
+     * @throws NoAccessException unless the user holds the PLATFORM permission on all tenants
+     */
+    public void checkPlatformPermissionOnAllTenants(AuthenticatedActor actor, PermissionKey permission) {
+        if (!platformScope(actor, permission).allTenants()) {
+            throw denied(actor, permission);
+        }
+    }
+
     private boolean isPlatformRoot(AuthenticatedActor actor) {
         return actor.rootUser() && tenantRepository.existsByIdAndType(actor.homeTenantId(), TenantType.PLATFORM);
     }
 
     public void checkPermission(AuthenticatedActor actor, PermissionKey permission) {
         if (!hasPermission(actor, permission)) {
-            log.warn("User '{}' lacks permission {}", actor.username(), permission.key());
-            throw new NoAccessException(NO_PERMISSION);
+            throw denied(actor, permission);
         }
+    }
+
+    private static NoAccessException denied(AuthenticatedActor actor, PermissionKey permission) {
+        log.warn("User '{}' lacks permission {}", actor.username(), permission.key());
+        return new NoAccessException(NO_PERMISSION);
     }
 }

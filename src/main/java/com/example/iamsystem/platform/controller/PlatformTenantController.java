@@ -1,11 +1,9 @@
 package com.example.iamsystem.platform.controller;
 
-import com.example.iamsystem.authorization.RequirePermission;
 import com.example.iamsystem.platform.service.PlatformTenantService;
 import com.example.iamsystem.tenant.dto.TenantDto;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.tenant.dto.TenantSignupResultDto;
-import com.example.iamsystem.tenant.service.TenantSignupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -22,13 +20,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import static com.example.iamsystem.permission.PermissionKey.TENANTS_ACTIVATE;
-import static com.example.iamsystem.permission.PermissionKey.TENANTS_CREATE;
-import static com.example.iamsystem.permission.PermissionKey.TENANTS_READ;
-import static com.example.iamsystem.permission.PermissionKey.TENANTS_SUSPEND;
-
 /**
- * Tenant administration by super users. Every endpoint needs a PLATFORM permission, which tenant users never hold.
+ * Tenant administration by super users. {@code PlatformTenantService} checks the PLATFORM permission on the tenant each
+ * request concerns (it is in the path, so {@code @RequirePermission} can't check it); tenant users are always refused.
  */
 @RestController
 @RequestMapping("/api/platform/tenants")
@@ -39,40 +33,34 @@ public class PlatformTenantController {
     private static final String DEFAULT_PAGE_SIZE = "20";
 
     private final PlatformTenantService platformTenantService;
-    private final TenantSignupService tenantSignupService;
 
     @PostMapping
-    @RequirePermission(TENANTS_CREATE)
-    @Operation(summary = "Create a tenant with its root user, predefined roles and management console, like signup (Requires: tenants:create)")
+    @Operation(summary = "Create a tenant with its root user, predefined roles and management console, like signup (Requires: tenants:create on all tenants)")
     public ResponseEntity<TenantSignupResultDto> createTenant(@RequestBody @Valid TenantSignupDto request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(tenantSignupService.signup(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(platformTenantService.createTenant(request));
     }
 
     @GetMapping
-    @RequirePermission(TENANTS_READ)
-    @Operation(summary = "List all tenants, one page at a time, ordered by id (Requires: tenants:read)")
+    @Operation(summary = "List the tenants you hold tenants:read on, one page at a time, ordered by id")
     public ResponseEntity<PagedModel<TenantDto>> getTenants(@RequestParam(defaultValue = "0") int page,
                                                             @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) int size) {
         return ResponseEntity.ok(new PagedModel<>(platformTenantService.findTenants(page, size)));
     }
 
     @GetMapping("/{id}")
-    @RequirePermission(TENANTS_READ)
-    @Operation(summary = "Get a tenant by ID (Requires: tenants:read)")
+    @Operation(summary = "Get a tenant by ID (Requires: tenants:read on it)")
     public ResponseEntity<TenantDto> getTenant(@PathVariable Long id) {
         return ResponseEntity.ok(platformTenantService.findTenant(id));
     }
 
     @PutMapping("/{id}/suspend")
-    @RequirePermission(TENANTS_SUSPEND)
-    @Operation(summary = "Suspend a tenant: none of its users can log in or use their tokens; never the platform tenant (Requires: tenants:suspend)")
+    @Operation(summary = "Suspend a tenant: none of its users can log in or use their tokens; never the platform tenant (Requires: tenants:suspend on it)")
     public ResponseEntity<TenantDto> suspendTenant(@PathVariable Long id) {
         return ResponseEntity.ok(platformTenantService.suspendTenant(id));
     }
 
     @PutMapping("/{id}/activate")
-    @RequirePermission(TENANTS_ACTIVATE)
-    @Operation(summary = "Activate a suspended tenant again (Requires: tenants:activate)")
+    @Operation(summary = "Activate a suspended tenant again (Requires: tenants:activate on it)")
     public ResponseEntity<TenantDto> activateTenant(@PathVariable Long id) {
         return ResponseEntity.ok(platformTenantService.activateTenant(id));
     }

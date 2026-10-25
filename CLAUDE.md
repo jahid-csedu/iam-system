@@ -409,3 +409,10 @@ Design debt
   application clients (`ClientService`), 400; it holds only management users and its console. Roadmap items 11
   (client-scoped regular users) and 12 (self-registration per tenant, Auth0-like, required later) added.
   Next: step 10j (per-tenant platform checks).
+- 2026-10-25: Step 10j (platform checks per tenant). `AuthorizationService.platformScope` (all tenants or the granted ones;
+  tenant users 403) + `checkPlatformPermission(..., tenantId)` / `checkPlatformPermissionOnAllTenants`; one grant query
+  (`PermissionRepository.findGrantedTenantIds`, NULL = all tenants). `PlatformTenantService` checks every operation on its
+  tenant (list = readable tenants, empty without grants; view/suspend/activate the path tenant; create needs an
+  all-tenants grant); the controller has no `@RequirePermission` any more. Decisions: no access to a tenant = 403;
+  no grants = empty list.
+  Next: step 10k (grant endpoints).
