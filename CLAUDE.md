@@ -275,8 +275,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit, is
-  stored in plain text, and the endpoint reveals whether a username/email exists.
+- Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit and is
+  stored in plain text.
+- The reset request answers a known user more slowly than an unknown one (the email is sent during the request), so
+  timing still tells them apart; fix by sending emails in the background (`@Async`).
 
 Broken / drift
 - Audit events for failures are logged at ERROR level.
@@ -446,3 +448,8 @@ Design debt
 - 2026-10-25: Security fix 3. `UserAccessPolicy.checkCanDelete` refuses every deletion of a root user, its own included
   (403 "The root user can't be deleted"); a root could delete itself before and leave its tenant without one, and the same
   went for the platform root. Next: security fix 4 (uniform reset-request response).
+- 2026-10-25: Security fix 4. `POST /api/password/reset-request` answers 200 with the same text for an unknown user, a
+  user without email and a failed email (was 404 / 400 / 500). `PasswordResetService.createPasswordResetOtp` returns an
+  `OtpRequestOutcome` (`SENT`, `UNKNOWN_USER`, `NO_EMAIL`, `MAIL_FAILED`) that the audit records (`request_outcome`), with a WARN
+  or ERROR log. Decisions: a failed email is no error for the caller; the timing difference is a known issue for now.
+  Next: security fix 5 (OTP attempts and lookup by user).

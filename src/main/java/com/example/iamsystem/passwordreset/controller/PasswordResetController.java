@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.OTP_SENT_SUCCESS;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_SUCCESS;
+import static com.example.iamsystem.passwordreset.PasswordResetConstants.RESET_REQUEST_ACCEPTED;
 
 /**
  * Self-service password reset for users who are not logged in. The OTP and the new password go only to the user's email.
@@ -26,10 +26,10 @@ public class PasswordResetController {
     private final PasswordResetService passwordResetService;
 
     @PostMapping("/reset-request")
-    @Operation(summary = "Email a password-reset OTP to the user with this username or email in the client's tenant (public)")
+    @Operation(summary = "Email a password-reset OTP to the user with this username or email in the client's tenant; the answer is the same whether or not the user exists (public)")
     public ResponseEntity<String> requestPasswordReset(@RequestBody @Valid PasswordResetRequestDto request) {
         passwordResetService.createPasswordResetOtp(request.clientId(), request.identifier());
-        return ResponseEntity.ok(OTP_SENT_SUCCESS);
+        return ResponseEntity.ok(RESET_REQUEST_ACCEPTED);
     }
 
     @PostMapping("/reset")

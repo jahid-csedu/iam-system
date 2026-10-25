@@ -2,7 +2,6 @@ package com.example.iamsystem.passwordreset.service;
 
 import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.client.service.ClientResolver;
-import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
@@ -18,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -86,7 +87,7 @@ class PasswordResetServiceTest {
     void createPasswordResetOtp_byUsername_savesAndEmailsTheOtp() {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
 
-        service.createPasswordResetOtp(CLIENT_ID, "alice");
+        assertEquals(OtpRequestOutcome.SENT, service.createPasswordResetOtp(CLIENT_ID, "alice"));
 
         ArgumentCaptor<PasswordResetOTP> saved = ArgumentCaptor.forClass(PasswordResetOTP.class);
         verify(otpRepository).save(saved.capture());
@@ -112,13 +113,32 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    @DisplayName("Requesting a reset for an unknown username or email is rejected and sends nothing")
-    void createPasswordResetOtp_unknownIdentifier_isRejected() {
+    @DisplayName("Requesting a reset for an unknown username or email is no error, and sends nothing")
+    void createPasswordResetOtp_unknownIdentifier_sendsNothing() {
         when(userRepository.findByUsernameAndTenantId("ghost", TENANT_ID)).thenReturn(Optional.empty());
         when(userRepository.findByEmailAndTenantId("ghost", TENANT_ID)).thenReturn(Optional.empty());
 
-        assertThrows(DataNotFoundException.class, () -> service.createPasswordResetOtp(CLIENT_ID, "ghost"));
+        assertEquals(OtpRequestOutcome.UNKNOWN_USER, service.createPasswordResetOtp(CLIENT_ID, "ghost"));
         verifyNoInteractions(otpRepository, mailSender);
+    }
+
+    @Test
+    @DisplayName("Requesting a reset for a user without an email address is no error, and saves and sends nothing")
+    void createPasswordResetOtp_userWithoutEmail_sendsNothing() {
+        user.setEmail(null);
+        when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
+
+        assertEquals(OtpRequestOutcome.NO_EMAIL, service.createPasswordResetOtp(CLIENT_ID, "alice"));
+        verifyNoInteractions(otpRepository, mailSender);
+    }
+
+    @Test
+    @DisplayName("A failed email is no error: the outcome says so")
+    void createPasswordResetOtp_mailFailure_isReported() {
+        when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
+        doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
+
+        assertEquals(OtpRequestOutcome.MAIL_FAILED, service.createPasswordResetOtp(CLIENT_ID, "alice"));
     }
 
     @Test

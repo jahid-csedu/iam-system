@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -23,14 +24,19 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 
+import static com.example.iamsystem.passwordreset.PasswordResetConstants.RESET_REQUEST_ACCEPTED;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -95,6 +101,32 @@ class PasswordResetControllerTest {
 
         postJson("/api/password/reset", new PasswordResetDto(clientId, "someone-else", otp)).andExpect(status().isBadRequest());
         verifyNoInteractions(mailSender);
+    }
+
+    @Test
+    @DisplayName("A request for an unknown user gets the same answer as one for a real user, and sends nothing")
+    void resetRequest_unknownUser_looksLikeAKnownOne() throws Exception {
+        String known = postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        clearInvocations(mailSender);
+
+        String unknown = postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "ghost@acme.com"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertEquals(known, unknown);
+        verifyNoInteractions(mailSender);
+    }
+
+    @Test
+    @DisplayName("A failed email gets the same answer too")
+    void resetRequest_mailFailure_looksTheSame() throws Exception {
+        doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
+
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(RESET_REQUEST_ACCEPTED));
     }
 
     @Test

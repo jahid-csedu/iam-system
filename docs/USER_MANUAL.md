@@ -233,7 +233,7 @@ and gets `403` on every management endpoint.
 |---|---|---|
 | Change own password | `PATCH /api/users/password` `{ "oldPassword": "...", "newPassword": "..." }` | Any logged-in user, for themselves only |
 | Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`; a new password is emailed to that user | `users:reset-password`; never your own password, never the root user's |
-| Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → the OTP is emailed | Public |
+| Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → `200` and the OTP is emailed. The answer is the same when no such user exists, the user has no email address or the email fails, so it never tells whether an account exists | Public |
 | Forgot password: reset with the OTP | `POST /api/password/reset` `{ "client_id": "...", "identifier": "<username or email>", "otp": "123456" }` → a new password is emailed | Public |
 | Refresh tokens | `POST /api/auth/token/refresh` `{ "client_id": "...", "refresh_token": "..." }` (the client the token was issued through) → a new access token **and a new refresh token**; the old refresh token is used up | Public (needs a valid refresh token) |
 | Log out | `POST /api/auth/logout` (no body) → `204`; ends the session of the Bearer token: its access token gets `401` here and its refresh token stops working | Any logged-in user |

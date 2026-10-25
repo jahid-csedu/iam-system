@@ -15,12 +15,12 @@ public class PasswordResetConstants {
     public static final String PASSWORD_RESET_SUCCESS_BODY_PREFIX = "Your new password is: ";
 
     // Error Messages
-    public static final String USER_NOT_FOUND = "User not found";
     public static final String INVALID_OTP = "Invalid OTP";
     public static final String OTP_DOES_NOT_BELONG_TO_USER = "OTP does not belong to this user";
     public static final String OTP_HAS_EXPIRED = "OTP has expired";
 
     // Controller Response Messages
-    public static final String OTP_SENT_SUCCESS = "Password reset OTP sent to your email.";
+    public static final String RESET_REQUEST_ACCEPTED =
+            "If the account exists and has an email address, a password reset OTP has been sent to it.";
     public static final String PASSWORD_RESET_SUCCESS = "Your new password has been sent to your email.";
 }

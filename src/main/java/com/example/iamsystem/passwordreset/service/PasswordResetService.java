@@ -3,7 +3,6 @@ package com.example.iamsystem.passwordreset.service;
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.client.service.ClientResolver;
-import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
@@ -11,6 +10,8 @@ import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,6 @@ import static com.example.iamsystem.passwordreset.PasswordResetConstants.OTP_DOE
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.OTP_HAS_EXPIRED;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_BODY_PREFIX;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_SUBJECT;
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.USER_NOT_FOUND;
 
 /**
  * Self-service password reset for users who are not logged in: an OTP is emailed, and a valid OTP gets the user a new
@@ -37,6 +37,7 @@ import static com.example.iamsystem.passwordreset.PasswordResetConstants.USER_NO
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PasswordResetService {
 
     private static final int OTP_BOUND = 1_000_000;
@@ -51,17 +52,29 @@ public class PasswordResetService {
     private final OtpExpirationProperties otpExpiration;
 
     /**
-     * Replaces any earlier OTP of the user.
+     * Replaces any earlier OTP of the user. An unknown user, a user without an email address and a failed email are not
+     * errors: the outcome is audited and logged, and the caller answers every request the same way, so nobody can find
+     * out which accounts exist. An OTP whose email failed stays unused until it expires or the next request replaces it.
      */
     @Auditable(
             value = AuditEventType.PASSWORD_RESET_OTP_REQUEST,
             target = "#identifier",
-            detailsExpression = "T(java.util.Map).of('client_id', #clientId)"
+            detailsExpression = "#result == null ? T(java.util.Map).of('client_id', #clientId)"
+                    + " : T(java.util.Map).of('client_id', #clientId, 'request_outcome', #result)"
     )
     @Transactional
-    public void createPasswordResetOtp(String clientId, String identifier) {
+    public OtpRequestOutcome createPasswordResetOtp(String clientId, String identifier) {
         Long tenantId = clientResolver.resolve(clientId).getTenant().getId();
-        User user = findUser(identifier, tenantId).orElseThrow(() -> new DataNotFoundException(USER_NOT_FOUND));
+        Optional<User> found = findUser(identifier, tenantId);
+        if (found.isEmpty()) {
+            log.warn("Password reset requested for an unknown user in tenant {}", tenantId);
+            return OtpRequestOutcome.UNKNOWN_USER;
+        }
+        User user = found.get();
+        if (user.getEmail() == null) {
+            log.warn("Password reset requested for user {}, who has no email address", user.getId());
+            return OtpRequestOutcome.NO_EMAIL;
+        }
 
         PasswordResetOTP existingOtp = otpRepository.findByUser(user);
         if (existingOtp != null) {
@@ -80,7 +93,13 @@ public class PasswordResetService {
         emailMessage.setTo(user.getEmail());
         emailMessage.setSubject(PASSWORD_RESET_REQUEST_SUBJECT);
         emailMessage.setText(PASSWORD_RESET_REQUEST_BODY_PREFIX + otp);
-        mailSender.send(emailMessage);
+        try {
+            mailSender.send(emailMessage);
+            return OtpRequestOutcome.SENT;
+        } catch (MailException e) {
+            log.error("Could not email the password-reset OTP to user {}", user.getId(), e);
+            return OtpRequestOutcome.MAIL_FAILED;
+        }
     }
 
     @Auditable(
