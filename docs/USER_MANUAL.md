@@ -97,12 +97,13 @@ Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are nee
 sent by email. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 
 **Token signing key.** Tokens are signed with an RSA private key that only the IAM holds. Configure one with
-`IAM_JWT_KEYS_0_KID` (any id, e.g. `key-2026-10`) and `IAM_JWT_KEYS_0_PRIVATE_KEY` (a PKCS#8 RSA key of at least 2048 bits,
-base64 on one line; PEM header lines are optional):
+`IAM_JWT_KEYS_0_KID` (any id, e.g. `key-2026-10`) and `IAM_JWT_KEYS_0_PRIVATEKEY` (a PKCS#8 RSA key of at least 2048 bits,
+base64 on one line; PEM header lines are optional). Write `PRIVATEKEY` as one word: Spring reads every `_` in a variable
+name as a `.`, so `PRIVATE_KEY` would not reach the `private-key` property:
 
 ```bash
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out jwt-key.pem
-grep -v -- ----- jwt-key.pem | tr -d '\n'     # the value for IAM_JWT_KEYS_0_PRIVATE_KEY
+grep -v -- ----- jwt-key.pem | tr -d '\n'     # the value for IAM_JWT_KEYS_0_PRIVATEKEY
 ```
 
 Put both in `.env` for `./gradlew bootRun`, or pass them to the `app` container (`-e` / `environment:`). Without a key the
