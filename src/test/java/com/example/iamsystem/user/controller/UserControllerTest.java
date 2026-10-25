@@ -1,5 +1,7 @@
 package com.example.iamsystem.user.controller;
 
+import com.example.iamsystem.passwordreset.dto.PasswordResetRequestDto;
+import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
 import com.example.iamsystem.permission.entity.Permission;
 import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.role.entity.Role;
@@ -38,6 +40,7 @@ import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
 import static com.example.iamsystem.user.repository.TestUserLookup.findByUsername;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
@@ -78,6 +81,9 @@ class UserControllerTest {
 
     @Autowired
     private PermissionRepository permissionRepository;
+
+    @Autowired
+    private PasswordResetOTPRepository otpRepository;
 
     @MockitoBean
     private JavaMailSender mailSender;
@@ -368,6 +374,25 @@ class UserControllerTest {
                 .andExpect(status().isNoContent());
 
         assertNull(findByUsername(userRepository, "created").orElseThrow().getCreatedBy());
+    }
+
+    @Test
+    @DisplayName("Deleting a user with a pending password-reset OTP also deletes the OTP")
+    @Sql("/sql/insert_user_role.sql")
+    void deleteUser_withPendingOtp_deletesTheOtp() throws Exception {
+        User root = findByUsername(userRepository, "root").orElseThrow();
+        User target = findByUsername(userRepository, "user").orElseThrow();
+        mockMvc.perform(post("/api/password/reset-request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(new PasswordResetRequestDto(FIXTURE_CONSOLE_CLIENT_ID, "user"))))
+                .andExpect(status().isOk());
+        assertEquals(1, otpRepository.count());
+
+        mockMvc.perform(delete("/api/users/{id}", target.getId())
+                        .with(actingAs(root)))
+                .andExpect(status().isNoContent());
+
+        assertEquals(0, otpRepository.count());
     }
 
     @Test

@@ -251,7 +251,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   32 random bytes, stored as SHA-256 hex, single use; a used one presented again revokes its session. Refresh runs in one
   transaction that commits on `InvalidTokenException` (401), so that revocation sticks.
 - Session revocation: logout (that session), own password change (all but the current one), any password reset (all),
-  user/client deletion (DB cascade). Deactivation and lock don't revoke; the filter and refresh refuse such users.
+  user/client deletion (DB cascade; deleting a user also deletes their pending reset OTPs). Deactivation and lock don't revoke; the filter and refresh refuse such users.
 - `POST /api/tenants/signup` (public) creates a tenant + its root user + predefined roles + management console (its `client_id` is in the response). `POST /api/users` (`users:create`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
@@ -282,7 +282,6 @@ Broken / drift
 - Audit events for failures are logged at ERROR level.
 - Ended sessions and used/expired refresh tokens are never purged (needs a cleanup job; roadmap item 6, session management).
 - Sessions slide forever while refreshed: no absolute session lifetime yet (roadmap item 6).
-- Deleting a user with a pending password-reset OTP fails (FK `fk_password_reset_otps_user`, no ON DELETE rule).
 - `GlobalHandler` still has one-off handlers per exception (the ProblemDetail step reworks it).
 
 Design debt
@@ -442,3 +441,5 @@ Design debt
 - 2026-10-25: Security fix 1 (mail debug). `MailConfig` set `mail.debug=true`, which printed every email (OTPs, new
   passwords) to the console. Removed the class; Spring Boot's auto-configured sender reads `spring.mail.*`
   (SMTP auth + STARTTLS in `application.properties`). Next: security fix 2 (user deletion with a pending OTP).
+- 2026-10-25: Security fix 2. Flyway `V15__password_reset_otp_cascade.sql`: deleting a user deletes their pending reset
+  OTPs (the delete failed on the foreign key before). Next: security fix 3 (nobody deletes a root user).
