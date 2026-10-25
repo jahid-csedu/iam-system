@@ -211,7 +211,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `security/`: Spring Security wiring: `config/` (incl. `JwtProperties`), `filter/` (JWT filter), `jwt/` (`SigningKeys` = the
   RSA key set, `TokenIssuer`, `TokenVerifier`: access tokens only),
   `userdetails/` (`AuthenticatedActor` = the request principal; `CurrentUserProvider`, the single owner of "who is logged in"
-  and of the current tenant id; `TenantAuthenticationProvider` = login inside the client's tenant; `DefaultUserDetails`/
+  and of the current tenant id; `ActingTenantResolver` = which tenant a request works in (`X-Tenant-Id`);
+  `TenantAuthenticationProvider` = login inside the client's tenant; `DefaultUserDetails`/
   `DefaultUserDetailsService` for login and refresh only), `event/` (lockout listeners, by user id), `config/LockoutProperties`
 - `session/`: login sessions. `UserSession` + `RefreshToken` (hash only), `SessionService` (start, refresh-token checks and
   rotation with reuse detection, revoke one / all / all but one), `RefreshTokenGenerator` (random token + SHA-256 hash)
@@ -253,8 +254,11 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `PATCH /api/users/password` changes only your own password (old password required). `POST /api/users/{id}/password-reset`
   (`users:reset-password`) gives another user a new emailed password; never your own, never root's.
 - New passwords and OTPs are only ever sent by email: never in responses, logs or audit details.
-- The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`, `sessionId`), never the
-  `User` entity. `JwtRequestFilter` finds it with one query (`UserSessionRepository.findActor`) that only matches a live
+- The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`, `sessionId`,
+  `homeTenantId`), never the `User` entity. `tenantId` is the tenant the request works in (the tenant boundary used by the
+  services); `homeTenantId` is the user's own tenant. They differ only when a platform user sends `X-Tenant-Id`
+  (`ActingTenantResolver`, called by the JWT filter; ignored for tenant users; malformed 400, unknown 404). Inside another
+  tenant only the platform root holds permissions (grants come in 10h); audit adds `acting_tenant_id`. `JwtRequestFilter` finds it with one query (`UserSessionRepository.findActor`) that only matches a live
   session of an active, unlocked user of an `ACTIVE` tenant; anything else leaves the request unauthenticated (401).
   Introspection uses the same query, so the API and other applications agree on what "active" means. `User.@Version` is
   optimistic locking only. Permissions are read from the database on
@@ -380,3 +384,9 @@ Design debt
 - 2026-10-25: Step 10f (create tenants). `POST /api/platform/tenants` (`tenants:create`) runs `TenantSignupService.signup`
   (same body, rules and result; the `TENANT_SIGNUP` audit names the super user as actor). Public signup stays open.
   Next: step 10g (`X-Tenant-Id` for the platform root).
+- 2026-10-25: Step 10g (`X-Tenant-Id`). `AuthenticatedActor` gets `homeTenantId`; `tenantId` = working tenant, so services
+  are unchanged. `ActingTenantResolver` (platform users only) + filter (errors through `GlobalHandler`);
+  `AuthorizationService`: in another tenant only the platform root; `changeOwnPassword` uses the home tenant; audit
+  `acting_tenant_id`. Decisions: services keep `actor.tenantId()` (owner: self-descriptive); `created_by` may be the
+  platform root; the platform root may work inside a suspended tenant.
+  Next: step 10h (platform grants).

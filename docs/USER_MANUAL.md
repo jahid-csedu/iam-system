@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10f (platform: create tenants).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10g (platform root works inside tenants).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -277,6 +277,13 @@ Log in as the platform root through the Platform tenant's console `client_id`, t
 
 Tenant users (their root included) get `403` on every `/api/platform/**` endpoint.
 
+**Working inside a tenant.** Add the header `X-Tenant-Id: <tenant id>` to any normal request (`/api/users`, `/api/roles`,
+`/api/clients`, ...) and it works inside that tenant, as if you were its root: list and create users, manage roles,
+clients and token settings. This also works in a suspended tenant (for support). Every audited action records
+`acting_tenant_id`. A header that isn't a number gives `400`, an unknown tenant `404`. Changing your own password still
+changes yours. Today only the platform root can do this; other platform users get `403` until they receive grants.
+Tenant users' `X-Tenant-Id` is ignored: they always work in their own tenant.
+
 ## 7. For other applications (verifying users)
 
 | What | Request | Notes |
@@ -330,6 +337,6 @@ The IAM manages only its own permissions; other applications decide their own au
 | `400` | Already exists (tenant, user, role or client name in your tenant), deleting the management console, suspending the platform tenant, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
 | `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, a suspended tenant, wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
 | `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; login, refresh or forgot-password for a suspended tenant ("Tenant is suspended"); or account locked, deactivated or expired |
-| `404` | Not found, including users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
+| `404` | Not found, including an unknown tenant in `X-Tenant-Id`, users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
 | `422` | Request body failed validation (the `errors` list shows which field), including token lifetimes out of range |

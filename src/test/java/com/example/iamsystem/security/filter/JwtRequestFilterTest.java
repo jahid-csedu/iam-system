@@ -1,10 +1,12 @@
 package com.example.iamsystem.security.filter;
 
 import com.example.iamsystem.client.entity.Client;
+import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.security.config.JwtProperties;
 import com.example.iamsystem.security.jwt.SigningKeys;
 import com.example.iamsystem.security.jwt.TokenIssuer;
 import com.example.iamsystem.security.jwt.TokenVerifier;
+import com.example.iamsystem.security.userdetails.ActingTenantResolver;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.session.entity.UserSession;
 import com.example.iamsystem.session.repository.UserSessionRepository;
@@ -22,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import java.time.Instant;
 import java.util.List;
@@ -31,6 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -47,6 +52,10 @@ class JwtRequestFilterTest {
     private UserSessionRepository sessionRepository;
     @Mock
     private FilterChain filterChain;
+    @Mock
+    private ActingTenantResolver actingTenantResolver;
+    @Mock
+    private HandlerExceptionResolver exceptionResolver;
 
     private JwtRequestFilter filter;
     private MockHttpServletRequest request;
@@ -55,7 +64,7 @@ class JwtRequestFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new JwtRequestFilter(new TokenVerifier(signingKeys), sessionRepository);
+        filter = new JwtRequestFilter(new TokenVerifier(signingKeys), sessionRepository, actingTenantResolver, exceptionResolver);
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
         Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
@@ -83,11 +92,42 @@ class JwtRequestFilterTest {
     void validToken_authenticatesTheActor() throws Exception {
         bearer(tokenIssuer.issueAccessToken(session));
         when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.of(actor));
+        when(actingTenantResolver.resolve(actor, null)).thenReturn(actor);
 
         filter.doFilter(request, response, filterChain);
 
         assertSame(actor, SecurityContextHolder.getContext().getAuthentication().getPrincipal());
         verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("A platform user's X-Tenant-Id makes the request work in that tenant")
+    void tenantHeader_setsTheActingTenant() throws Exception {
+        bearer(tokenIssuer.issueAccessToken(session));
+        request.addHeader("X-Tenant-Id", "200");
+        AuthenticatedActor acting = actor.actingIn(200L);
+        when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.of(actor));
+        when(actingTenantResolver.resolve(actor, "200")).thenReturn(acting);
+
+        filter.doFilter(request, response, filterChain);
+
+        assertSame(acting, SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+    }
+
+    @Test
+    @DisplayName("An unknown or malformed X-Tenant-Id is answered as an error and stops the request")
+    void badTenantHeader_isAnsweredAndStopsTheRequest() throws Exception {
+        bearer(tokenIssuer.issueAccessToken(session));
+        request.addHeader("X-Tenant-Id", "999");
+        DataNotFoundException notFound = new DataNotFoundException("Tenant not found");
+        when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.of(actor));
+        when(actingTenantResolver.resolve(actor, "999")).thenThrow(notFound);
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(exceptionResolver).resolveException(eq(request), eq(response), isNull(), eq(notFound));
+        verify(filterChain, never()).doFilter(request, response);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
 
     @Test

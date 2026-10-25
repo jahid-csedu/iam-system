@@ -42,7 +42,7 @@ public class UserPasswordService {
     @Transactional
     public void changeOwnPassword(PasswordChangeDto request) {
         AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
-        User user = userRepository.getRequiredByIdAndTenantId(actor.userId(), actor.tenantId());
+        User user = userRepository.getRequiredByIdAndTenantId(actor.userId(), actor.homeTenantId());
         if (!passwordEncoder.matches(request.oldPassword(), user.getPassword())) {
             throw new InvalidPasswordException(INVALID_OLD_PASSWORD);
         }

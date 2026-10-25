@@ -28,13 +28,20 @@ public class AuthorizationService {
     /**
      * A root user holds every TENANT permission implicitly; the platform tenant's root also holds every PLATFORM
      * permission, a standard tenant's root never one. Everyone else holds the permissions of their roles and their
-     * directly granted permissions.
+     * directly granted permissions. Inside another tenant ({@code X-Tenant-Id}) only the platform root holds anything.
      */
     public boolean hasPermission(AuthenticatedActor actor, PermissionKey permission) {
+        if (actor.isActingInOtherTenant()) {
+            return isPlatformRoot(actor);
+        }
         if (actor.rootUser()) {
-            return permission.scope() == TENANT || tenantRepository.existsByIdAndType(actor.tenantId(), TenantType.PLATFORM);
+            return permission.scope() == TENANT || isPlatformRoot(actor);
         }
         return permissionRepository.isGrantedToUser(actor.userId(), permission.key());
+    }
+
+    private boolean isPlatformRoot(AuthenticatedActor actor) {
+        return actor.rootUser() && tenantRepository.existsByIdAndType(actor.homeTenantId(), TenantType.PLATFORM);
     }
 
     public void checkPermission(AuthenticatedActor actor, PermissionKey permission) {

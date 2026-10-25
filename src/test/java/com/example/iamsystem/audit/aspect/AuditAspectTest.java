@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
@@ -74,6 +75,20 @@ class AuditAspectTest {
         assertEquals("127.0.0.1", details.getValue().get("ip_address"));
         assertEquals("alice", details.getValue().get("current_user"));
         assertEquals("deleted", details.getValue().get("outcome_value"));
+        assertFalse(details.getValue().containsKey("acting_tenant_id"));
+    }
+
+    @Test
+    @DisplayName("An action of a platform user inside another tenant records that tenant")
+    void audit_actingInAnotherTenant_recordsTheTenant() throws Throwable {
+        AuthenticatedActor acting = new AuthenticatedActor(1L, "platform-root", 1L, true, 10L).actingIn(100L);
+        when(currentUserProvider.currentActor()).thenReturn(Optional.of(acting));
+
+        aspect.audit(joinPoint, annotationOf("withoutTarget"));
+
+        verify(auditService).logAuditEvent(eq(AuditEventType.USER_DELETE), eq("platform-root"), eq("N/A"),
+                eq(AuditOutcome.SUCCESS), details.capture(), eq("SampleService"), eq("deleteUser"));
+        assertEquals(100L, details.getValue().get("acting_tenant_id"));
     }
 
     @Test

@@ -39,6 +39,7 @@ public class AuditAspect {
     private static final String TARGET_SPEL_ERROR = "N/A (SpEL Error)";
     private static final String TARGET_NULL = "N/A (Null Target)";
     private static final String CURRENT_USER = "current_user";
+    private static final String ACTING_TENANT_ID = "acting_tenant_id";
     private static final String REASON = "reason";
     private static final String RESULT = "result";
     private static final String EXCEPTION = "exception";
@@ -52,12 +53,15 @@ public class AuditAspect {
     public Object audit(ProceedingJoinPoint joinPoint, Auditable auditable) throws Throwable {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         EvaluationContext context = argumentsContext(signature.getParameterNames(), joinPoint.getArgs());
-        Optional<String> username = currentUserProvider.currentActor().map(AuthenticatedActor::username);
+        Optional<AuthenticatedActor> currentActor = currentUserProvider.currentActor();
+        Optional<String> username = currentActor.map(AuthenticatedActor::username);
         String actor = username.orElse(UNKNOWN_ACTOR);
         String target = resolveTarget(auditable.target(), context);
 
         Map<String, Object> details = auditService.getRequestDetails(request);
         details.put(CURRENT_USER, username.orElse(NOT_AVAILABLE));
+        currentActor.filter(AuthenticatedActor::isActingInOtherTenant)
+                .ifPresent(acting -> details.put(ACTING_TENANT_ID, acting.tenantId()));
 
         try {
             Object result = joinPoint.proceed();

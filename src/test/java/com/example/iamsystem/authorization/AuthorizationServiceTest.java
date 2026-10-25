@@ -80,6 +80,26 @@ class AuthorizationServiceTest {
     }
 
     @Test
+    @DisplayName("Inside another tenant the platform root holds every permission")
+    void hasPermission_platformRootInAnotherTenant_holdsEverything() {
+        AuthenticatedActor acting = new AuthenticatedActor(2L, "platform-root", 1L, true, 20L).actingIn(100L);
+        when(tenantRepository.existsByIdAndType(1L, TenantType.PLATFORM)).thenReturn(true);
+
+        assertTrue(authorizationService.hasPermission(acting, USERS_CREATE));
+        assertTrue(authorizationService.hasPermission(acting, TENANTS_READ));
+        verifyNoInteractions(permissionRepository);
+    }
+
+    @Test
+    @DisplayName("Inside another tenant other platform users hold nothing yet, whatever their own roles grant")
+    void hasPermission_otherPlatformUserInAnotherTenant_holdsNothing() {
+        AuthenticatedActor acting = new AuthenticatedActor(3L, "support", 1L, false, 30L).actingIn(100L);
+
+        assertFalse(authorizationService.hasPermission(acting, USERS_READ));
+        verifyNoInteractions(permissionRepository, tenantRepository);
+    }
+
+    @Test
     @DisplayName("The check throws only when the permission is missing")
     void checkPermission_throwsOnlyWhenPermissionMissing() {
         when(permissionRepository.isGrantedToUser(1L, "users:read")).thenReturn(true);

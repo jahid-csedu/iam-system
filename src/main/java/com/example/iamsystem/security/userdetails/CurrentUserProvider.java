@@ -28,7 +28,8 @@ public class CurrentUserProvider {
     }
 
     /**
-     * The tenant of the current user: the boundary for every tenant-owned read and write.
+     * The tenant the current request works in (see {@link AuthenticatedActor#tenantId()}): the boundary for every
+     * tenant-owned read and write.
      */
     public Long requireCurrentTenantId() {
         return requireCurrentActor().tenantId();

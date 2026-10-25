@@ -60,7 +60,8 @@ This file lets any new session pick up the work without the conversation that pr
 | fix | No credentials in logs: root log level INFO, secrets masked in `toString()` (`SecretMask`) | `7b6315e` |
 | 10d | PLATFORM keys `tenants:*` (`V11`), platform root holds them, `GET /api/platform/tenants` | `bed1c17` |
 | 10e | `PUT /api/platform/tenants/{id}/suspend` and `/activate` (never the platform tenant; sessions kept) | `0e0f5fc` |
-| 10f | `POST /api/platform/tenants`: super users create tenants through the signup service | step 10f commit |
+| 10f | `POST /api/platform/tenants`: super users create tenants through the signup service | `0effa3d` |
+| 10g | `X-Tenant-Id`: the platform root works inside any tenant through the normal APIs | step 10g commit |
 
 ---
 
@@ -228,7 +229,7 @@ Small sub-steps, each touching only a few classes:
 | 10d (DONE) | `tenants:*` PLATFORM keys; `GET /api/platform/tenants` (list, view) for platform users only |
 | 10e (DONE) | Suspend / activate a tenant (never the platform tenant); sessions kept |
 | 10f (DONE) | Create a tenant with its root as a super user |
-| 10g | `X-Tenant-Id`: the platform root works inside any tenant through the normal APIs; audit records platform user + tenant |
+| 10g (DONE) | `X-Tenant-Id`: the platform root works inside any tenant through the normal APIs; audit records platform user + tenant |
 | 10h | `platform_role_grants` / `platform_permission_grants` (tenant or all); `AuthorizationService` checks grants per tenant |
 | 10i | Endpoints to give and remove platform grants (no self-grants) |
 | 10j | Remove the unused `is_super_user` column |
