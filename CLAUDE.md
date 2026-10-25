@@ -277,7 +277,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 Security
 - Password reset emails a plaintext new password (until forced change on first login). The OTP is stored in plain text.
 - The reset request answers a known user more slowly than an unknown one (the email is sent during the request), so
-  timing still tells them apart; fix by sending emails in the background (`@Async`).
+  timing still tells them apart; fixed by asynchronous email (plan step 13).
 
 Broken / drift
 - Audit events for failures are logged at ERROR level.

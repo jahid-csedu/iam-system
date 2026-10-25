@@ -286,6 +286,21 @@ creation and no API changes it.
 - Permissions to decide then: new keys (e.g. `users:unlock`, `users:deactivate`) or `users:update`. Rules as for other user
   changes: tenant-scoped (other tenants 404), never yourself, never the root user.
 
+### Step 13: Email service: asynchronous sending with templates (planned, owner asked 2026-10-25)
+Today each feature builds a `SimpleMailMessage` and sends it inside the request and its transaction
+(`PasswordResetService`, `NewPasswordIssuer`). A slow SMTP server slows the response, holds database locks longer, and
+makes a known user's reset request measurably slower than an unknown one's. More emails will come (verification,
+invitations, MFA codes, notifications), so:
+- One owner for email: an email service that every feature calls with a purpose and its values; nobody else touches
+  `JavaMailSender`.
+- Common templates, one per purpose (reset OTP, new password, later verification, invitation, ...), with shared layout and
+  wording; per-tenant branding later.
+- Asynchronous: sent after the transaction commits (`@TransactionalEventListener(AFTER_COMMIT)` + `@Async` on its own
+  executor), so requests never wait for SMTP and roll-backs never send. Failures are logged (ERROR) and maybe retried;
+  decide then whether an outbox table is needed for guaranteed delivery.
+- The reset request's `MAIL_FAILED` outcome can't be known during the request any more; decide then how to audit it.
+- Removes the reset-request timing difference (Known issues in `CLAUDE.md`).
+
 ## 5. After the target design: the feature roadmap (`IAM_ROADMAP.md`)
 
 Each item builds on a seam created above:
