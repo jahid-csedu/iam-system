@@ -25,6 +25,10 @@ What "clean" means for every class a step touches:
 - **Explicit failures.** No `assert` or silent `null` returns for runtime checks; throw a meaningful exception.
 - **No magic strings or numbers.** Constants live in the feature that owns them. Config values come from `@ConfigurationProperties`, not scattered `@Value`.
 - **Logging with purpose.** No entry/exit debug noise. INFO for meaningful events, WARN for suspicious ones, ERROR only for real failures. Never log secrets.
+- **Mask sensitive data.** Passwords, OTPs, tokens, keys and any other credential never appear in logs, audit details, exception
+  messages or responses. Every class that holds one (request DTOs, configuration records, ...) overrides `toString()` and shows
+  `SecretMask.MASK` instead of the value, and `SecretMaskTest` lists it, because frameworks log objects on their own (Spring MVC
+  logs request bodies at DEBUG). Only the email that delivers a new password or OTP contains it.
 - **Entities.** No Lombok `@Data`/`@AllArgsConstructor` on JPA entities; `equals`/`hashCode` based on id; no business logic that belongs in services.
 - **HTTP.** Correct status codes (201 on create, 204 for empty responses, 401/403/404 as appropriate).
 - **Clean imports.** No unused imports; delete them. No wildcard (`*`) imports, static ones included; import each class or member explicitly.
@@ -257,9 +261,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- **Plaintext passwords in the log:** `logging.level.root=DEBUG` makes Spring MVC (`RequestResponseBodyMethodProcessor`)
-  log every request body it reads, including the passwords of login, signup, user creation and password change
-  (found 2026-10-25 in the 10c smoke test). `mail.debug=true`.
+- `mail.debug=true`.
 - Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit, is
   stored in plain text, and the endpoint reveals whether a username/email exists.
 
@@ -361,3 +363,7 @@ Design debt
   `PlatformBootstrap` creates the platform root through `UserFactory.newRootUser` while the platform has no root (WARN
   without complete config; invalid config stops startup; later config changes are ignored). docker-compose passes the vars.
   Next: step 10d (`tenants:*` keys, list/view tenants).
+- 2026-10-25: Fix: plaintext passwords in the log. Spring MVC logged request bodies at DEBUG (`logging.level.root=DEBUG`),
+  passwords included. Root level now INFO, and every credential-carrying record (`UserLoginDto`, `UserCreationDto`,
+  `PasswordChangeDto`, `PasswordResetDto`, `JwtRefreshTokenDto`, `IntrospectionRequest`, `PlatformProperties.RootUser`) masks
+  the secret in `toString()` (`SecretMask`). New code standard: mask sensitive data.
