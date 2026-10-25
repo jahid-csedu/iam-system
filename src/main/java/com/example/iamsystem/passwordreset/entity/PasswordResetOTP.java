@@ -19,7 +19,8 @@ import java.time.Instant;
 import static com.example.iamsystem.common.util.SecretMask.MASK;
 
 /**
- * The pending password-reset OTP of a user (at most one), with the number of wrong guesses made against it.
+ * The pending password-reset OTP of a user (at most one), with the number of wrong guesses made against it. Only a bcrypt
+ * hash of the OTP is stored; the OTP itself exists only in the email.
  */
 @Entity
 @Table(name = "password_reset_otps")
@@ -32,8 +33,8 @@ public class PasswordResetOTP {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String otp;
+    @Column(name = "otp_hash", nullable = false)
+    private String otpHash;
 
     @OneToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id", nullable = false)
@@ -63,7 +64,7 @@ public class PasswordResetOTP {
 
     @Override
     public String toString() {
-        return "PasswordResetOTP[id=" + id + ", otp=" + MASK + ", expiryDate=" + expiryDate
+        return "PasswordResetOTP[id=" + id + ", otpHash=" + MASK + ", expiryDate=" + expiryDate
                 + ", failedAttempts=" + failedAttempts + "]";
     }
 }

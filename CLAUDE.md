@@ -275,7 +275,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- Password reset emails a plaintext new password (until forced change on first login). The OTP is stored in plain text.
+- Password reset emails a plaintext new password (until forced change on first login).
 - The reset request answers a known user more slowly than an unknown one (the email is sent during the request), so
   timing still tells them apart; fixed by asynchronous email (plan step 13).
 
@@ -469,3 +469,7 @@ Design debt
 - 2026-10-25: Security fix 5d. SMTP connect, read and write timeouts of 10 s (`spring.mail.properties.mail.smtp.*timeout`);
   JavaMail waited forever by default, so a hanging mail server could hang a request (and the reset OTP lock) indefinitely.
   Verified against a silent local server: the send fails after 10 s. Next: security fix 6 (hashed OTPs).
+- 2026-10-25: Security fix 6. Flyway `V18__password_reset_otp_hash.sql`: `otp` → `otp_hash` (pending plain OTPs deleted).
+  OTPs are stored as a bcrypt hash through the shared `PasswordEncoder` and checked with `matches`. Decision (option A):
+  bcrypt, not SHA-256 (a million six-digit values hash in under a second) and not an HMAC secret (one more key to
+  manage). Next: security fix 7 (no emailed passwords).

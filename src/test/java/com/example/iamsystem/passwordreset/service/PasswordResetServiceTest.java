@@ -20,6 +20,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -27,6 +29,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -57,6 +60,7 @@ class PasswordResetServiceTest {
     @Mock
     private ResetRequestLimiter requestLimiter;
 
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
     private PasswordResetService service;
     private User user;
     private PasswordResetOTP resetOtp;
@@ -64,7 +68,7 @@ class PasswordResetServiceTest {
     @BeforeEach
     void setUp() {
         service = new PasswordResetService(userRepository, otpRepository, mailSender, newPasswordIssuer, clientResolver,
-                new OtpExpirationProperties(5), requestLimiter);
+                new OtpExpirationProperties(5), requestLimiter, passwordEncoder);
         Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
         tenant.setId(TENANT_ID);
         Client client = new Client();
@@ -80,7 +84,7 @@ class PasswordResetServiceTest {
         user.setEmail("alice@example.com");
 
         resetOtp = new PasswordResetOTP();
-        resetOtp.setOtp("123456");
+        resetOtp.setOtpHash(passwordEncoder.encode("123456"));
         resetOtp.setUser(user);
         resetOtp.setExpiryDate(Instant.now().plus(Duration.ofMinutes(5)));
     }
@@ -94,14 +98,16 @@ class PasswordResetServiceTest {
 
         ArgumentCaptor<PasswordResetOTP> saved = ArgumentCaptor.forClass(PasswordResetOTP.class);
         verify(otpRepository).save(saved.capture());
-        String otp = saved.getValue().getOtp();
-        assertTrue(otp.matches("\\d{6}"));
+        String hash = saved.getValue().getOtpHash();
         assertTrue(saved.getValue().getExpiryDate().isBefore(Instant.now().plus(Duration.ofMinutes(6))));
 
         ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(mail.capture());
         assertArrayEquals(new String[]{"alice@example.com"}, mail.getValue().getTo());
-        assertTrue(mail.getValue().getText().endsWith(otp));
+        String otp = mail.getValue().getText().substring(mail.getValue().getText().length() - 6);
+        assertTrue(otp.matches("\\d{6}"));
+        assertNotEquals(otp, hash);
+        assertTrue(passwordEncoder.matches(otp, hash));
     }
 
     @Test

@@ -46,7 +46,7 @@ class SecretMaskTest {
 
     private static PasswordResetOTP pendingOtp() {
         PasswordResetOTP otp = new PasswordResetOTP();
-        otp.setOtp(SECRET);
+        otp.setOtpHash(SECRET);
         return otp;
     }
 }

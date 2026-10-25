@@ -14,11 +14,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -30,7 +29,8 @@ import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWOR
 
 /**
  * Self-service password reset for users who are not logged in: an OTP is emailed, and a valid OTP gets the user a new
- * password by email. The OTP and the password are only ever sent by email.
+ * password by email. The OTP and the password are only ever sent by email; the database keeps only a bcrypt hash of the
+ * OTP (six digits are too few for a fast hash).
  * <p>
  * The request's {@code client_id} decides the tenant, and the user is found by username or email inside that tenant only
  * (both are unique per tenant).
@@ -55,6 +55,7 @@ public class PasswordResetService {
     private final ClientResolver clientResolver;
     private final OtpExpirationProperties otpExpiration;
     private final ResetRequestLimiter requestLimiter;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * Replaces any earlier OTP of the user. An unknown user, a user without an email address, a user over the request limit
@@ -93,7 +94,7 @@ public class PasswordResetService {
         String otp = String.format(OTP_FORMAT, random.nextInt(OTP_BOUND));
         PasswordResetOTP resetOtp = new PasswordResetOTP();
         resetOtp.setUser(user);
-        resetOtp.setOtp(otp);
+        resetOtp.setOtpHash(passwordEncoder.encode(otp));
         resetOtp.setExpiryDate(Instant.now().plus(Duration.ofMinutes(otpExpiration.minutes())));
         otpRepository.save(resetOtp);
 
@@ -131,7 +132,7 @@ public class PasswordResetService {
             otpRepository.delete(resetOtp);
             throw new InvalidPasswordResetOTPException(INVALID_OTP);
         }
-        if (!matches(resetOtp, otp)) {
+        if (!passwordEncoder.matches(otp, resetOtp.getOtpHash())) {
             recordFailedAttempt(resetOtp);
             throw new InvalidPasswordResetOTPException(INVALID_OTP);
         }
@@ -145,13 +146,6 @@ public class PasswordResetService {
     private Optional<User> findUser(String identifier, Long tenantId) {
         return userRepository.findByUsernameAndTenantId(identifier, tenantId)
                 .or(() -> userRepository.findByEmailAndTenantId(identifier, tenantId));
-    }
-
-    /**
-     * Compares in constant time, so the response time doesn't tell how many leading digits were right.
-     */
-    private static boolean matches(PasswordResetOTP resetOtp, String otp) {
-        return MessageDigest.isEqual(resetOtp.getOtp().getBytes(StandardCharsets.UTF_8), otp.getBytes(StandardCharsets.UTF_8));
     }
 
     private void recordFailedAttempt(PasswordResetOTP resetOtp) {
