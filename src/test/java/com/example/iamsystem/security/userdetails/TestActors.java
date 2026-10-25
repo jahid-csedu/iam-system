@@ -9,7 +9,8 @@ import java.util.List;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 
 /**
- * Builds the principal that {@code JwtRequestFilter} puts into the security context, for tests.
+ * Builds the principal that {@code JwtRequestFilter} puts into the security context, for tests. These actors have no
+ * login session; tests of sessions log in for real.
  */
 public final class TestActors {
 
@@ -17,7 +18,7 @@ public final class TestActors {
     }
 
     public static AuthenticatedActor actorOf(User user) {
-        return new AuthenticatedActor(user.getId(), user.getUsername(), user.getTenant().getId(), user.isRootUser());
+        return new AuthenticatedActor(user.getId(), user.getUsername(), user.getTenant().getId(), user.isRootUser(), null);
     }
 
     /**

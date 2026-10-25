@@ -24,7 +24,7 @@ final class RoleTestData {
     }
 
     static AuthenticatedActor actor() {
-        return new AuthenticatedActor(1L, "actor", TENANT.getId(), false);
+        return new AuthenticatedActor(1L, "actor", TENANT.getId(), false, 10L);
     }
 
     private static Tenant tenant() {

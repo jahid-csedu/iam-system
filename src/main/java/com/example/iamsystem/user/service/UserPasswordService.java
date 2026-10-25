@@ -6,6 +6,7 @@ import com.example.iamsystem.common.exception.InvalidPasswordException;
 import com.example.iamsystem.passwordreset.service.NewPasswordIssuer;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
+import com.example.iamsystem.session.service.SessionService;
 import com.example.iamsystem.user.config.PasswordExpirationProperties;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.entity.User;
@@ -32,9 +33,10 @@ public class UserPasswordService {
     private final PasswordEncoder passwordEncoder;
     private final PasswordExpirationProperties passwordExpiration;
     private final NewPasswordIssuer newPasswordIssuer;
+    private final SessionService sessionService;
 
     /**
-     * Only for yourself, and always with the old password.
+     * Only for yourself, and always with the old password. Logs you out everywhere except the session making the change.
      */
     @Auditable(AuditEventType.PASSWORD_CHANGE)
     @Transactional
@@ -49,6 +51,7 @@ public class UserPasswordService {
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         user.setPasswordExpiryDate(calculateExpiryDate(passwordExpiration.days()));
         userRepository.save(user);
+        sessionService.revokeOthersOf(user.getId(), actor.sessionId());
     }
 
     /**

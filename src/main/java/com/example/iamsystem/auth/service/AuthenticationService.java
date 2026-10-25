@@ -8,34 +8,34 @@ import com.example.iamsystem.auth.dto.TokenValidationRequest;
 import com.example.iamsystem.auth.dto.TokenValidationResponse;
 import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.client.service.ClientResolver;
-import com.example.iamsystem.common.exception.JwtException;
+import com.example.iamsystem.common.exception.InvalidTokenException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.jwt.TokenIssuer;
 import com.example.iamsystem.security.jwt.TokenVerifier;
+import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
+import com.example.iamsystem.session.entity.RefreshToken;
+import com.example.iamsystem.session.service.IssuedSession;
+import com.example.iamsystem.session.service.SessionService;
 import com.example.iamsystem.user.dto.UserLoginDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.entity.UserType;
-import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Service;
-
-import java.util.Optional;
+import org.springframework.transaction.annotation.Transactional;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.CONSOLE_CLIENT_MANAGEMENT_ONLY;
-import static com.example.iamsystem.common.exception.ErrorMessage.INVALID_TOKEN;
 import static com.example.iamsystem.common.exception.ErrorMessage.REFRESH_TOKENS_DISABLED;
-import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
-import static com.example.iamsystem.security.jwt.TokenType.REFRESH_TOKEN;
 
 /**
- * Login, token refresh and token checks behind the {@code /api/auth} endpoints. Every login and refresh names its client:
- * the client decides the tenant the user is looked up in, and its tokens carry the client.
+ * Login, token refresh, logout and token checks behind the {@code /api/auth} endpoints. Every login and refresh names its
+ * client: the client decides the tenant the user is looked up in, and its tokens carry the client. Every login starts a
+ * session, which its access tokens name and its refresh tokens keep alive.
  */
 @Service
 @RequiredArgsConstructor
@@ -45,8 +45,10 @@ public class AuthenticationService {
     private final AuthenticationManager authenticationManager;
     private final DefaultUserDetailsService userDetailsService;
     private final ClientResolver clientResolver;
+    private final SessionService sessionService;
     private final TokenIssuer tokenIssuer;
     private final TokenVerifier tokenVerifier;
+    private final CurrentUserProvider currentUserProvider;
 
     /**
      * The username is looked up only inside the client's tenant; the management console accepts management users only.
@@ -64,35 +66,39 @@ public class AuthenticationService {
 
         User user = ((DefaultUserDetails) authenticationManager.authenticate(loginRequest).getPrincipal()).user();
         checkClientAccepts(client, user);
-        return issueTokens(user, client);
+        return toResponse(sessionService.start(user, client));
     }
 
     /**
-     * The refresh token must have been issued through this client, for the user's current version, and the client must
-     * still issue refresh tokens.
+     * Trades a refresh token, issued through this client, for a new access token and a new refresh token; the old one is
+     * used up. The client must still issue refresh tokens and the user must still be able to log in. Commits even when
+     * the token is refused, because a reused token revokes its session.
      */
     @Auditable(
             value = AuditEventType.TOKEN_REFRESH,
             detailsExpression = "T(java.util.Map).of('client_id', #request.clientId())"
     )
+    @Transactional(noRollbackFor = InvalidTokenException.class)
     public JwtResponse refresh(JwtRefreshTokenDto request) {
         Client client = clientResolver.resolve(request.clientId());
         if (!client.isRefreshTokenEnabled()) {
             throw new UserInputNotValidException(REFRESH_TOKENS_DISABLED);
         }
-        Claims claims = parseRefreshToken(request.refreshToken())
-                .filter(parsed -> client.getClientId().equals(tokenVerifier.clientIdOf(parsed)))
-                .orElseThrow(() -> new JwtException(INVALID_TOKEN));
+        RefreshToken refreshToken = sessionService.requireRefreshableToken(client, request.refreshToken());
+        userDetailsService.checkUsable(refreshToken.getSession().getUser());
+        return toResponse(sessionService.rotate(refreshToken));
+    }
 
-        User user = userDetailsService.requireUsableUser(tokenVerifier.userIdOf(claims)).user();
-        if (!tokenVerifier.isIssuedFor(claims, user)) {
-            throw new JwtException(INVALID_TOKEN);
-        }
-        return issueTokens(user, client);
+    /**
+     * Ends the caller's session: its access tokens stop working here and its refresh tokens can't be used.
+     */
+    @Auditable(AuditEventType.LOGOUT)
+    public void logout() {
+        sessionService.revoke(currentUserProvider.requireCurrentActor().sessionId());
     }
 
     public TokenValidationResponse validate(TokenValidationRequest request) {
-        return new TokenValidationResponse(tokenVerifier.isValid(request.getToken(), ACCESS_TOKEN));
+        return new TokenValidationResponse(tokenVerifier.isValid(request.getToken()));
     }
 
     private void checkClientAccepts(Client client, User user) {
@@ -102,21 +108,8 @@ public class AuthenticationService {
         }
     }
 
-    private Optional<Claims> parseRefreshToken(String token) {
-        try {
-            Claims claims = tokenVerifier.parseClaims(token, REFRESH_TOKEN);
-            tokenVerifier.userIdOf(claims);
-            return Optional.of(claims);
-        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * A refresh token only when the client issues them.
-     */
-    private JwtResponse issueTokens(User user, Client client) {
-        String refreshToken = client.isRefreshTokenEnabled() ? tokenIssuer.issueRefreshToken(user, client) : null;
-        return new JwtResponse(user.getUsername(), refreshToken, tokenIssuer.issueAccessToken(user, client));
+    private JwtResponse toResponse(IssuedSession issued) {
+        return new JwtResponse(issued.session().getUser().getUsername(), issued.refreshToken(),
+                tokenIssuer.issueAccessToken(issued.session()));
     }
 }

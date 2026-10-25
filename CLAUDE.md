@@ -118,6 +118,8 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   (done in step 9a: RS256, one platform key set; per-tenant keys are roadmap item 10), plus an introspection endpoint that
   reflects revocation and tenant suspension (planned).
 - Logout and revocation: store refresh tokens (hashed) in the database. This replaces the `@Version`-based revocation.
+  Done (step 9b): a session per login (`sid` in access tokens), single-use rotating opaque refresh tokens with reuse
+  detection, `POST /api/auth/logout`.
 
 ### Tenant lifecycle
 - `tenants.status` = `ACTIVE` / `SUSPENDED` (later maybe `DELETED`). A suspended tenant fails login, refresh and introspection.
@@ -183,13 +185,15 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `@RequirePermission(PermissionKey)` on every protected endpoint
 - `authorization/`: `AuthorizationService` = the only place answering "does user X hold service:action?";
   `@RequirePermission` + `AuthorizationAspect` enforce it on endpoints
-- `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, validate) and DTOs;
+- `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, logout, validate) and DTOs;
   `JwksController` (`/.well-known/jwks.json`)
 - `security/`: Spring Security wiring: `config/` (incl. `JwtProperties`), `filter/` (JWT filter), `jwt/` (`SigningKeys` = the
-  RSA key set, `TokenIssuer`, `TokenVerifier`, `TokenType`),
+  RSA key set, `TokenIssuer`, `TokenVerifier`: access tokens only),
   `userdetails/` (`AuthenticatedActor` = the request principal; `CurrentUserProvider`, the single owner of "who is logged in"
   and of the current tenant id; `TenantAuthenticationProvider` = login inside the client's tenant; `DefaultUserDetails`/
   `DefaultUserDetailsService` for login and refresh only), `event/` (lockout listeners, by user id), `config/LockoutProperties`
+- `session/`: login sessions. `UserSession` + `RefreshToken` (hash only), `SessionService` (start, refresh-token checks and
+  rotation with reuse detection, revoke one / all / all but one), `RefreshTokenGenerator` (random token + SHA-256 hash)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
 - `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (mail, OpenAPI), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
@@ -208,12 +212,18 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   authentication details to `TenantAuthenticationProvider`; the console client refuses regular users (403).
   Refresh: `{ client_id, refresh_token }`, only through the issuing client, and refused when the client has refresh tokens off.
 - Token settings live on the client (`access_token_ttl_seconds`, `refresh_token_enabled`, `refresh_token_ttl_seconds`,
-  `client_token_claims`). `TokenIssuer.issueAccessToken/issueRefreshToken(user, client)` read them; defaults are
+  `client_token_claims`). `SessionService.start` and `TokenIssuer.issueAccessToken(session)` read them; defaults are
   `ClientService.DEFAULT_TOKEN_SETTINGS` (5 min, refresh on for 24 h, `USERNAME`).
 - Tokens are RS256-signed by the first key of `iam.jwt.keys` (kid + PKCS#8 PEM private key, public key derived); every
   configured key is published at `GET /.well-known/jwks.json` (public) and accepted by `TokenVerifier`, which only takes
-  RS256 by a known `kid` and the expected `typ` (`at+jwt` access, `rt+jwt` refresh). No key configured → a temporary key
-  with a WARN. `iss` = `iam.jwt.issuer` + `/tenants/{id}`, `aud` = `client_id`, plus `jti`.
+  RS256 by a known `kid` and `typ: at+jwt`. No key configured → a temporary key with a WARN.
+  `iss` = `iam.jwt.issuer` + `/tenants/{id}`, `aud` = `client_id`, `sid` = session id, plus `jti`.
+- Sessions (`user_sessions`): one per login; expire with their latest refresh token (each refresh extends them by the
+  client's refresh lifetime) or, without refresh tokens, with the access token. Refresh tokens (`refresh_tokens`) are
+  32 random bytes, stored as SHA-256 hex, single use; a used one presented again revokes its session. Refresh runs in one
+  transaction that commits on `InvalidTokenException` (401), so that revocation sticks.
+- Session revocation: logout (that session), own password change (all but the current one), any password reset (all),
+  user/client deletion (DB cascade). Deactivation and lock don't revoke; the filter and refresh refuse such users.
 - `POST /api/tenants/signup` (public) creates a tenant + its root user + predefined roles + management console (its `client_id` is in the response). `POST /api/users` (`users:create`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
@@ -221,10 +231,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `PATCH /api/users/password` changes only your own password (old password required). `POST /api/users/{id}/password-reset`
   (`users:reset-password`) gives another user a new emailed password; never your own, never root's.
 - New passwords and OTPs are only ever sent by email: never in responses, logs or audit details.
-- Token revocation = JWT `version` claim vs `User.@Version` (the same column as optimistic locking), so any user change revokes tokens.
-- The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`), never the `User` entity.
-  `JwtRequestFilter` finds it with one query (`UserRepository.findActor`) that only matches the current token version and an
-  active, unlocked user; anything else leaves the request unauthenticated (401). Permissions are read from the database on
+- The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`, `sessionId`), never the
+  `User` entity. `JwtRequestFilter` finds it with one query (`UserSessionRepository.findActor`) that only matches a live
+  session of an active, unlocked user; anything else leaves the request unauthenticated (401). `User.@Version` is
+  optimistic locking only. Permissions are read from the database on
   every check (`PermissionRepository.isGrantedToUser`).
 - `is_super_user` exists in schema and entity but is never read.
 
@@ -233,11 +243,13 @@ Security
 - `mail.debug=true`.
 - Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit, is
   stored in plain text, and the endpoint reveals whether a username/email exists.
-- `/api/auth/token/validate` ignores the token version (revoked tokens are reported as valid).
+- `/api/auth/token/validate` checks signature and expiry only (ended sessions are reported as valid; replaced in step 9c).
 
 Broken / drift
 - A root user can delete itself, which leaves its tenant without a root (decide with the platform/tenant lifecycle work).
-- Refresh-token errors answer 412 instead of 401 (step 9). Audit events for failures are logged at ERROR level.
+- Audit events for failures are logged at ERROR level.
+- Ended sessions and used/expired refresh tokens are never purged (needs a cleanup job; roadmap item 6, session management).
+- Sessions slide forever while refreshed: no absolute session lifetime yet (roadmap item 6).
 - Deleting a user with a pending password-reset OTP fails (FK `fk_password_reset_otps_user`, no ON DELETE rule).
 - `GlobalHandler` still has one-off handlers per exception (the ProblemDetail step reworks it).
 
@@ -306,3 +318,9 @@ Design debt
   access tokens get `typ: at+jwt`, `kid`, `iss` (per tenant), `aud`, `jti`. Decisions: one platform key set (per-tenant keys
   → roadmap item 10), RS256, logout by bearer token (9b), public introspection until client secrets (9c).
   Next: step 9b (sessions, opaque rotated refresh tokens, logout).
+- 2026-10-25: Step 9b (sessions). Flyway `V9__user_sessions.sql`: `user_sessions`, `refresh_tokens` (SHA-256 hash).
+  Refresh tokens are opaque, single use and rotated; reuse revokes the session; access tokens carry `sid` and the filter checks
+  the session; `version` claim and refresh JWTs removed; `POST /api/auth/logout` (204); refresh errors 401 instead of 412
+  (`InvalidTokenException` replaces `JwtException`); password change/reset end sessions. Decisions: own password change keeps
+  the current session; deactivation/lock don't revoke (checked per request); sessions slide with each refresh.
+  Next: step 9c (introspection).

@@ -6,6 +6,7 @@ import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.passwordreset.service.NewPasswordIssuer;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
+import com.example.iamsystem.session.service.SessionService;
 import com.example.iamsystem.user.config.PasswordExpirationProperties;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.entity.User;
@@ -20,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
 
+import static com.example.iamsystem.user.service.UserTestData.SESSION_ID;
 import static com.example.iamsystem.user.service.UserTestData.TENANT;
 import static com.example.iamsystem.user.service.UserTestData.actor;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
@@ -51,6 +53,8 @@ class UserPasswordServiceTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private NewPasswordIssuer newPasswordIssuer;
+    @Mock
+    private SessionService sessionService;
 
     private UserPasswordService service;
     private User root;
@@ -59,13 +63,13 @@ class UserPasswordServiceTest {
     @BeforeEach
     void setUp() {
         service = new UserPasswordService(userRepository, userValidator, accessPolicy, currentUserProvider,
-                passwordEncoder, new PasswordExpirationProperties(90), newPasswordIssuer);
+                passwordEncoder, new PasswordExpirationProperties(90), newPasswordIssuer, sessionService);
         root = rootUser(1, "root");
         member = user(2, "member");
     }
 
     @Test
-    @DisplayName("The correct old password updates your password and its expiry")
+    @DisplayName("The correct old password updates your password and its expiry and ends your other sessions")
     void changeOwnPassword_withCorrectOldPassword_updatesPasswordAndExpiry() {
         givenLoggedIn(member);
         when(passwordEncoder.matches("old", "encoded-member")).thenReturn(true);
@@ -76,6 +80,7 @@ class UserPasswordServiceTest {
         assertEquals("encoded-new", member.getPassword());
         assertTrue(member.getPasswordExpiryDate().isAfter(Instant.now()));
         verify(userRepository).save(member);
+        verify(sessionService).revokeOthersOf(2L, SESSION_ID);
     }
 
     @Test

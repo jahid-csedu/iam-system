@@ -28,7 +28,7 @@ class AuthorizationAspectTest {
     @InjectMocks
     private AuthorizationAspect aspect;
 
-    private final AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 100L, false);
+    private final AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 100L, false, 10L);
 
     @Test
     @DisplayName("The annotated permission is checked for the current user")

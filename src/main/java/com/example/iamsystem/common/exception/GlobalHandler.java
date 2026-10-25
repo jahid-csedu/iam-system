@@ -1,6 +1,5 @@
 package com.example.iamsystem.common.exception;
 
-import io.jsonwebtoken.security.SignatureException;
 import io.swagger.v3.oas.annotations.Hidden;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -25,7 +24,6 @@ import static com.example.iamsystem.common.exception.ErrorMessage.UNREADABLE_REQ
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
-import static org.springframework.http.HttpStatus.PRECONDITION_FAILED;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 
@@ -147,11 +145,10 @@ public class GlobalHandler {
         }
     }
 
-    @ExceptionHandler({SignatureException.class, JwtException.class})
-    @ResponseStatus(HttpStatus.PRECONDITION_FAILED)
-    public ResponseEntity<ExceptionResponse> handleJwtAndSignatureExceptions(RuntimeException exception) {
-        ExceptionResponse response = new ExceptionResponse(PRECONDITION_FAILED.value(), ErrorMessage.INVALID_TOKEN);
-        return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(response);
+    @ExceptionHandler(InvalidTokenException.class)
+    @ResponseStatus(UNAUTHORIZED)
+    public ResponseEntity<ExceptionResponse> handleInvalidTokenException(InvalidTokenException exception) {
+        return buildExceptionResponse(exception, UNAUTHORIZED);
     }
 
     /**

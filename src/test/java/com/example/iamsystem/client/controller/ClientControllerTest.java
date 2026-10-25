@@ -140,7 +140,7 @@ class ClientControllerTest {
         String shopClientId = body(send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop"))).get("client_id").asString();
         String refreshToken = body(login(consoleClientId, "acme-root", "Password1!")).get("refresh_token").asString();
 
-        refresh(shopClientId, refreshToken).andExpect(status().isPreconditionFailed());
+        refresh(shopClientId, refreshToken).andExpect(status().isUnauthorized());
         refresh(consoleClientId, refreshToken).andExpect(status().isOk());
     }
 
@@ -167,9 +167,7 @@ class ClientControllerTest {
 
         JsonNode tokens = body(login(shop.get("client_id").asString(), "acme-root", "Password1!").andExpect(status().isOk()));
         JsonNode access = payload(tokens.get("access_token").asString());
-        JsonNode refresh = payload(tokens.get("refresh_token").asString());
         assertEquals(600, access.get("exp").asLong() - access.get("iat").asLong());
-        assertEquals(7200, refresh.get("exp").asLong() - refresh.get("iat").asLong());
         assertEquals("root@acme.com", access.get("email").asString());
         assertEquals("MANAGEMENT", access.get("user_type").asString());
         assertFalse(access.has("username"));

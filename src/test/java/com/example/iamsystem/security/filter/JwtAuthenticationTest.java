@@ -1,7 +1,5 @@
 package com.example.iamsystem.security.filter;
 
-import com.example.iamsystem.client.repository.ClientRepository;
-import com.example.iamsystem.security.jwt.TokenIssuer;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
@@ -45,12 +43,7 @@ class JwtAuthenticationTest {
     private JsonMapper jsonMapper;
     @Autowired
     private UserRepository userRepository;
-    @Autowired
-    private TokenIssuer tokenIssuer;
-    @Autowired
-    private ClientRepository clientRepository;
 
-    private String consoleClientId;
     private String accessToken;
 
     @BeforeEach
@@ -61,7 +54,7 @@ class JwtAuthenticationTest {
                         .content(jsonMapper.writeValueAsString(signup)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        consoleClientId = jsonMapper.readTree(signupResponse).get("managementConsole").get("client_id").asString();
+        String consoleClientId = jsonMapper.readTree(signupResponse).get("managementConsole").get("client_id").asString();
 
         String login = mockMvc.perform(post("/api/auth/authenticate").contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(new UserLoginDto(consoleClientId, "acme-root", "Password1!"))))
@@ -83,11 +76,11 @@ class JwtAuthenticationTest {
     }
 
     @Test
-    @DisplayName("A token issued before the user changed is revoked")
-    void tokenOfChangedUser_isUnauthorized() throws Exception {
+    @DisplayName("Changing a user's profile keeps their session: permissions are read live, not from the token")
+    void tokenOfChangedUser_staysValid() throws Exception {
         updateRoot(user -> user.setFullName("Renamed Root"));
 
-        getUsers(accessToken).andExpect(status().isUnauthorized());
+        getUsers(accessToken).andExpect(status().isOk());
     }
 
     @Test
@@ -95,51 +88,39 @@ class JwtAuthenticationTest {
     void tokenOfInactiveUser_isUnauthorized() throws Exception {
         updateRoot(user -> user.setActive(false));
 
-        getUsers(freshToken()).andExpect(status().isUnauthorized());
+        getUsers(accessToken).andExpect(status().isUnauthorized());
     }
 
     @Test
     @DisplayName("A token of a locked user is rejected while the lock lasts")
     void tokenOfLockedUser_isUnauthorized() throws Exception {
-        String token = lockRootAndIssueToken(Instant.now().plus(Duration.ofMinutes(15)));
+        lockRoot(Instant.now().plus(Duration.ofMinutes(15)));
 
-        getUsers(token).andExpect(status().isUnauthorized());
+        getUsers(accessToken).andExpect(status().isUnauthorized());
     }
 
     @Test
     @DisplayName("A token of a user whose lock has expired is accepted")
     void tokenOfUserWithExpiredLock_isAccepted() throws Exception {
-        String token = lockRootAndIssueToken(Instant.now().minus(Duration.ofMinutes(1)));
+        lockRoot(Instant.now().minus(Duration.ofMinutes(1)));
 
-        getUsers(token).andExpect(status().isOk());
+        getUsers(accessToken).andExpect(status().isOk());
     }
 
     private ResultActions getUsers(String token) throws Exception {
         return mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + token));
     }
 
-    /**
-     * Changes the root user directly in the database; every save bumps the user's version.
-     */
     private void updateRoot(Consumer<User> change) {
         User root = findByUsername(userRepository, "acme-root").orElseThrow();
         change.accept(root);
         userRepository.save(root);
     }
 
-    /**
-     * A token for the root user's current version, issued by the same code login uses.
-     */
-    private String freshToken() {
-        return tokenIssuer.issueAccessToken(findByUsername(userRepository, "acme-root").orElseThrow(),
-                clientRepository.findByClientId(consoleClientId).orElseThrow());
-    }
-
-    private String lockRootAndIssueToken(Instant lockedUntil) {
+    private void lockRoot(Instant lockedUntil) {
         updateRoot(user -> {
             user.setUserLocked(true);
             user.setAccountLockedUntil(lockedUntil);
         });
-        return freshToken();
     }
 }

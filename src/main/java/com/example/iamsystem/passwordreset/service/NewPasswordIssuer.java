@@ -1,6 +1,7 @@
 package com.example.iamsystem.passwordreset.service;
 
 import com.example.iamsystem.common.exception.UserInputNotValidException;
+import com.example.iamsystem.session.service.SessionService;
 import com.example.iamsystem.user.config.PasswordExpirationProperties;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
@@ -23,7 +24,7 @@ import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWOR
 /**
  * Gives a user a new random password and sends it to the user's email address, for both password resets
  * (self-service with OTP, and by another user). The password is only ever sent by email: never returned,
- * logged or audited. Saving the user also revokes the tokens issued before the reset.
+ * logged or audited. The user is logged out everywhere.
  */
 @Component
 @RequiredArgsConstructor
@@ -41,6 +42,7 @@ public class NewPasswordIssuer {
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
     private final PasswordExpirationProperties passwordExpiration;
+    private final SessionService sessionService;
 
     /**
      * Must run inside the caller's transaction, so a failed email also rolls back the password change.
@@ -53,6 +55,7 @@ public class NewPasswordIssuer {
         user.setPassword(passwordEncoder.encode(password));
         user.setPasswordExpiryDate(calculateExpiryDate(passwordExpiration.days()));
         userRepository.save(user);
+        sessionService.revokeAllOf(user.getId());
 
         SimpleMailMessage email = new SimpleMailMessage();
         email.setTo(user.getEmail());

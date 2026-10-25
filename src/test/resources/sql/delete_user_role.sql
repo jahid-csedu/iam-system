@@ -1,3 +1,4 @@
+delete from `user_sessions`;
 delete from `password_reset_otps`;
 delete from `user_roles`;
 delete from `roles`;

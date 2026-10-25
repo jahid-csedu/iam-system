@@ -63,7 +63,7 @@ public class Client {
     private int refreshTokenTtlSeconds;
 
     /**
-     * The user claims this client's access tokens carry, on top of sub, client_id, version, iat and exp.
+     * The user claims this client's access tokens carry, on top of the standard ones (iss, sub, aud, client_id, sid, jti, iat, exp).
      */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "client_token_claims", joinColumns = @JoinColumn(name = "client_ref_id"))

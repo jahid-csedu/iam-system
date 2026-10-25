@@ -1,6 +1,5 @@
 package com.example.iamsystem.security.jwt;
 
-import com.example.iamsystem.user.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Header;
 import io.jsonwebtoken.Jws;
@@ -13,13 +12,14 @@ import org.springframework.stereotype.Component;
 
 import java.security.Key;
 
-import static com.example.iamsystem.security.jwt.TokenIssuer.CLIENT_ID;
-import static com.example.iamsystem.security.jwt.TokenIssuer.VERSION;
+import static com.example.iamsystem.security.jwt.TokenIssuer.ACCESS_TOKEN_TYPE;
+import static com.example.iamsystem.security.jwt.TokenIssuer.SESSION_ID;
 
 /**
- * Reads tokens issued by {@link TokenIssuer}. A token is accepted only when it is signed with RS256 by one of our
- * {@link SigningKeys} (found by its {@code kid}), is unexpired, and has the expected {@code typ}. Unsigned tokens and tokens
+ * Reads access tokens issued by {@link TokenIssuer}. A token is accepted only when it is signed with RS256 by one of our
+ * {@link SigningKeys} (found by its {@code kid}), is unexpired, and is typed {@code at+jwt}. Unsigned tokens and tokens
  * signed with any other algorithm, such as HMAC keyed with our public key, are rejected: the public key can only verify.
+ * Whether the token's session is still live is the caller's check.
  */
 @Component
 public class TokenVerifier {
@@ -35,13 +35,13 @@ public class TokenVerifier {
     /**
      * Verifies the signature, expiry and token type and returns the claims.
      *
-     * @throws JwtException             if the token is malformed, not ours, expired or of the other type
+     * @throws JwtException             if the token is malformed, not ours, expired or not an access token
      * @throws IllegalArgumentException if the token is blank
      */
-    public Claims parseClaims(String token, TokenType tokenType) {
+    public Claims parseAccessToken(String token) {
         Jws<Claims> jws = parser.parseSignedClaims(token);
-        if (!tokenType.headerType().equals(jws.getHeader().getType())) {
-            throw new UnsupportedJwtException("Not a token of type " + tokenType.headerType());
+        if (!ACCESS_TOKEN_TYPE.equals(jws.getHeader().getType())) {
+            throw new UnsupportedJwtException("Not an access token");
         }
         return jws.getPayload();
     }
@@ -53,31 +53,19 @@ public class TokenVerifier {
         return Long.valueOf(claims.getSubject());
     }
 
-    public String clientIdOf(Claims claims) {
-        return claims.get(CLIENT_ID, String.class);
-    }
-
     /**
-     * The user version the token was issued for, or {@code null} if the token carries none.
+     * The session the token belongs to, or {@code null} if the token names none.
      */
-    public Integer versionOf(Claims claims) {
-        return claims.get(VERSION, Integer.class);
-    }
-
-    /**
-     * Whether verified claims were issued for this user and its current version (not revoked since).
-     */
-    public boolean isIssuedFor(Claims claims, User user) {
-        return String.valueOf(user.getId()).equals(claims.getSubject())
-                && Integer.valueOf(user.getVersion()).equals(versionOf(claims));
+    public Long sessionIdOf(Claims claims) {
+        return claims.get(SESSION_ID, Long.class);
     }
 
     /**
      * Checks signature, expiry and type only.
      */
-    public boolean isValid(String token, TokenType tokenType) {
+    public boolean isValid(String token) {
         try {
-            parseClaims(token, tokenType);
+            parseAccessToken(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;

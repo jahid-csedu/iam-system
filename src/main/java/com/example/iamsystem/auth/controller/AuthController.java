@@ -9,6 +9,7 @@ import com.example.iamsystem.user.dto.UserLoginDto;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,6 +33,14 @@ public class AuthController {
     @Operation(summary = "Refresh token")
     public ResponseEntity<JwtResponse> refreshToken(@Valid @RequestBody JwtRefreshTokenDto request) {
         return ResponseEntity.ok(authenticationService.refresh(request));
+    }
+
+    @PostMapping("/logout")
+    @Operation(summary = "Log out: end the session of the Bearer access token")
+    @SecurityRequirement(name = "Bearer Authentication")
+    public ResponseEntity<Void> logout() {
+        authenticationService.logout();
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/token/validate")

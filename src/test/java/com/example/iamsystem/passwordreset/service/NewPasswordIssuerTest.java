@@ -1,6 +1,7 @@
 package com.example.iamsystem.passwordreset.service;
 
 import com.example.iamsystem.common.exception.UserInputNotValidException;
+import com.example.iamsystem.session.service.SessionService;
 import com.example.iamsystem.user.config.PasswordExpirationProperties;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
@@ -38,19 +39,22 @@ class NewPasswordIssuerTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private JavaMailSender mailSender;
+    @Mock
+    private SessionService sessionService;
 
     private NewPasswordIssuer issuer;
     private User user;
 
     @BeforeEach
     void setUp() {
-        issuer = new NewPasswordIssuer(userRepository, passwordEncoder, mailSender, new PasswordExpirationProperties(90));
+        issuer = new NewPasswordIssuer(userRepository, passwordEncoder, mailSender, new PasswordExpirationProperties(90), sessionService);
         user = new User();
+        user.setId(7L);
         user.setEmail("alice@example.com");
     }
 
     @Test
-    @DisplayName("A new policy-compliant password is stored encoded and sent only to the user's email")
+    @DisplayName("A new policy-compliant password is stored encoded, sent only to the user's email, and ends every session")
     void issueNewPassword_storesEncodedAndEmailsIt() {
         when(passwordEncoder.encode(anyString())).thenAnswer(invocation -> "encoded:" + invocation.getArgument(0));
 
@@ -64,6 +68,7 @@ class NewPasswordIssuerTest {
         assertEquals("encoded:" + password, user.getPassword());
         assertTrue(user.getPasswordExpiryDate().isAfter(Instant.now()));
         verify(userRepository).save(user);
+        verify(sessionService).revokeAllOf(7L);
     }
 
     @Test
@@ -84,6 +89,6 @@ class NewPasswordIssuerTest {
         user.setEmail(null);
 
         assertThrows(UserInputNotValidException.class, () -> issuer.issueNewPassword(user));
-        verifyNoInteractions(passwordEncoder, userRepository, mailSender);
+        verifyNoInteractions(passwordEncoder, userRepository, mailSender, sessionService);
     }
 }

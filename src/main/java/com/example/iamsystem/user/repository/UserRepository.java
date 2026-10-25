@@ -1,7 +1,6 @@
 package com.example.iamsystem.user.repository;
 
 import com.example.iamsystem.common.exception.DataNotFoundException;
-import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,19 +41,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmailAndIsRootUserTrue(String email);
 
-    /**
-     * The actor behind an access token: found only while the token's version is current and the user is active and unlocked.
-     */
-    @Query("""
-            SELECT new com.example.iamsystem.security.userdetails.AuthenticatedActor(u.id, u.username, u.tenant.id, u.isRootUser)
-            FROM User u
-            WHERE u.id = :userId AND u.version = :version AND u.active = true
-              AND (u.userLocked = false OR u.accountLockedUntil < :now)
-            """)
-    Optional<AuthenticatedActor> findActor(@Param("userId") Long userId,
-                                           @Param("version") int version,
-                                           @Param("now") Instant now);
-
     boolean existsByIdAndRolesId(Long id, Long roleId);
 
     default User getRequiredByIdAndTenantId(Long id, Long tenantId) {
@@ -70,7 +56,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     }
 
     /**
-     * Lockout bookkeeping; deliberately skips the {@code @Version} bump, so it doesn't revoke the user's tokens.
+     * Lockout bookkeeping, written directly so it never conflicts with a concurrent change of the user ({@code @Version}).
      */
     @Modifying
     @Transactional

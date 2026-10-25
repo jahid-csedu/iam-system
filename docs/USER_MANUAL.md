@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 9a (RS256 signing and JWKS).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 9b (sessions, rotating refresh tokens, logout).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -25,7 +25,8 @@ How to use the system as a developer through Swagger UI or Postman.
 | **No self-modification** | Nobody can change their own roles, change or delete a role they hold, or reset their own password through the management API. Another user with the permission must do it. |
 
 **Important limitations today:**
-- **Refresh tokens can't be revoked one by one** (logout arrives with step 9); changing the user revokes all of them.
+- **Other applications can't yet ask whether a token was revoked** (introspection arrives with step 9c); a locally verified
+  access token stays valid until it expires.
 
 ### The permission catalog
 
@@ -84,7 +85,7 @@ grep -v -- ----- jwt-key.pem | tr -d '\n'     # the value for IAM_JWT_KEYS_0_PRI
 Put both in `.env` for `./gradlew bootRun`, or pass them to the `app` container (`-e` / `environment:`). Without a key the
 app generates a temporary one at startup (a WARN in the log) and every token becomes invalid when it restarts.
 **Rotating:** add the new key as `IAM_JWT_KEYS_0_*` and move the old one to `IAM_JWT_KEYS_1_*`; the first key signs, both
-are published, so tokens signed by the old key keep working. Remove the old key once its refresh tokens have expired.
+are published, so tokens signed by the old key keep working. Remove the old key once the access tokens it signed have expired (refresh tokens aren't signed).
 `IAM_JWT_ISSUER` (default `http://localhost:8080`) is the public base URL put into every token's `iss`.
 
 ---
@@ -141,7 +142,7 @@ or email that any user of any tenant already uses.
 ```json
 { "client_id": "pipHcOj4eVaEOqgMCeTJygKC", "username": "globex-root", "password": "Root1234!" }
 ```
-→ `200` with `access_token` (valid 5 minutes) and `refresh_token` (valid 24 hours). Use the access token as `Bearer` from now on.
+→ `200` with `access_token` (valid 5 minutes) and `refresh_token` (valid 24 hours, single use). Use the access token as `Bearer` from now on.
 An unknown `client_id`, or a username that doesn't exist in the client's tenant, gives `401`.
 
 ### Step 3: Look at your roles (root)
@@ -178,8 +179,8 @@ Without `userType` the user is `REGULAR`; creating a `MANAGEMENT` user without `
 (using the id of `USER_MANAGER`) → `204`. Bob can now see, create (regular users only), update and delete the users of the tenant.
 Roles and permissions can only be given to management users: for a regular user the request gives `400`.
 Bob can't change his own roles, or change the `USER_MANAGER` role while he holds it (`403`).
-(`DELETE /api/users/roles` with the same body removes roles.) Changing a user's roles revokes the tokens they already
-hold (`401`), so they log in again. Changing the permissions of a role applies to its users immediately, without new tokens.
+(`DELETE /api/users/roles` with the same body removes roles.) Role and permission changes apply to the user's next request,
+without new tokens: permissions are read from the database every time, never from the token.
 
 ### Step 7: Register an application and create a regular user
 Regular users can't log in through the management console (`403`), so register the application they use (needs `clients:create`):
@@ -210,7 +211,8 @@ and gets `403` on every management endpoint.
 | Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`; a new password is emailed to that user | `users:reset-password`; never your own password, never the root user's |
 | Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → the OTP is emailed | Public |
 | Forgot password: reset with the OTP | `POST /api/password/reset` `{ "client_id": "...", "identifier": "<username or email>", "otp": "123456" }` → a new password is emailed | Public |
-| Refresh tokens | `POST /api/auth/token/refresh` `{ "client_id": "...", "refresh_token": "..." }` (the client the token was issued through) | Public (needs a valid refresh token) |
+| Refresh tokens | `POST /api/auth/token/refresh` `{ "client_id": "...", "refresh_token": "..." }` (the client the token was issued through) → a new access token **and a new refresh token**; the old refresh token is used up | Public (needs a valid refresh token) |
+| Log out | `POST /api/auth/logout` (no body) → `204`; ends the session of the Bearer token: its access token gets `401` here and its refresh token stops working | Any logged-in user |
 | Client token settings | `PUT /api/clients/{id}/token-settings` (see below); applies to tokens issued from then on | `clients:update` |
 | Clients | `GET /api/clients`, `GET /api/clients/{id}`, `POST /api/clients` `{ "name" }`, `PUT /api/clients/{id}` `{ "name" }` (rename), `DELETE /api/clients/{id}` (never the console) | `clients:read` / `create` / `update` / `delete` |
 | List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `users:read` |
@@ -239,8 +241,8 @@ Change them with `PUT /api/clients/{id}/token-settings` and the same body:
 | `refreshTokenTtlSeconds` | 3600 to 2592000 (1 hour to 30 days), always longer than the access token |
 | `claims` | Any of `USERNAME`, `EMAIL`, `FULL_NAME`, `USER_TYPE`, `TENANT_ID` (an empty list for none). Roles and permissions are never put into tokens. |
 
-Every access token also carries `iss`, `sub` (the user id), `aud` and `client_id` (the client), `jti`, `version`, `iat` and
-`exp`; refresh tokens carry only those.
+Every access token also carries `iss`, `sub` (the user id), `aud` and `client_id` (the client), `sid` (the login session),
+`jti`, `iat` and `exp`. Refresh tokens are random opaque strings, not JWTs.
 A selected claim the user has no value for (for example no email) is left out.
 
 ## 7. For other applications (verifying users)
@@ -269,8 +271,14 @@ The IAM manages only its own permissions; other applications decide their own au
 - **Token lifetimes and claims** come from the client the user logged in through (defaults: 5 minutes / 24 hours / `username`).
   Tokens already issued keep their lifetime when the settings change.
 - **Lockout:** 5 failed logins lock the account for 15 minutes. While locked, the user's existing tokens are rejected too.
-- **Revocation:** any change to a user (roles, password, profile, lock, deactivation) revokes the access and refresh tokens
-  issued before it. Permissions are checked against the database on every request, so role changes apply immediately.
+- **Sessions:** every login starts a session. It lasts as long as its refresh token (each refresh moves the end forward by the
+  client's refresh lifetime), or, for a client without refresh tokens, as long as its access token.
+- **Refresh tokens are single use.** Each refresh returns a new one. Presenting a used refresh token again (a sign it was
+  copied) ends the whole session, including the tokens issued after it.
+- **Revocation:** logout ends one session; changing your own password ends your other sessions (the current one stays);
+  a password reset (by another user or forgot-password) ends all of the user's sessions; deleting a user or a client ends
+  its sessions. A deactivated or locked user's tokens are refused while that lasts. Roles and permissions are checked
+  against the database on every request, so their changes apply immediately without ending sessions.
 - **Password expiry:** passwords expire after 90 days; an expired password blocks login.
 - **Password resets** (forgot-password and reset by another user) generate a new password and send it **only by email**; it never
   appears in a response. A forgot-password OTP is valid for 5 minutes and replaces any earlier OTP of the user.
@@ -279,8 +287,8 @@ The IAM manages only its own permissions; other applications decide their own au
 - **Usernames and emails** are unique per tenant: two tenants may both have a `bob`. Exception: a root user's username and
   email are unique across all users of all tenants. Login and forgot-password look the user up only inside the tenant of
   the request's `client_id`.
-- **Tokens** are RS256-signed JWTs. They carry the tenant as `iss`, the user id as `sub`, the client they were issued through
-  as `aud` and `client_id`, the user's `version`, and the client's selected claims. A refresh token only works through the client it was issued through.
+- **Access tokens** are RS256-signed JWTs. They carry the tenant as `iss`, the user id as `sub`, the client they were issued
+  through as `aud` and `client_id`, the session as `sid`, and the client's selected claims. A refresh token only works through the client it was issued through.
 
 ## 9. Status codes
 
@@ -288,9 +296,8 @@ The IAM manages only its own permissions; other applications decide their own au
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
 | `400` | Already exists (tenant, user, role or client name in your tenant), deleting the management console, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
-| `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, wrong username/password, or an unknown `client_id` |
+| `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
 | `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; or account locked, deactivated or expired |
 | `404` | Not found, including users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
-| `412` | Invalid or expired token on refresh/validation (changes to 401 in step 9) |
 | `422` | Request body failed validation (the `errors` list shows which field), including token lifetimes out of range |

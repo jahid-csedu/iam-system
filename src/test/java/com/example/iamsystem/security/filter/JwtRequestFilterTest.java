@@ -6,10 +6,11 @@ import com.example.iamsystem.security.jwt.SigningKeys;
 import com.example.iamsystem.security.jwt.TokenIssuer;
 import com.example.iamsystem.security.jwt.TokenVerifier;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
+import com.example.iamsystem.session.entity.UserSession;
+import com.example.iamsystem.session.repository.UserSessionRepository;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.user.entity.User;
-import com.example.iamsystem.user.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,10 +30,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -43,35 +41,36 @@ class JwtRequestFilterTest {
     private final JwtProperties properties = new JwtProperties("https://iam.test", List.of());
     private final SigningKeys signingKeys = new SigningKeys(properties);
     private final TokenIssuer tokenIssuer = new TokenIssuer(signingKeys, properties);
-    private final AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 100L, false);
+    private final AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 100L, false, 10L);
 
     @Mock
-    private UserRepository userRepository;
+    private UserSessionRepository sessionRepository;
     @Mock
     private FilterChain filterChain;
 
     private JwtRequestFilter filter;
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
-    private User user;
-    private Client client;
+    private UserSession session;
 
     @BeforeEach
     void setUp() {
-        filter = new JwtRequestFilter(new TokenVerifier(signingKeys), userRepository);
+        filter = new JwtRequestFilter(new TokenVerifier(signingKeys), sessionRepository);
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
-        client = new Client();
-        client.setClientId("app-client");
-        client.setAccessTokenTtlSeconds(300);
-        client.setRefreshTokenTtlSeconds(3600);
-        user = new User();
-        user.setId(1L);
-        user.setUsername("alice");
-        user.setVersion(2);
         Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
         tenant.setId(100L);
+        User user = new User();
+        user.setId(1L);
+        user.setUsername("alice");
         user.setTenant(tenant);
+        Client client = new Client();
+        client.setClientId("app-client");
+        client.setAccessTokenTtlSeconds(300);
+        session = new UserSession();
+        session.setId(10L);
+        session.setUser(user);
+        session.setClient(client);
     }
 
     @AfterEach
@@ -80,10 +79,10 @@ class JwtRequestFilterTest {
     }
 
     @Test
-    @DisplayName("A valid access token of a current user authenticates the request as that actor")
+    @DisplayName("A valid access token of a live session authenticates the request as that actor")
     void validToken_authenticatesTheActor() throws Exception {
-        bearer(tokenIssuer.issueAccessToken(user, client));
-        when(userRepository.findActor(eq(1L), eq(2), any(Instant.class))).thenReturn(Optional.of(actor));
+        bearer(tokenIssuer.issueAccessToken(session));
+        when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.of(actor));
 
         filter.doFilter(request, response, filterChain);
 
@@ -92,10 +91,10 @@ class JwtRequestFilterTest {
     }
 
     @Test
-    @DisplayName("A revoked token, or one of an inactive or locked user, leaves the request unauthenticated")
-    void tokenWithoutCurrentActor_leavesRequestUnauthenticated() throws Exception {
-        bearer(tokenIssuer.issueAccessToken(user, client));
-        when(userRepository.findActor(eq(1L), eq(2), any(Instant.class))).thenReturn(Optional.empty());
+    @DisplayName("A token of an ended session, or of an inactive or locked user, leaves the request unauthenticated")
+    void tokenWithoutLiveSession_leavesRequestUnauthenticated() throws Exception {
+        bearer(tokenIssuer.issueAccessToken(session));
+        when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.empty());
 
         filter.doFilter(request, response, filterChain);
 
@@ -111,19 +110,8 @@ class JwtRequestFilterTest {
         filter.doFilter(request, response, filterChain);
 
         assertNull(SecurityContextHolder.getContext().getAuthentication());
-        verifyNoInteractions(userRepository);
+        verifyNoInteractions(sessionRepository);
         verify(filterChain).doFilter(request, response);
-    }
-
-    @Test
-    @DisplayName("A refresh token is not accepted as an access token")
-    void refreshToken_isNotAnAccessToken() throws Exception {
-        bearer(tokenIssuer.issueRefreshToken(user, client));
-
-        filter.doFilter(request, response, filterChain);
-
-        assertNull(SecurityContextHolder.getContext().getAuthentication());
-        verifyNoInteractions(userRepository);
     }
 
     @Test
@@ -134,7 +122,7 @@ class JwtRequestFilterTest {
         filter.doFilter(request, response, filterChain);
 
         assertNull(SecurityContextHolder.getContext().getAuthentication());
-        verify(userRepository, never()).findActor(anyLong(), anyInt(), any());
+        verifyNoInteractions(sessionRepository);
         verify(filterChain).doFilter(request, response);
     }
 

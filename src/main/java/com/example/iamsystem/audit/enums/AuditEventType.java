@@ -4,6 +4,7 @@ public enum AuditEventType {
     // Authentication
     USER_LOGIN,
     TOKEN_REFRESH,
+    LOGOUT,
 
     // Tenant Management
     TENANT_SIGNUP,

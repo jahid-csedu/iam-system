@@ -3,6 +3,7 @@ package com.example.iamsystem.security.jwt;
 import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.client.entity.TokenClaim;
 import com.example.iamsystem.security.config.JwtProperties;
+import com.example.iamsystem.session.entity.UserSession;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.user.entity.User;
@@ -18,8 +19,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 
-import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
-import static com.example.iamsystem.security.jwt.TokenType.REFRESH_TOKEN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -30,32 +29,36 @@ class TokenIssuerTest {
     private final SigningKeys signingKeys = new SigningKeys(properties);
     private final TokenIssuer issuer = new TokenIssuer(signingKeys, properties);
     private final TokenVerifier verifier = new TokenVerifier(signingKeys);
-    private User user;
     private Client client;
+    private UserSession session;
 
     @BeforeEach
     void setUp() {
         Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
         tenant.setId(100L);
-        user = new User();
+        User user = new User();
         user.setId(7L);
         user.setUsername("alice");
         user.setFullName("Alice Example");
         user.setUserType(UserType.MANAGEMENT);
         user.setTenant(tenant);
-        user.setVersion(3);
 
         client = new Client();
         client.setClientId("app-client");
         client.setAccessTokenTtlSeconds(300);
-        client.setRefreshTokenTtlSeconds(7200);
         client.getTokenClaims().add(TokenClaim.USERNAME);
+
+        session = new UserSession();
+        session.setId(42L);
+        session.setUser(user);
+        session.setClient(client);
     }
 
     @Test
     @DisplayName("An access token is RS256-signed and names the signing key and the access-token type in its header")
     void accessToken_headerNamesKeyAndType() {
-        Jws<Claims> jws = parse(issuer.issueAccessToken(user, client));
+        Jws<Claims> jws = Jwts.parser().verifyWith(signingKeys.current().publicKey()).build()
+                .parseSignedClaims(issuer.issueAccessToken(session));
 
         assertEquals("RS256", jws.getHeader().getAlgorithm());
         assertEquals(signingKeys.current().kid(), jws.getHeader().getKeyId());
@@ -63,50 +66,48 @@ class TokenIssuerTest {
     }
 
     @Test
-    @DisplayName("An access token names the tenant as issuer, the user as subject and the client as audience")
-    void accessToken_carriesIssuerSubjectAndAudience() {
-        Claims claims = verifier.parseClaims(issuer.issueAccessToken(user, client), ACCESS_TOKEN);
+    @DisplayName("An access token names the tenant as issuer, the user as subject, the client as audience and its session")
+    void accessToken_carriesIssuerSubjectAudienceAndSession() {
+        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session));
 
         assertEquals("https://iam.test/tenants/100", claims.getIssuer());
-        assertEquals("7", claims.getSubject());
+        assertEquals(7L, verifier.userIdOf(claims));
         assertEquals(Set.of("app-client"), claims.getAudience());
-        assertEquals("app-client", verifier.clientIdOf(claims));
-        assertEquals(3, verifier.versionOf(claims));
+        assertEquals("app-client", claims.get("client_id"));
+        assertEquals(42L, verifier.sessionIdOf(claims));
+        assertFalse(claims.containsKey("version"));
     }
 
     @Test
     @DisplayName("Every token gets its own id")
     void tokens_haveUniqueIds() {
-        Claims first = verifier.parseClaims(issuer.issueAccessToken(user, client), ACCESS_TOKEN);
-        Claims second = verifier.parseClaims(issuer.issueAccessToken(user, client), ACCESS_TOKEN);
+        Claims first = verifier.parseAccessToken(issuer.issueAccessToken(session));
+        Claims second = verifier.parseAccessToken(issuer.issueAccessToken(session));
 
         assertNotEquals(first.getId(), second.getId());
     }
 
     @Test
-    @DisplayName("Access and refresh tokens live as long as the client's settings say")
-    void tokens_liveAsLongAsTheClientSays() {
-        Claims access = verifier.parseClaims(issuer.issueAccessToken(user, client), ACCESS_TOKEN);
-        Claims refresh = verifier.parseClaims(issuer.issueRefreshToken(user, client), REFRESH_TOKEN);
+    @DisplayName("An access token lives as long as the client's settings say")
+    void accessToken_livesAsLongAsTheClientSays() {
+        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session));
 
-        assertEquals(Duration.ofSeconds(300), lifetime(access));
-        assertEquals(Duration.ofSeconds(7200), lifetime(refresh));
+        assertEquals(Duration.ofSeconds(300),
+                Duration.between(claims.getIssuedAt().toInstant(), claims.getExpiration().toInstant()));
     }
 
     @Test
-    @DisplayName("An access token carries exactly the user claims the client selected; a refresh token carries none")
+    @DisplayName("An access token carries exactly the user claims the client selected")
     void accessToken_carriesTheSelectedClaims() {
         client.getTokenClaims().addAll(Set.of(TokenClaim.FULL_NAME, TokenClaim.USER_TYPE, TokenClaim.TENANT_ID));
 
-        Claims access = verifier.parseClaims(issuer.issueAccessToken(user, client), ACCESS_TOKEN);
-        Claims refresh = verifier.parseClaims(issuer.issueRefreshToken(user, client), REFRESH_TOKEN);
+        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session));
 
-        assertEquals("alice", access.get("username"));
-        assertEquals("Alice Example", access.get("full_name"));
-        assertEquals("MANAGEMENT", access.get("user_type"));
-        assertEquals(100, access.get("tenant_id", Integer.class));
-        assertFalse(access.containsKey("email"));
-        assertFalse(refresh.containsKey("username"));
+        assertEquals("alice", claims.get("username"));
+        assertEquals("Alice Example", claims.get("full_name"));
+        assertEquals("MANAGEMENT", claims.get("user_type"));
+        assertEquals(100, claims.get("tenant_id", Integer.class));
+        assertFalse(claims.containsKey("email"));
     }
 
     @Test
@@ -114,16 +115,8 @@ class TokenIssuerTest {
     void accessToken_leavesOutEmptyClaims() {
         client.getTokenClaims().add(TokenClaim.EMAIL);
 
-        Claims access = verifier.parseClaims(issuer.issueAccessToken(user, client), ACCESS_TOKEN);
+        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session));
 
-        assertFalse(access.containsKey("email"));
-    }
-
-    private Jws<Claims> parse(String token) {
-        return Jwts.parser().verifyWith(signingKeys.current().publicKey()).build().parseSignedClaims(token);
-    }
-
-    private static Duration lifetime(Claims claims) {
-        return Duration.between(claims.getIssuedAt().toInstant(), claims.getExpiration().toInstant());
+        assertFalse(claims.containsKey("email"));
     }
 }

@@ -51,7 +51,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 7c | User types (`V6`): `MANAGEMENT`/`REGULAR`, `users:create-management`, direct user permissions | `b7dc4e1` |
 | 8a | Clients (`V7`): `client_id` login/refresh/forgot-password, console client per tenant, per-tenant usernames/emails | `5f2c416` |
 | 8b | Per-client token settings (`V8`): lifetimes, refresh on/off, selectable claims | `099f14b` |
-| 9a | RS256 signing with configured keys, `/.well-known/jwks.json`, `iss`/`aud`/`jti`/`kid` | step 9a commit |
+| 9a | RS256 signing with configured keys, `/.well-known/jwks.json`, `iss`/`aud`/`jti`/`kid` | `9fdae12` |
+| 9b | Sessions (`V9`), single-use rotating opaque refresh tokens, reuse detection, logout, 401 on refresh errors | step 9b commit |
 
 ---
 
@@ -192,11 +193,11 @@ by the bearer access token; introspection is public until clients get secrets; t
   `client_id` = the client, `jti`, `iat`, `exp`, the client's claims (`version` stays until 9b).
 - Hard-coded HMAC secrets and `JwtConstant` removed; `JwtTokenUtil` split into `TokenIssuer` and `TokenVerifier`.
 
-**9b: sessions, opaque refresh tokens, logout**
-- `sessions` (one per login) and `refresh_tokens` (SHA-256 hash, rotated on every refresh; reusing a used token revokes the
+**9b: sessions, opaque refresh tokens, logout (DONE)**
+- `user_sessions` (one per login) and `refresh_tokens` (SHA-256 hash, rotated on every refresh; reusing a used token revokes the
   session). Access tokens carry `sid`; the JWT filter checks the session instead of the `version` claim.
-- `version` claim dropped (`@Version` = optimistic locking only); a password change/reset, deactivation, lock or deletion
-  revokes the user's sessions. `POST /api/auth/logout` (bearer) revokes the current session (204).
+- `version` claim dropped (`@Version` = optimistic locking only); a password reset or deletion revokes the user's sessions,
+  an own password change all but the current one; deactivation and lock are refused per request instead of revoking. `POST /api/auth/logout` (bearer) revokes the current session (204).
 - Refresh-token errors answer 401 instead of 412.
 
 **9c: introspection**

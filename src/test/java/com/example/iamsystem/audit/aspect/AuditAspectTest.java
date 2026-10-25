@@ -116,7 +116,7 @@ class AuditAspectTest {
     }
 
     private void givenCurrentUser(String username) {
-        when(currentUserProvider.currentActor()).thenReturn(Optional.of(new AuthenticatedActor(1L, username, 100L, false)));
+        when(currentUserProvider.currentActor()).thenReturn(Optional.of(new AuthenticatedActor(1L, username, 100L, false, 10L)));
     }
 
     private static Auditable annotationOf(String methodName) throws NoSuchMethodException {

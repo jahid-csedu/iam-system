@@ -24,7 +24,9 @@ public class AuthorizationConfig {
 
     private static final String[] PUBLIC_APIS = {
             "/api/tenants/signup",
-            "/api/auth/**",
+            "/api/auth/authenticate",
+            "/api/auth/token/refresh",
+            "/api/auth/token/validate",
             "/api/password/reset-request",
             "/api/password/reset",
             JwksController.JWKS_PATH

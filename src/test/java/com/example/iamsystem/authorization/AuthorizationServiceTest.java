@@ -25,8 +25,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AuthorizationServiceTest {
 
-    private static final AuthenticatedActor ALICE = new AuthenticatedActor(1L, "alice", 100L, false);
-    private static final AuthenticatedActor ROOT = new AuthenticatedActor(2L, "root", 100L, true);
+    private static final AuthenticatedActor ALICE = new AuthenticatedActor(1L, "alice", 100L, false, 10L);
+    private static final AuthenticatedActor ROOT = new AuthenticatedActor(2L, "root", 100L, true, 20L);
 
     @Mock
     private PermissionRepository permissionRepository;

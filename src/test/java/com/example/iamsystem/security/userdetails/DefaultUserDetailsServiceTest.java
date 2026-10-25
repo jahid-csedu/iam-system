@@ -1,6 +1,5 @@
 package com.example.iamsystem.security.userdetails;
 
-import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,37 +61,25 @@ class DefaultUserDetailsServiceTest {
     }
 
     @Test
-    @DisplayName("Refresh loads an active, unlocked user by id")
-    void requireUsableUser_returnsTheUser() {
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-
-        assertSame(user, service.requireUsableUser(1L).user());
+    @DisplayName("Refresh accepts an active, unlocked user")
+    void checkUsable_acceptsAnActiveUser() {
+        assertDoesNotThrow(() -> service.checkUsable(user));
     }
 
     @Test
     @DisplayName("Refresh rejects a user locked until a future time")
-    void requireUsableUser_lockedUser_isRejected() {
+    void checkUsable_lockedUser_isRejected() {
         user.setUserLocked(true);
         user.setAccountLockedUntil(Instant.now().plus(Duration.ofMinutes(10)));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
-        assertThrows(LockedException.class, () -> service.requireUsableUser(1L));
+        assertThrows(LockedException.class, () -> service.checkUsable(user));
     }
 
     @Test
     @DisplayName("Refresh rejects a deactivated user")
-    void requireUsableUser_inactiveUser_isRejected() {
+    void checkUsable_inactiveUser_isRejected() {
         user.setActive(false);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
-        assertThrows(DisabledException.class, () -> service.requireUsableUser(1L));
-    }
-
-    @Test
-    @DisplayName("Refresh for a deleted user is not found")
-    void requireUsableUser_unknownUser_isNotFound() {
-        when(userRepository.findById(9L)).thenReturn(Optional.empty());
-
-        assertThrows(DataNotFoundException.class, () -> service.requireUsableUser(9L));
+        assertThrows(DisabledException.class, () -> service.checkUsable(user));
     }
 }

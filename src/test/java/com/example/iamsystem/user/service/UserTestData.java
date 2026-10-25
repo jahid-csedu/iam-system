@@ -11,6 +11,7 @@ import com.example.iamsystem.user.entity.User;
 final class UserTestData {
 
     static final Tenant TENANT = tenant(100L, "Acme");
+    static final Long SESSION_ID = 50L;
 
     private UserTestData() {
     }
@@ -38,7 +39,7 @@ final class UserTestData {
     }
 
     static AuthenticatedActor actor(User user) {
-        return new AuthenticatedActor(user.getId(), user.getUsername(), user.getTenant().getId(), user.isRootUser());
+        return new AuthenticatedActor(user.getId(), user.getUsername(), user.getTenant().getId(), user.isRootUser(), SESSION_ID);
     }
 
     static User createdBy(User creator, long id, String username) {

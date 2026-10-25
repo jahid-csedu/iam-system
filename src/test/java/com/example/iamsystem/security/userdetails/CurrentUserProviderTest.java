@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CurrentUserProviderTest {
 
     private final CurrentUserProvider currentUserProvider = new CurrentUserProvider();
-    private final AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 7L, false);
+    private final AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 7L, false, 10L);
 
     @AfterEach
     void clearContext() {
