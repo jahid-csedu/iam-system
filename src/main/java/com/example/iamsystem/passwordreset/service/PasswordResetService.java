@@ -7,8 +7,10 @@ import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
+import com.example.iamsystem.session.service.SessionService;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
+import com.example.iamsystem.user.service.UserPasswordUpdater;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
@@ -28,9 +30,9 @@ import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWOR
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_SUBJECT;
 
 /**
- * Self-service password reset for users who are not logged in: an OTP is emailed, and a valid OTP gets the user a new
- * password by email. The OTP and the password are only ever sent by email; the database keeps only a bcrypt hash of the
- * OTP (six digits are too few for a fast hash).
+ * Self-service password reset for users who are not logged in: an OTP is emailed, and with a valid OTP the user sets a
+ * new password of their choice. The OTP is only ever sent by email, and the database keeps only a bcrypt hash of it (six
+ * digits are too few for a fast hash).
  * <p>
  * The request's {@code client_id} decides the tenant, and the user is found by username or email inside that tenant only
  * (both are unique per tenant).
@@ -51,11 +53,12 @@ public class PasswordResetService {
     private final UserRepository userRepository;
     private final PasswordResetOTPRepository otpRepository;
     private final JavaMailSender mailSender;
-    private final NewPasswordIssuer newPasswordIssuer;
     private final ClientResolver clientResolver;
     private final OtpExpirationProperties otpExpiration;
     private final ResetRequestLimiter requestLimiter;
     private final PasswordEncoder passwordEncoder;
+    private final UserPasswordUpdater passwordUpdater;
+    private final SessionService sessionService;
 
     /**
      * Replaces any earlier OTP of the user. An unknown user, a user without an email address, a user over the request limit
@@ -111,19 +114,21 @@ public class PasswordResetService {
         }
     }
 
+    /**
+     * With a valid OTP the user's password becomes {@code newPassword} (password policy applies), any login lockout ends,
+     * and every session of the user ends. The OTP is compared only with the pending OTP of the user named by the
+     * identifier in the client's tenant. An unknown user, no pending OTP, an expired OTP and a wrong guess all get the same
+     * error. Wrong guesses are counted (the transaction commits on {@link InvalidPasswordResetOTPException}, so the count
+     * sticks), and the {@value #MAX_FAILED_ATTEMPTS}th one deletes the OTP. A new password that violates the policy rolls
+     * everything back, so the OTP stays usable.
+     */
     @Auditable(
             value = AuditEventType.PASSWORD_RESET,
             target = "#identifier",
             detailsExpression = "T(java.util.Map).of('client_id', #clientId)"
     )
-    /**
-     * The OTP is compared only with the pending OTP of the user named by the identifier in the client's tenant. An unknown
-     * user, no pending OTP, an expired OTP and a wrong guess all get the same error. Wrong guesses are counted (the
-     * transaction commits on {@link InvalidPasswordResetOTPException}, so the count sticks), and the
-     * {@value #MAX_FAILED_ATTEMPTS}th one deletes the OTP.
-     */
     @Transactional(noRollbackFor = InvalidPasswordResetOTPException.class)
-    public void resetPassword(String clientId, String identifier, String otp) {
+    public void resetPassword(String clientId, String identifier, String otp, String newPassword) {
         Long tenantId = clientResolver.resolve(clientId).getTenant().getId();
         PasswordResetOTP resetOtp = findUser(identifier, tenantId)
                 .flatMap(otpRepository::findForUpdateByUser)
@@ -136,7 +141,9 @@ public class PasswordResetService {
             recordFailedAttempt(resetOtp);
             throw new InvalidPasswordResetOTPException(INVALID_OTP);
         }
-        newPasswordIssuer.issueNewPassword(resetOtp.getUser());
+        User user = resetOtp.getUser();
+        passwordUpdater.updatePassword(user, newPassword);
+        sessionService.revokeAllOf(user.getId());
         otpRepository.delete(resetOtp);
     }
 

@@ -7,7 +7,6 @@ import com.example.iamsystem.passwordreset.service.NewPasswordIssuer;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.session.service.SessionService;
-import com.example.iamsystem.user.config.PasswordExpirationProperties;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.INVALID_OLD_PASSWORD;
-import static com.example.iamsystem.common.util.DateUtil.calculateExpiryDate;
 
 /**
  * Changing your own password, and resetting another user's password.
@@ -27,11 +25,10 @@ import static com.example.iamsystem.common.util.DateUtil.calculateExpiryDate;
 public class UserPasswordService {
 
     private final UserRepository userRepository;
-    private final UserValidator userValidator;
     private final UserAccessPolicy accessPolicy;
     private final CurrentUserProvider currentUserProvider;
     private final PasswordEncoder passwordEncoder;
-    private final PasswordExpirationProperties passwordExpiration;
+    private final UserPasswordUpdater passwordUpdater;
     private final NewPasswordIssuer newPasswordIssuer;
     private final SessionService sessionService;
 
@@ -46,11 +43,7 @@ public class UserPasswordService {
         if (!passwordEncoder.matches(request.oldPassword(), user.getPassword())) {
             throw new InvalidPasswordException(INVALID_OLD_PASSWORD);
         }
-        userValidator.validatePasswordPolicy(request.newPassword());
-
-        user.setPassword(passwordEncoder.encode(request.newPassword()));
-        user.setPasswordExpiryDate(calculateExpiryDate(passwordExpiration.days()));
-        userRepository.save(user);
+        passwordUpdater.updatePassword(user, request.newPassword());
         sessionService.revokeOthersOf(user.getId(), actor.sessionId());
     }
 

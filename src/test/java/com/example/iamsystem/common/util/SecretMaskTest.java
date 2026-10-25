@@ -30,7 +30,7 @@ class SecretMaskTest {
                 new UserCreationDto("alice", SECRET, "Alice", "alice@acme.com", null),
                 new TenantSignupDto("Acme", new UserCreationDto("alice", SECRET, "Alice", "alice@acme.com", null)),
                 new PasswordChangeDto(SECRET, SECRET),
-                new PasswordResetDto("client-1", "alice", SECRET),
+                new PasswordResetDto("client-1", "alice", SECRET, SECRET),
                 new JwtRefreshTokenDto("client-1", SECRET),
                 new IntrospectionRequest(SECRET),
                 new RootUser("alice", SECRET, "alice@acme.com", null),

@@ -16,7 +16,8 @@ import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWOR
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.RESET_REQUEST_ACCEPTED;
 
 /**
- * Self-service password reset for users who are not logged in. The OTP and the new password go only to the user's email.
+ * Self-service password reset for users who are not logged in: the OTP goes only to the user's email, and the user then
+ * sets a new password with it.
  */
 @RestController
 @RequestMapping("/api/password")
@@ -33,9 +34,9 @@ public class PasswordResetController {
     }
 
     @PostMapping("/reset")
-    @Operation(summary = "With a valid OTP, email the user a new password (public)")
+    @Operation(summary = "With a valid OTP, set the new password the user chose; every session of the user ends (public)")
     public ResponseEntity<String> resetPassword(@RequestBody @Valid PasswordResetDto request) {
-        passwordResetService.resetPassword(request.clientId(), request.identifier(), request.otp());
+        passwordResetService.resetPassword(request.clientId(), request.identifier(), request.otp(), request.newPassword());
         return ResponseEntity.ok(PASSWORD_RESET_SUCCESS);
     }
 }

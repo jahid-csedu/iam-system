@@ -25,6 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.List;
 
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.RESET_REQUEST_ACCEPTED;
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -51,6 +52,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = "/sql/delete_user_role.sql", executionPhase = AFTER_TEST_METHOD)
 class PasswordResetControllerTest {
 
+    private static final String NEW_PASSWORD = "Chosen-Password1!";
+
     @Autowired
     private MockMvc mockMvc;
     @Autowired
@@ -72,16 +75,44 @@ class PasswordResetControllerTest {
     }
 
     @Test
-    @DisplayName("Reset by username: the OTP and then the new password are emailed, and the new password logs in")
-    void resetByUsername_emailsOtpThenAWorkingPassword() throws Exception {
+    @DisplayName("Reset by username: the OTP is emailed, the user sets a new password with it, and only that password logs in")
+    void resetByUsername_setsTheChosenPassword() throws Exception {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
-        String otp = lastEmailedSecret();
+        String otp = lastEmailedOtp();
+        clearInvocations(mailSender);
 
-        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp)).andExpect(status().isOk());
-        String newPassword = lastEmailedSecret();
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp, NEW_PASSWORD)).andExpect(status().isOk());
 
-        postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", newPassword)).andExpect(status().isOk());
+        verifyNoInteractions(mailSender);
+        postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", NEW_PASSWORD)).andExpect(status().isOk());
         postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", "Password1!")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("A new password violating the policy is rejected and the OTP stays usable")
+    void reset_withWeakPassword_keepsTheOtp() throws Exception {
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
+        String otp = lastEmailedOtp();
+
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp, "weak")).andExpect(status().isBadRequest());
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp, NEW_PASSWORD)).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("A reset ends a login lockout")
+    void reset_endsALoginLockout() throws Exception {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", "Wrong-password1!"));
+        }
+        postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", "Password1!"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(containsString("locked")));
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
+
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", lastEmailedOtp(), NEW_PASSWORD))
+                .andExpect(status().isOk());
+
+        postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", NEW_PASSWORD)).andExpect(status().isOk());
     }
 
     @Test
@@ -98,10 +129,10 @@ class PasswordResetControllerTest {
     @DisplayName("An OTP used with another user's identifier is rejected")
     void reset_withWrongIdentifier_isRejected() throws Exception {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
-        String otp = lastEmailedSecret();
+        String otp = lastEmailedOtp();
         clearInvocations(mailSender);
 
-        postJson("/api/password/reset", new PasswordResetDto(clientId, "someone-else", otp)).andExpect(status().isBadRequest());
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "someone-else", otp, NEW_PASSWORD)).andExpect(status().isBadRequest());
         verifyNoInteractions(mailSender);
     }
 
@@ -135,16 +166,16 @@ class PasswordResetControllerTest {
     @DisplayName("After five wrong guesses the OTP is gone: even the right one is refused, with the same error")
     void reset_afterTooManyWrongGuesses_refusesTheRightOtp() throws Exception {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
-        String otp = lastEmailedSecret();
+        String otp = lastEmailedOtp();
         String wrongOtp = otp.equals("000000") ? "111111" : "000000";
         clearInvocations(mailSender);
 
         for (int attempt = 0; attempt < 5; attempt++) {
-            postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", wrongOtp))
+            postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", wrongOtp, NEW_PASSWORD))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.message").value("Invalid or expired OTP"));
         }
-        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp))
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp, NEW_PASSWORD))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Invalid or expired OTP"));
         verifyNoInteractions(mailSender);
@@ -154,13 +185,13 @@ class PasswordResetControllerTest {
     @DisplayName("Wrong guesses below the limit leave the OTP usable")
     void reset_afterAFewWrongGuesses_stillAcceptsTheRightOtp() throws Exception {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
-        String otp = lastEmailedSecret();
+        String otp = lastEmailedOtp();
         String wrongOtp = otp.equals("000000") ? "111111" : "000000";
 
         for (int attempt = 0; attempt < 4; attempt++) {
-            postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", wrongOtp)).andExpect(status().isBadRequest());
+            postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", wrongOtp, NEW_PASSWORD)).andExpect(status().isBadRequest());
         }
-        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp)).andExpect(status().isOk());
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp, NEW_PASSWORD)).andExpect(status().isOk());
     }
 
     @Test
@@ -197,12 +228,13 @@ class PasswordResetControllerTest {
     void responses_neverContainSecrets() throws Exception {
         String requestResponse = postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root"))
                 .andReturn().getResponse().getContentAsString();
-        String otp = lastEmailedSecret();
-        String resetResponse = postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp))
+        String otp = lastEmailedOtp();
+        String resetResponse = postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp, NEW_PASSWORD))
                 .andReturn().getResponse().getContentAsString();
 
         assertFalse(requestResponse.contains(otp));
-        assertFalse(resetResponse.contains(lastEmailedSecret()));
+        assertFalse(resetResponse.contains(otp));
+        assertFalse(resetResponse.contains(NEW_PASSWORD));
     }
 
     private ResultActions postJson(String path, Object body) throws Exception {
@@ -212,9 +244,9 @@ class PasswordResetControllerTest {
     }
 
     /**
-     * The OTP or password at the end of the most recent email.
+     * The OTP at the end of the most recent email.
      */
-    private String lastEmailedSecret() {
+    private String lastEmailedOtp() {
         ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender, atLeastOnce()).send(mail.capture());
         List<SimpleMailMessage> sent = mail.getAllValues();

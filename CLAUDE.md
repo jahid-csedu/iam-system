@@ -473,3 +473,7 @@ Design debt
   OTPs are stored as a bcrypt hash through the shared `PasswordEncoder` and checked with `matches`. Decision (option A):
   bcrypt, not SHA-256 (a million six-digit values hash in under a second) and not an HMAC secret (one more key to
   manage). Next: security fix 7 (no emailed passwords).
+- 2026-10-25: Security fix 7a (forgot-password sets a chosen password). `POST /api/password/reset` takes `newPassword`; no
+  password is emailed any more by this flow. `UserPasswordUpdater` is the one place that sets a chosen password (policy,
+  hash, expiry, ends a login lockout), used by the reset and by your own password change. Decisions (option B): users
+  choose their password; a reset ends a login lockout. Next: 7b (admin reset emails an OTP, `NewPasswordIssuer` goes).

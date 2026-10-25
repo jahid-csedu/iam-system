@@ -7,7 +7,6 @@ import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.passwordreset.service.NewPasswordIssuer;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.session.service.SessionService;
-import com.example.iamsystem.user.config.PasswordExpirationProperties;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
@@ -19,19 +18,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.time.Instant;
-
 import static com.example.iamsystem.user.service.UserTestData.SESSION_ID;
 import static com.example.iamsystem.user.service.UserTestData.TENANT;
 import static com.example.iamsystem.user.service.UserTestData.actor;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static com.example.iamsystem.user.service.UserTestData.user;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -44,13 +37,13 @@ class UserPasswordServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private UserValidator userValidator;
-    @Mock
     private UserAccessPolicy accessPolicy;
     @Mock
     private CurrentUserProvider currentUserProvider;
     @Mock
     private PasswordEncoder passwordEncoder;
+    @Mock
+    private UserPasswordUpdater passwordUpdater;
     @Mock
     private NewPasswordIssuer newPasswordIssuer;
     @Mock
@@ -62,24 +55,21 @@ class UserPasswordServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new UserPasswordService(userRepository, userValidator, accessPolicy, currentUserProvider,
-                passwordEncoder, new PasswordExpirationProperties(90), newPasswordIssuer, sessionService);
+        service = new UserPasswordService(userRepository, accessPolicy, currentUserProvider, passwordEncoder,
+                passwordUpdater, newPasswordIssuer, sessionService);
         root = rootUser(1, "root");
         member = user(2, "member");
     }
 
     @Test
-    @DisplayName("The correct old password updates your password and its expiry and ends your other sessions")
-    void changeOwnPassword_withCorrectOldPassword_updatesPasswordAndExpiry() {
+    @DisplayName("The correct old password sets your new password and ends your other sessions")
+    void changeOwnPassword_withCorrectOldPassword_setsTheNewPassword() {
         givenLoggedIn(member);
         when(passwordEncoder.matches("old", "encoded-member")).thenReturn(true);
-        when(passwordEncoder.encode("NewPassword1!")).thenReturn("encoded-new");
 
         service.changeOwnPassword(new PasswordChangeDto("old", "NewPassword1!"));
 
-        assertEquals("encoded-new", member.getPassword());
-        assertTrue(member.getPasswordExpiryDate().isAfter(Instant.now()));
-        verify(userRepository).save(member);
+        verify(passwordUpdater).updatePassword(member, "NewPassword1!");
         verify(sessionService).revokeOthersOf(2L, SESSION_ID);
     }
 
@@ -91,7 +81,7 @@ class UserPasswordServiceTest {
 
         assertThrows(InvalidPasswordException.class,
                 () -> service.changeOwnPassword(new PasswordChangeDto("wrong", "NewPassword1!")));
-        verify(userRepository, never()).save(any());
+        verifyNoInteractions(passwordUpdater, sessionService);
     }
 
     @Test
@@ -99,10 +89,10 @@ class UserPasswordServiceTest {
     void changeOwnPassword_violatingPasswordPolicy_isRejected() {
         givenLoggedIn(member);
         when(passwordEncoder.matches("old", "encoded-member")).thenReturn(true);
-        doThrow(new UserInputNotValidException("policy")).when(userValidator).validatePasswordPolicy("weak");
+        doThrow(new UserInputNotValidException("policy")).when(passwordUpdater).updatePassword(member, "weak");
 
         assertThrows(UserInputNotValidException.class, () -> service.changeOwnPassword(new PasswordChangeDto("old", "weak")));
-        verify(userRepository, never()).save(any());
+        verifyNoInteractions(sessionService);
     }
 
     @Test

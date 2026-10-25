@@ -6,10 +6,12 @@ import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
+import com.example.iamsystem.session.service.SessionService;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantStatus;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
+import com.example.iamsystem.user.service.UserPasswordUpdater;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,7 +56,9 @@ class PasswordResetServiceTest {
     @Mock
     private JavaMailSender mailSender;
     @Mock
-    private NewPasswordIssuer newPasswordIssuer;
+    private UserPasswordUpdater passwordUpdater;
+    @Mock
+    private SessionService sessionService;
     @Mock
     private ClientResolver clientResolver;
     @Mock
@@ -67,8 +71,8 @@ class PasswordResetServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PasswordResetService(userRepository, otpRepository, mailSender, newPasswordIssuer, clientResolver,
-                new OtpExpirationProperties(5), requestLimiter, passwordEncoder);
+        service = new PasswordResetService(userRepository, otpRepository, mailSender, clientResolver,
+                new OtpExpirationProperties(5), requestLimiter, passwordEncoder, passwordUpdater, sessionService);
         Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
         tenant.setId(TENANT_ID);
         Client client = new Client();
@@ -173,17 +177,18 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    @DisplayName("A valid OTP, given with the username or the email, gets the user a new password by email")
-    void resetPassword_validOtp_issuesANewPassword() {
+    @DisplayName("A valid OTP, given with the username or the email, sets the chosen password and ends every session")
+    void resetPassword_validOtp_setsTheNewPassword() {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
         when(userRepository.findByUsernameAndTenantId("alice@example.com", TENANT_ID)).thenReturn(Optional.empty());
         when(userRepository.findByEmailAndTenantId("alice@example.com", TENANT_ID)).thenReturn(Optional.of(user));
         when(otpRepository.findForUpdateByUser(user)).thenReturn(Optional.of(resetOtp));
 
-        service.resetPassword(CLIENT_ID, "alice", "123456");
-        service.resetPassword(CLIENT_ID, "alice@example.com", "123456");
+        service.resetPassword(CLIENT_ID, "alice", "123456", "NewPassword1!");
+        service.resetPassword(CLIENT_ID, "alice@example.com", "123456", "NewPassword1!");
 
-        verify(newPasswordIssuer, times(2)).issueNewPassword(user);
+        verify(passwordUpdater, times(2)).updatePassword(user, "NewPassword1!");
+        verify(sessionService, times(2)).revokeAllOf(1L);
         verify(otpRepository, times(2)).delete(resetOtp);
     }
 
@@ -196,19 +201,19 @@ class PasswordResetServiceTest {
         when(otpRepository.findForUpdateByUser(user)).thenReturn(Optional.empty());
 
         String unknownUser = assertThrows(InvalidPasswordResetOTPException.class,
-                () -> service.resetPassword(CLIENT_ID, "ghost", "123456")).getMessage();
+                () -> service.resetPassword(CLIENT_ID, "ghost", "123456", "NewPassword1!")).getMessage();
         String noOtp = assertThrows(InvalidPasswordResetOTPException.class,
-                () -> service.resetPassword(CLIENT_ID, "alice", "123456")).getMessage();
+                () -> service.resetPassword(CLIENT_ID, "alice", "123456", "NewPassword1!")).getMessage();
         resetOtp.setExpiryDate(Instant.now().minusSeconds(1));
         when(otpRepository.findForUpdateByUser(user)).thenReturn(Optional.of(resetOtp));
         String expired = assertThrows(InvalidPasswordResetOTPException.class,
-                () -> service.resetPassword(CLIENT_ID, "alice", "123456")).getMessage();
+                () -> service.resetPassword(CLIENT_ID, "alice", "123456", "NewPassword1!")).getMessage();
 
         assertEquals("Invalid or expired OTP", unknownUser);
         assertEquals(unknownUser, noOtp);
         assertEquals(unknownUser, expired);
         verify(otpRepository).delete(resetOtp);
-        verifyNoInteractions(newPasswordIssuer);
+        verifyNoInteractions(passwordUpdater, sessionService);
     }
 
     @Test
@@ -218,12 +223,12 @@ class PasswordResetServiceTest {
         when(otpRepository.findForUpdateByUser(user)).thenReturn(Optional.of(resetOtp));
 
         InvalidPasswordResetOTPException exception = assertThrows(InvalidPasswordResetOTPException.class,
-                () -> service.resetPassword(CLIENT_ID, "alice", "654321"));
+                () -> service.resetPassword(CLIENT_ID, "alice", "654321", "NewPassword1!"));
 
         assertEquals("Invalid or expired OTP", exception.getMessage());
         assertEquals(1, resetOtp.getFailedAttempts());
         verify(otpRepository, never()).delete(any());
-        verifyNoInteractions(newPasswordIssuer);
+        verifyNoInteractions(passwordUpdater, sessionService);
     }
 
     @Test
@@ -233,10 +238,10 @@ class PasswordResetServiceTest {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
         when(otpRepository.findForUpdateByUser(user)).thenReturn(Optional.of(resetOtp));
 
-        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword(CLIENT_ID, "alice", "654321"));
+        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword(CLIENT_ID, "alice", "654321", "NewPassword1!"));
 
         verify(otpRepository).delete(resetOtp);
-        verifyNoInteractions(newPasswordIssuer);
+        verifyNoInteractions(passwordUpdater, sessionService);
     }
 
     @Test
@@ -245,7 +250,7 @@ class PasswordResetServiceTest {
         when(userRepository.findByUsernameAndTenantId("bob", TENANT_ID)).thenReturn(Optional.empty());
         when(userRepository.findByEmailAndTenantId("bob", TENANT_ID)).thenReturn(Optional.empty());
 
-        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword(CLIENT_ID, "bob", "123456"));
-        verifyNoInteractions(otpRepository, newPasswordIssuer);
+        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword(CLIENT_ID, "bob", "123456", "NewPassword1!"));
+        verifyNoInteractions(otpRepository, passwordUpdater);
     }
 }
