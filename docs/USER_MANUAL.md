@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10b (platform tenant).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10c (platform root).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -70,7 +70,14 @@ them, delete them, or create more. Later changes to the predefined set never aff
 | Local JVM (needs MySQL on `localhost:3366`, e.g. `docker compose up db`) | `./gradlew bootRun` | `http://localhost:8080` (override with `SERVER_PORT=8081` in `.env`) |
 
 The database schema and the permission catalog are created automatically (Flyway) on first start, and so is the
-**Platform** tenant of the super users (its name is therefore taken; platform users arrive in the next steps). Mail settings
+**Platform** tenant of the super users (its name is therefore taken).
+
+**First super user.** Set `IAM_PLATFORM_ROOT_USERNAME`, `IAM_PLATFORM_ROOT_PASSWORD` (password policy applies) and
+`IAM_PLATFORM_ROOT_EMAIL` (optionally `IAM_PLATFORM_ROOT_FULL_NAME`) in `.env`; `docker compose` passes them to the app.
+At startup, while the platform has no root user, this user becomes its root (a WARN is logged when they're missing). It
+logs in like any root, through the Platform tenant's management console: its `client_id` is logged once, when the
+Platform tenant is created ("Created the platform tenant ... (client_id ...)").
+The variables are read only then: changing them later changes nothing. Platform endpoints arrive in the next steps. Mail settings
 (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs and new passwords are only ever
 sent by email. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 

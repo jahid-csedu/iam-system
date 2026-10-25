@@ -181,7 +181,8 @@ Package by feature. Each feature uses only the sub-packages it needs, always wit
 Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enums/` or `aspect/` packages:
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
-- `platform/`: the platform level. `PlatformBootstrap` creates the platform tenant (+ console + predefined roles) at startup
+- `platform/`: the platform level. `PlatformBootstrap` creates the platform tenant (+ console + predefined roles) at startup,
+  and its root from `config/PlatformProperties` (`iam.platform.root.*`) while it has none
 - `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
   (direct permissions), `UserService` (paged list, find, delete);
@@ -256,7 +257,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- `mail.debug=true`.
+- **Plaintext passwords in the log:** `logging.level.root=DEBUG` makes Spring MVC (`RequestResponseBodyMethodProcessor`)
+  log every request body it reads, including the passwords of login, signup, user creation and password change
+  (found 2026-10-25 in the 10c smoke test). `mail.debug=true`.
 - Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit, is
   stored in plain text, and the endpoint reveals whether a username/email exists.
 
@@ -354,3 +357,7 @@ Design debt
   platform). `PlatformBootstrap` (ApplicationRunner) creates the "Platform" tenant with its console and predefined roles on
   first startup, through the same services signup uses. Decision: created in Java, not by migration.
   Next: step 10c (platform root from config).
+- 2026-10-25: Step 10c (platform root). `PlatformProperties` (`IAM_PLATFORM_ROOT_USERNAME/PASSWORD/EMAIL/FULL_NAME`);
+  `PlatformBootstrap` creates the platform root through `UserFactory.newRootUser` while the platform has no root (WARN
+  without complete config; invalid config stops startup; later config changes are ignored). docker-compose passes the vars.
+  Next: step 10d (`tenants:*` keys, list/view tenants).

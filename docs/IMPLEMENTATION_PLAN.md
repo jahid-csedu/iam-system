@@ -55,7 +55,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 9b | Sessions (`V9`), single-use rotating opaque refresh tokens, reuse detection, logout, 401 on refresh errors | `efe589f` |
 | 9c | `POST /api/auth/introspect` (RFC 7662 style), `/token/validate` removed, filter refuses non-ACTIVE tenants | `1e90eea` |
 | 10a | Suspended tenant: login, refresh and forgot-password answer 403 (`ClientResolver`) | `4327479` |
-| 10b | Platform tenant (`V10` `tenants.type`), created at startup by `PlatformBootstrap` | step 10b commit |
+| 10b | Platform tenant (`V10` `tenants.type`), created at startup by `PlatformBootstrap` | `167ec71` |
+| 10c | Platform root created at startup from `IAM_PLATFORM_ROOT_*` | step 10c commit |
 
 ---
 
@@ -219,7 +220,7 @@ Small sub-steps, each touching only a few classes:
 |---|---|
 | 10a (DONE) | Suspended tenant: login, refresh and forgot-password refused with 403 (`ClientResolver`) |
 | 10b (DONE) | Platform tenant: `tenants.type` (`STANDARD`/`PLATFORM`, one platform); the tenant + console client + roles are created at startup by `PlatformBootstrap` |
-| 10c | Platform root created at startup from `IAM_PLATFORM_ROOT_USERNAME/PASSWORD/EMAIL` (WARN when missing) |
+| 10c (DONE) | Platform root created at startup from `IAM_PLATFORM_ROOT_USERNAME/PASSWORD/EMAIL` (WARN when missing) |
 | 10d | `tenants:*` PLATFORM keys; `GET /api/platform/tenants` (list, view) for platform users only |
 | 10e | Suspend / activate a tenant (never the platform tenant); sessions kept |
 | 10f | Create a tenant with its root as a super user |
@@ -245,7 +246,7 @@ refresh, and its sessions are refused by the filter and introspection.
 | JWT filter errors → 500 instead of 401 | Done in step 6b |
 | `/token/validate` ignores revocation | Done in step 9c (replaced by introspection) |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
-| `mail.debug=true`, `logging.level.root=DEBUG`, DB credentials in `application.properties`; no JWT key configured only warns | Small config step (profiles + env); outside dev/test, fail at startup without a configured JWT key |
+| Plaintext passwords logged by Spring MVC at DEBUG; `mail.debug=true`, `logging.level.root=DEBUG`, DB credentials in `application.properties`; no JWT key configured only warns | Small config step (profiles + env); outside dev/test, fail at startup without a configured JWT key |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |

@@ -4,9 +4,11 @@ import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 public interface TenantRepository extends JpaRepository<Tenant, Long> {
 
     boolean existsByName(String name);
 
-    boolean existsByType(TenantType type);
+    Optional<Tenant> findByType(TenantType type);
 }
