@@ -3,6 +3,8 @@ package com.example.iamsystem.authorization;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
+import com.example.iamsystem.tenant.entity.TenantType;
+import com.example.iamsystem.tenant.repository.TenantRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static com.example.iamsystem.permission.PermissionKey.TENANTS_READ;
 import static com.example.iamsystem.permission.PermissionKey.USERS_CREATE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_READ;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -30,6 +33,8 @@ class AuthorizationServiceTest {
 
     @Mock
     private PermissionRepository permissionRepository;
+    @Mock
+    private TenantRepository tenantRepository;
 
     @InjectMocks
     private AuthorizationService authorizationService;
@@ -54,6 +59,23 @@ class AuthorizationServiceTest {
     @DisplayName("The root user holds every TENANT permission, without a database lookup")
     void hasPermission_forRootUser_holdsTenantPermissions() {
         assertTrue(authorizationService.hasPermission(ROOT, USERS_CREATE));
+        verifyNoInteractions(permissionRepository, tenantRepository);
+    }
+
+    @Test
+    @DisplayName("A standard tenant's root holds no PLATFORM permission")
+    void hasPermission_forTenantRoot_holdsNoPlatformPermission() {
+        when(tenantRepository.existsByIdAndType(100L, TenantType.PLATFORM)).thenReturn(false);
+
+        assertFalse(authorizationService.hasPermission(ROOT, TENANTS_READ));
+    }
+
+    @Test
+    @DisplayName("The platform tenant's root holds every PLATFORM permission")
+    void hasPermission_forPlatformRoot_holdsPlatformPermissions() {
+        when(tenantRepository.existsByIdAndType(100L, TenantType.PLATFORM)).thenReturn(true);
+
+        assertTrue(authorizationService.hasPermission(ROOT, TENANTS_READ));
         verifyNoInteractions(permissionRepository);
     }
 

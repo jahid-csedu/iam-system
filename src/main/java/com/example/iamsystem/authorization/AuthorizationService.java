@@ -4,6 +4,8 @@ import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.permission.PermissionKey;
 import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
+import com.example.iamsystem.tenant.entity.TenantType;
+import com.example.iamsystem.tenant.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,14 +23,16 @@ import static com.example.iamsystem.permission.entity.PermissionScope.TENANT;
 public class AuthorizationService {
 
     private final PermissionRepository permissionRepository;
+    private final TenantRepository tenantRepository;
 
     /**
-     * The root user holds every TENANT permission implicitly (never a PLATFORM one); everyone else holds the
-     * permissions of their roles.
+     * A root user holds every TENANT permission implicitly; the platform tenant's root also holds every PLATFORM
+     * permission, a standard tenant's root never one. Everyone else holds the permissions of their roles and their
+     * directly granted permissions.
      */
     public boolean hasPermission(AuthenticatedActor actor, PermissionKey permission) {
         if (actor.rootUser()) {
-            return permission.scope() == TENANT;
+            return permission.scope() == TENANT || tenantRepository.existsByIdAndType(actor.tenantId(), TenantType.PLATFORM);
         }
         return permissionRepository.isGrantedToUser(actor.userId(), permission.key());
     }

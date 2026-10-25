@@ -170,8 +170,8 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 - When the current development plan is finished, all migrations are merged into a single `V1__baseline.sql` taken from the
   live schema; versioned migrations start from there. Each step is verified on a fresh database (`docker compose down -v`).
 - The permission catalog and the role templates are reference data inserted by migrations (the only rows migrations insert).
-  A migration that adds a permission key also adds it to the `ADMIN` template (a test fails otherwise) and decides which
-  other templates get it.
+  A migration that adds a TENANT key also adds it to the `ADMIN` template (a test fails otherwise) and decides which
+  other templates get it. PLATFORM keys go into no template.
 - Hibernate runs with `ddl-auto=validate` (app and tests), so an entity/schema mismatch fails at startup.
 - No other seed data. The first root user is created by tenant signup.
 - One root per tenant is a functional unique index (`uk_users_root_per_tenant`), not visible to Hibernate validation.
@@ -186,7 +186,8 @@ Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enum
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
 - `platform/`: the platform level. `PlatformBootstrap` creates the platform tenant (+ console + predefined roles) at startup,
-  and its root from `config/PlatformProperties` (`iam.platform.root.*`) while it has none
+  and its root from `config/PlatformProperties` (`iam.platform.root.*`) while it has none; `PlatformTenantController`/
+  `PlatformTenantService` (`/api/platform/tenants`, PLATFORM keys only)
 - `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
   (direct permissions), `UserService` (paged list, find, delete);
@@ -219,7 +220,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
 ## Current behaviours to remember
-- Root user (`is_root_user`) passes every permission check in `AuthorizationService`; what it can reach is still limited to its tenant.
+- Root user (`is_root_user`) holds every TENANT key in `AuthorizationService`; what it can reach is still limited to its tenant.
+  The platform tenant's root also holds every PLATFORM key (`tenants:*`); a standard tenant's root never does.
 - **Tenant boundary = tenant-scoped repository lookups** (`...AndTenantId`). Users and roles of other tenants are 404, never 403.
   Policies (`UserAccessPolicy`, `RoleAccessPolicy`) only decide rules inside the tenant.
 - No self-modification: nobody changes their own roles or permissions, or a role they hold (403).
@@ -367,3 +369,7 @@ Design debt
   passwords included. Root level now INFO, and every credential-carrying record (`UserLoginDto`, `UserCreationDto`,
   `PasswordChangeDto`, `PasswordResetDto`, `JwtRefreshTokenDto`, `IntrospectionRequest`, `PlatformProperties.RootUser`) masks
   the secret in `toString()` (`SecretMask`). New code standard: mask sensitive data.
+- 2026-10-25: Step 10d (platform keys, list tenants). Flyway `V11__platform_permissions.sql`: `tenants:read/create/suspend/
+  activate` (PLATFORM, in no template). `AuthorizationService`: the platform root holds every PLATFORM key.
+  `PlatformTenantController`/`PlatformTenantService`: `GET /api/platform/tenants` (paged) and `/{id}`; `TenantDto` has `type`.
+  Next: step 10e (suspend / activate).

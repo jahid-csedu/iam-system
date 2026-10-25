@@ -57,7 +57,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 10a | Suspended tenant: login, refresh and forgot-password answer 403 (`ClientResolver`) | `4327479` |
 | 10b | Platform tenant (`V10` `tenants.type`), created at startup by `PlatformBootstrap` | `167ec71` |
 | 10c | Platform root created at startup from `IAM_PLATFORM_ROOT_*` | `ec724ae` |
-| fix | No credentials in logs: root log level INFO, secrets masked in `toString()` (`SecretMask`) | this commit |
+| fix | No credentials in logs: root log level INFO, secrets masked in `toString()` (`SecretMask`) | `7b6315e` |
+| 10d | PLATFORM keys `tenants:*` (`V11`), platform root holds them, `GET /api/platform/tenants` | step 10d commit |
 
 ---
 
@@ -222,7 +223,7 @@ Small sub-steps, each touching only a few classes:
 | 10a (DONE) | Suspended tenant: login, refresh and forgot-password refused with 403 (`ClientResolver`) |
 | 10b (DONE) | Platform tenant: `tenants.type` (`STANDARD`/`PLATFORM`, one platform); the tenant + console client + roles are created at startup by `PlatformBootstrap` |
 | 10c (DONE) | Platform root created at startup from `IAM_PLATFORM_ROOT_USERNAME/PASSWORD/EMAIL` (WARN when missing) |
-| 10d | `tenants:*` PLATFORM keys; `GET /api/platform/tenants` (list, view) for platform users only |
+| 10d (DONE) | `tenants:*` PLATFORM keys; `GET /api/platform/tenants` (list, view) for platform users only |
 | 10e | Suspend / activate a tenant (never the platform tenant); sessions kept |
 | 10f | Create a tenant with its root as a super user |
 | 10g | `X-Tenant-Id`: the platform root works inside any tenant through the normal APIs; audit records platform user + tenant |

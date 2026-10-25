@@ -2,6 +2,7 @@ package com.example.iamsystem.permission;
 
 import com.example.iamsystem.permission.entity.PermissionScope;
 
+import static com.example.iamsystem.permission.entity.PermissionScope.PLATFORM;
 import static com.example.iamsystem.permission.entity.PermissionScope.TENANT;
 
 /**
@@ -24,7 +25,11 @@ public enum PermissionKey {
     CLIENTS_CREATE("clients:create", TENANT),
     CLIENTS_UPDATE("clients:update", TENANT),
     CLIENTS_DELETE("clients:delete", TENANT),
-    PERMISSIONS_READ("permissions:read", TENANT);
+    PERMISSIONS_READ("permissions:read", TENANT),
+    TENANTS_READ("tenants:read", PLATFORM),
+    TENANTS_CREATE("tenants:create", PLATFORM),
+    TENANTS_SUSPEND("tenants:suspend", PLATFORM),
+    TENANTS_ACTIVATE("tenants:activate", PLATFORM);
 
     private final String key;
     private final PermissionScope scope;

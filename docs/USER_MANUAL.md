@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10c (platform root).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10d (platform: list and view tenants).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -48,6 +48,15 @@ How to use the system as a developer through Swagger UI or Postman.
 | `clients:delete` | Delete application clients (never the management console) |
 | `permissions:read` | List the catalog and view a permission |
 
+PLATFORM keys, for super users only (never part of a tenant's roles; the platform root holds them all):
+
+| Key | Allows |
+|---|---|
+| `tenants:read` | List and view all tenants (`/api/platform/tenants`) |
+| `tenants:create` | Create tenants with their root user (endpoint arrives in step 10f) |
+| `tenants:suspend` | Suspend a tenant (endpoint arrives in step 10e) |
+| `tenants:activate` | Reactivate a suspended tenant (endpoint arrives in step 10e) |
+
 ### Predefined roles
 
 Every new tenant gets its own copies of these roles at signup. They are ordinary roles of the tenant: assign them, change
@@ -77,8 +86,9 @@ The database schema and the permission catalog are created automatically (Flyway
 At startup, while the platform has no root user, this user becomes its root (a WARN is logged when they're missing). It
 logs in like any root, through the Platform tenant's management console: its `client_id` is logged once, when the
 Platform tenant is created ("Created the platform tenant ... (client_id ...)").
-The variables are read only then: changing them later changes nothing. Platform endpoints arrive in the next steps. Mail settings
-(`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs and new passwords are only ever
+The variables are read only then: changing them later changes nothing.
+
+Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs and new passwords are only ever
 sent by email. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 
 **Token signing key.** Tokens are signed with an RSA private key that only the IAM holds. Configure one with
@@ -252,6 +262,17 @@ Change them with `PUT /api/clients/{id}/token-settings` and the same body:
 Every access token also carries `iss`, `sub` (the user id), `aud` and `client_id` (the client), `sid` (the login session),
 `jti`, `iat` and `exp`. Refresh tokens are random opaque strings, not JWTs.
 A selected claim the user has no value for (for example no email) is left out.
+
+### Platform administration (super users)
+
+Log in as the platform root through the Platform tenant's console `client_id`, then:
+
+| What | Request | Who |
+|---|---|---|
+| List all tenants | `GET /api/platform/tenants?page=0&size=20` → paged like `GET /api/users`, each `{ "id", "name", "type": "PLATFORM"/"STANDARD", "status" }` | `tenants:read` |
+| View a tenant | `GET /api/platform/tenants/{id}` (`404` if unknown) | `tenants:read` |
+
+Tenant users (their root included) get `403` on every `/api/platform/**` endpoint.
 
 ## 7. For other applications (verifying users)
 

@@ -165,7 +165,7 @@ class TenantControllerTest {
         Map<String, Set<String>> roles = rolesOf("Acme");
 
         assertEquals(PREDEFINED_ROLES, roles.keySet());
-        assertEquals(allKeys(), roles.get("ADMIN"));
+        assertEquals(allTenantKeys(), roles.get("ADMIN"));
         assertEquals(Set.of("users:read", "users:create", "users:update", "users:delete"), roles.get("USER_MANAGER"));
         assertEquals(Set.of("users:read", "roles:read", "clients:read", "permissions:read"), roles.get("VIEWER"));
     }
@@ -184,13 +184,13 @@ class TenantControllerTest {
     }
 
     @Test
-    @DisplayName("The ADMIN template holds every permission key, and templates hold only TENANT permissions")
+    @DisplayName("The ADMIN template holds every TENANT permission key, and templates hold only TENANT permissions")
     void roleTemplates_coverTheCatalog() {
         RoleTemplate admin = roleTemplateRepository.findAll().stream()
                 .filter(template -> template.getName().equals("ADMIN"))
                 .findFirst().orElseThrow();
 
-        assertEquals(allKeys(), admin.getPermissions().stream().map(Permission::getName).collect(Collectors.toSet()));
+        assertEquals(allTenantKeys(), admin.getPermissions().stream().map(Permission::getName).collect(Collectors.toSet()));
         roleTemplateRepository.findAll().forEach(template -> template.getPermissions()
                 .forEach(permission -> assertEquals(PermissionScope.TENANT, permission.getScope())));
     }
@@ -228,8 +228,11 @@ class TenantControllerTest {
                         role -> role.getPermissions().stream().map(Permission::getName).collect(Collectors.toSet())));
     }
 
-    private static Set<String> allKeys() {
-        return Arrays.stream(PermissionKey.values()).map(PermissionKey::key).collect(Collectors.toSet());
+    private static Set<String> allTenantKeys() {
+        return Arrays.stream(PermissionKey.values())
+                .filter(key -> key.scope() == PermissionScope.TENANT)
+                .map(PermissionKey::key)
+                .collect(Collectors.toSet());
     }
 
     private String consoleClientId(ResultActions signup) throws Exception {
