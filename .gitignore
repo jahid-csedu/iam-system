@@ -13,6 +13,8 @@ target/
 .env
 .env.*
 !.env.example
+# Private keys (e.g. the JWT signing key)
+*.pem
 
 # ==========================================
 # IntelliJ IDEA Configuration
