@@ -46,3 +46,11 @@ This document outlines important features to consider for the evolution of the I
 10. **Per-Tenant Signing Keys:**
     *   **Description:** Give every tenant its own RSA key pair for signing tokens, instead of one platform key set. Private keys are stored encrypted (under a platform master key, or in a KMS/HSM), every tenant publishes its own JWKS (e.g. `/tenants/{id}/.well-known/jwks.json`), and root users can rotate their tenant's key. Tokens already carry a `kid` and a tenant-specific `iss`, so the token format doesn't change.
     *   **Why it's important:** A leaked or compromised key affects one tenant only, and a tenant can rotate its keys on its own schedule.
+
+11. **Client-Scoped Regular Users:**
+    *   **Description:** Regular users are tenant-scoped today: every application client of the tenant accepts them. Let a tenant admin optionally attach a regular user to one or more specific clients. A user without client attachments stays tenant-scoped (accepted by every application client, as now); a user attached to clients gets tokens only through those clients, and login or refresh through any other client is refused. This lets a tenant keep a separate user base per application.
+    *   **Why it's important:** Tenants with several unrelated applications (e.g. a customer app and a partner portal) can keep their user bases apart without creating a tenant per application.
+
+12. **Self-Registration of Regular Users (required in the future):**
+    *   **Description:** Today only management users create regular users (`POST /api/users`). Like Auth0, let the public register themselves as regular users of a tenant: the tenant's own portal (frontend) shows a sign-up screen and calls a public registration endpoint with the tenant's `client_id`, which identifies the tenant (the same way login does). Each tenant decides whether self-registration is allowed (a tenant setting, switched by the root or a management user with permission; off means only management users create regular users, as today), with email verification of new accounts. Together with item 11, users who register through a client can be attached to that client.
+    *   **Why it's important:** Consumer-facing tenants need end users to sign up on their own, while other tenants (internal tools, B2B) must be able to keep sign-up closed.
