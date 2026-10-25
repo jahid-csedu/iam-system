@@ -466,3 +466,6 @@ Design debt
   user-row lock lasts milliseconds instead of until the OTP email is sent (a login of that user had to wait for it).
   Plan step 13 added: one email service, templates per purpose, asynchronous sending after commit.
   Next: security fix 5d (mail timeouts), then 6 (hashed OTPs).
+- 2026-10-25: Security fix 5d. SMTP connect, read and write timeouts of 10 s (`spring.mail.properties.mail.smtp.*timeout`);
+  JavaMail waited forever by default, so a hanging mail server could hang a request (and the reset OTP lock) indefinitely.
+  Verified against a silent local server: the send fails after 10 s. Next: security fix 6 (hashed OTPs).
