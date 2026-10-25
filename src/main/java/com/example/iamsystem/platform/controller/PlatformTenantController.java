@@ -10,11 +10,14 @@ import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import static com.example.iamsystem.permission.PermissionKey.TENANTS_ACTIVATE;
 import static com.example.iamsystem.permission.PermissionKey.TENANTS_READ;
+import static com.example.iamsystem.permission.PermissionKey.TENANTS_SUSPEND;
 
 /**
  * Tenant administration by super users. Every endpoint needs a PLATFORM permission, which tenant users never hold.
@@ -42,5 +45,19 @@ public class PlatformTenantController {
     @Operation(summary = "Get a tenant by ID (Requires: tenants:read)")
     public ResponseEntity<TenantDto> getTenant(@PathVariable Long id) {
         return ResponseEntity.ok(platformTenantService.findTenant(id));
+    }
+
+    @PutMapping("/{id}/suspend")
+    @RequirePermission(TENANTS_SUSPEND)
+    @Operation(summary = "Suspend a tenant: none of its users can log in or use their tokens; never the platform tenant (Requires: tenants:suspend)")
+    public ResponseEntity<TenantDto> suspendTenant(@PathVariable Long id) {
+        return ResponseEntity.ok(platformTenantService.suspendTenant(id));
+    }
+
+    @PutMapping("/{id}/activate")
+    @RequirePermission(TENANTS_ACTIVATE)
+    @Operation(summary = "Activate a suspended tenant again (Requires: tenants:activate)")
+    public ResponseEntity<TenantDto> activateTenant(@PathVariable Long id) {
+        return ResponseEntity.ok(platformTenantService.activateTenant(id));
     }
 }

@@ -6,8 +6,10 @@ import com.example.iamsystem.platform.config.PlatformProperties.RootUser;
 import com.example.iamsystem.platform.service.PlatformBootstrap;
 import com.example.iamsystem.role.service.PredefinedRoleService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
+import com.example.iamsystem.tenant.entity.TenantType;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.UserCreationDto;
+import com.example.iamsystem.user.dto.UserLoginDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import com.example.iamsystem.user.service.UserFactory;
@@ -20,6 +22,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -29,6 +32,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -61,6 +65,7 @@ class PlatformTenantControllerTest {
     private User platformRoot;
     private User acmeRoot;
     private long acmeId;
+    private String acmeConsoleClientId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -72,9 +77,11 @@ class PlatformTenantControllerTest {
 
         TenantSignupDto signup = new TenantSignupDto("Acme",
                 new UserCreationDto("acme-root", "Password1!", "Acme Root", "root@acme.com", null));
-        mockMvc.perform(post("/api/tenants/signup").contentType(MediaType.APPLICATION_JSON)
+        String signupResponse = mockMvc.perform(post("/api/tenants/signup").contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(signup)))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        acmeConsoleClientId = jsonMapper.readTree(signupResponse).get("managementConsole").get("client_id").asString();
         acmeRoot = findByUsername(userRepository, "acme-root").orElseThrow();
         acmeId = acmeRoot.getTenant().getId();
     }
@@ -112,5 +119,61 @@ class PlatformTenantControllerTest {
     @DisplayName("The platform endpoints need a logged-in user")
     void anonymous_isUnauthorized() throws Exception {
         mockMvc.perform(get("/api/platform/tenants")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("A suspended tenant's users can't log in or use their tokens; activating it brings both back")
+    void suspendAndActivate_controlTheTenantsAccess() throws Exception {
+        String accessToken = jsonMapper.readTree(login().andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
+                .get("access_token").asString();
+
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", acmeId).with(actingAs(platformRoot)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUSPENDED"));
+        login().andExpect(status().isForbidden());
+        getUsers(accessToken).andExpect(status().isUnauthorized());
+
+        mockMvc.perform(put("/api/platform/tenants/{id}/activate", acmeId).with(actingAs(platformRoot)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+        login().andExpect(status().isOk());
+        getUsers(accessToken).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Suspending a suspended tenant changes nothing")
+    void suspendTwice_isHarmless() throws Exception {
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", acmeId).with(actingAs(platformRoot))).andExpect(status().isOk());
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", acmeId).with(actingAs(platformRoot)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUSPENDED"));
+    }
+
+    @Test
+    @DisplayName("The platform tenant can't be suspended, and an unknown tenant is not found")
+    void platformOrUnknownTenant_isNotSuspended() throws Exception {
+        long platformId = tenantRepository.findByType(TenantType.PLATFORM).orElseThrow().getId();
+
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", platformId).with(actingAs(platformRoot)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("The platform tenant can't be suspended"));
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", 999_999L).with(actingAs(platformRoot)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("A tenant's root can't suspend or activate tenants, not even its own")
+    void tenantRoot_cannotChangeTenantStatus() throws Exception {
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", acmeId).with(actingAs(acmeRoot))).andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/platform/tenants/{id}/activate", acmeId).with(actingAs(acmeRoot))).andExpect(status().isForbidden());
+    }
+
+    private ResultActions login() throws Exception {
+        return mockMvc.perform(post("/api/auth/authenticate").contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(new UserLoginDto(acmeConsoleClientId, "acme-root", "Password1!"))));
+    }
+
+    private ResultActions getUsers(String accessToken) throws Exception {
+        return mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + accessToken));
     }
 }

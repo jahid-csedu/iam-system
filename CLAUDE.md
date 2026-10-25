@@ -373,3 +373,7 @@ Design debt
   activate` (PLATFORM, in no template). `AuthorizationService`: the platform root holds every PLATFORM key.
   `PlatformTenantController`/`PlatformTenantService`: `GET /api/platform/tenants` (paged) and `/{id}`; `TenantDto` has `type`.
   Next: step 10e (suspend / activate).
+- 2026-10-25: Step 10e (suspend / activate). `PUT /api/platform/tenants/{id}/suspend|activate` (`tenants:suspend` /
+  `tenants:activate`), idempotent, audited (`TENANT_SUSPEND`/`TENANT_ACTIVATE`); the platform tenant can't be suspended
+  (400); sessions are kept, so activation restores unexpired ones.
+  Next: step 10f (create a tenant as a super user).

@@ -58,7 +58,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 10b | Platform tenant (`V10` `tenants.type`), created at startup by `PlatformBootstrap` | `167ec71` |
 | 10c | Platform root created at startup from `IAM_PLATFORM_ROOT_*` | `ec724ae` |
 | fix | No credentials in logs: root log level INFO, secrets masked in `toString()` (`SecretMask`) | `7b6315e` |
-| 10d | PLATFORM keys `tenants:*` (`V11`), platform root holds them, `GET /api/platform/tenants` | step 10d commit |
+| 10d | PLATFORM keys `tenants:*` (`V11`), platform root holds them, `GET /api/platform/tenants` | `bed1c17` |
+| 10e | `PUT /api/platform/tenants/{id}/suspend` and `/activate` (never the platform tenant; sessions kept) | step 10e commit |
 
 ---
 
@@ -224,7 +225,7 @@ Small sub-steps, each touching only a few classes:
 | 10b (DONE) | Platform tenant: `tenants.type` (`STANDARD`/`PLATFORM`, one platform); the tenant + console client + roles are created at startup by `PlatformBootstrap` |
 | 10c (DONE) | Platform root created at startup from `IAM_PLATFORM_ROOT_USERNAME/PASSWORD/EMAIL` (WARN when missing) |
 | 10d (DONE) | `tenants:*` PLATFORM keys; `GET /api/platform/tenants` (list, view) for platform users only |
-| 10e | Suspend / activate a tenant (never the platform tenant); sessions kept |
+| 10e (DONE) | Suspend / activate a tenant (never the platform tenant); sessions kept |
 | 10f | Create a tenant with its root as a super user |
 | 10g | `X-Tenant-Id`: the platform root works inside any tenant through the normal APIs; audit records platform user + tenant |
 | 10h | `platform_role_grants` / `platform_permission_grants` (tenant or all); `AuthorizationService` checks grants per tenant |

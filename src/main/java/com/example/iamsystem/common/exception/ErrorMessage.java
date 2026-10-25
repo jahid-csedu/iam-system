@@ -17,6 +17,7 @@ public class ErrorMessage {
     public static final String ROLE_NOT_FOUND = "Role not found";
     public static final String CLIENT_NOT_FOUND = "Client not found";
     public static final String TENANT_NOT_FOUND = "Tenant not found";
+    public static final String PLATFORM_TENANT_NOT_SUSPENDABLE = "The platform tenant can't be suspended";
     public static final String CLIENT_EXISTS = "Client name already exists";
     public static final String CLIENT_NAME_REQUIRED = "Client name cannot be null or blank";
     public static final String CLIENT_ID_REQUIRED = "client_id is required";

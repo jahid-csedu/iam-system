@@ -8,6 +8,8 @@ public enum AuditEventType {
 
     // Tenant Management
     TENANT_SIGNUP,
+    TENANT_SUSPEND,
+    TENANT_ACTIVATE,
 
     // User Management
     USER_CREATION,

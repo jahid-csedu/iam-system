@@ -52,6 +52,10 @@ public class Tenant implements Serializable {
         this.status = status;
     }
 
+    public boolean isPlatform() {
+        return type == TenantType.PLATFORM;
+    }
+
     public boolean isActive() {
         return status == TenantStatus.ACTIVE;
     }
