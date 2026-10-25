@@ -37,8 +37,6 @@ public class ErrorMessage {
     public static final String ROLE_EXISTS = "Role name already exists";
     public static final String ROLE_ID_REQUIRED = "Role id is required";
     public static final String USER_ID_REQUIRED = "User id is required";
-    public static final String GRANT_EXISTS = "This grant already exists";
-    public static final String GRANT_NOT_FOUND = "Grant not found";
     public static final String PLATFORM_ROOT_HOLDS_EVERYTHING = "The platform root already holds every permission on every tenant";
     public static final String NO_GRANTS_ON_PLATFORM_TENANT = "Grants apply to standard tenants; inside the platform tenant use roles";
     public static final String OWN_ACCESS_CHANGE = "Users cannot change their own roles or permissions";

@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10k (platform role grants).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10l (platform grants: roles and permissions, in bulk).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -296,13 +296,17 @@ Inside the Platform tenant itself (no header) they use their normal roles; grant
 
 | What | Request |
 |---|---|
-| A platform user's grants | `GET /api/platform/users/{userId}/grants` → `{ "roleGrants": [ { "id", "userId", "roleId", "roleName", "tenantId", "createdAt" } ] }` (`tenantId` missing = all tenants) |
-| Grant a platform role | `POST /api/platform/grants/roles` `{ "userId", "roleId", "tenantId" }` → `201`; leave out `tenantId` for all standard tenants (also future ones) |
-| Remove a role grant | `DELETE /api/platform/grants/roles/{id}` → `204` |
+| A platform user's grants | `GET /api/platform/users/{userId}/grants` → `{ "roleGrants": [ { "id", "userId", "roleId", "roleName", "tenantId", "createdAt" } ], "permissionGrants": [ { "id", "userId", "permissionId", "permissionName", "tenantId", "createdAt" } ] }` (`tenantId` missing = all tenants) |
+| Grant platform roles | `POST /api/platform/grants/roles` `{ "userId", "roleIds": [..], "tenantId" }` → `201` with the user's grants of those roles; leave out `tenantId` for all standard tenants (also future ones) |
+| Remove role grants | `DELETE /api/platform/grants/roles` with the same body → `204`; removes those roles' grants on that tenant (without `tenantId`: the all-tenants grants) |
+| Grant permissions | `POST /api/platform/grants/permissions` `{ "userId", "permissionIds": [..], "tenantId" }` → `201`; any catalog key, including `tenants:*` (e.g. `tenants:suspend` on all tenants) |
+| Remove permission grants | `DELETE /api/platform/grants/permissions` with the same body → `204` |
 
-Rules: only roles of the Platform tenant (another tenant's role is `404`); only to management users of the Platform
+Rules: only roles of the Platform tenant (another tenant's role is `404`) or catalog permissions (unknown `404`); only to management users of the Platform
 tenant (others `404`), never to yourself (`403`) and never to the platform root (`400`, it holds everything already);
-only on a standard tenant (the Platform tenant `400`, an unknown one `404`); the same grant twice is `400`. A standard
+only on a standard tenant (the Platform tenant `400`, an unknown one `404`). Like assigning roles, a request is all or
+nothing (one unknown id and nothing changes, `404`); a grant the user already has is kept, and removing one they don't
+have changes nothing. A standard
 tenant's users get `403`. Grants and their removal are audited and apply immediately.
 Tenant users' `X-Tenant-Id` is ignored: they always work in their own tenant.
 

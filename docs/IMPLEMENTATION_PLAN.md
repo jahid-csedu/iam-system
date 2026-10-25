@@ -66,7 +66,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 10i | Platform roles may hold `tenants:*` keys; PLATFORM keys only through grants; grant query fixed | `89b1e0a` |
 | 10i+ | The platform tenant refuses regular users and application clients | `bdf6d18` |
 | 10j | Platform endpoints check PLATFORM keys per tenant (`TenantScope`) | `08de269` |
-| 10k | Role grants API (`/api/platform/grants/roles`, `/api/platform/users/{id}/grants`) | step 10k commit |
+| 10k | Role grants API (`/api/platform/grants/roles`, `/api/platform/users/{id}/grants`) | `10cf07e` |
+| 10l | Permission grants; grants given and removed in bulk (`roleIds` / `permissionIds`, `DELETE` with the same body) | step 10l commit |
 
 ---
 
@@ -240,7 +241,7 @@ Small sub-steps, each touching only a few classes:
 | 10i+ (DONE) | The platform tenant has management users only (no regular users) and no application clients |
 | 10j (DONE) | Platform endpoints check per tenant (list/view only granted tenants, suspend/activate the path tenant, create needs an all-tenants grant) |
 | 10k (DONE) | Role grants API (only to platform management users, only platform roles, no self-grants; `users:update` in the platform tenant) |
-| 10l | Permission grants API (`/api/platform/grants/permissions`) |
+| 10l (DONE) | Permission grants API (`/api/platform/grants/permissions`) |
 | 10m | Remove the unused `is_super_user` column |
 
 **Done when:** a suspended tenant's users cannot log in, refresh or pass introspection; tenant users can never call

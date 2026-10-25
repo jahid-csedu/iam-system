@@ -5,5 +5,5 @@ import java.util.List;
 /**
  * Everything a platform user is granted on other tenants.
  */
-public record PlatformGrantsDto(List<RoleGrantDto> roleGrants) {
+public record PlatformGrantsDto(List<RoleGrantDto> roleGrants, List<PermissionGrantDto> permissionGrants) {
 }

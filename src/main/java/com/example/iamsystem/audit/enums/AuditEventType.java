@@ -14,6 +14,8 @@ public enum AuditEventType {
     // Platform Grants
     PLATFORM_ROLE_GRANTED,
     PLATFORM_ROLE_GRANT_REVOKED,
+    PLATFORM_PERMISSION_GRANTED,
+    PLATFORM_PERMISSION_GRANT_REVOKED,
 
     // User Management
     USER_CREATION,

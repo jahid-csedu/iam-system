@@ -185,7 +185,8 @@ Package by feature. Each feature uses only the sub-packages it needs, always wit
 Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enums/` or `aspect/` packages:
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
-- `platform/`: the platform level. `PlatformGrantService`/`PlatformGrantController` (role grants; `entity/PlatformRoleGrant`);
+- `platform/`: the platform level. `PlatformGrantService`/`PlatformGrantController` (role and permission grants;
+  `entity/PlatformRoleGrant`, `entity/PlatformPermissionGrant`);
   `PlatformBootstrap` creates the platform tenant (+ console + predefined roles) at startup,
   and its root from `config/PlatformProperties` (`iam.platform.root.*`) while it has none; `PlatformTenantController`/
   `PlatformTenantService` (`/api/platform/tenants`, PLATFORM keys only)
@@ -423,3 +424,8 @@ Design debt
   roles; only to platform management users, never yourself or the platform root; only standard tenants or all; no
   duplicates. Decision: grants are managed with `users:read`/`users:update` held in the platform tenant.
   Next: step 10l (permission grants API).
+- 2026-10-25: Step 10l (permission grants, bulk). `PlatformPermissionGrant` + repository. Owner asked for lists: grants and
+  removals take `roleIds` / `permissionIds` like role assignment: `POST /api/platform/grants/roles|permissions` (201, the
+  user's grants of those ids) and `DELETE` with the same body (204), all or nothing; existing grants are kept, missing
+  ones ignored (no "already exists" error, no delete by grant id). The listing adds `permissionGrants`.
+  Next: step 10m (remove `is_super_user`).

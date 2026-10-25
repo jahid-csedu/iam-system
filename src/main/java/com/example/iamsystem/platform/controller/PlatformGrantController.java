@@ -1,6 +1,8 @@
 package com.example.iamsystem.platform.controller;
 
 import com.example.iamsystem.authorization.RequirePermission;
+import com.example.iamsystem.platform.dto.PermissionGrantDto;
+import com.example.iamsystem.platform.dto.PermissionGrantRequestDto;
 import com.example.iamsystem.platform.dto.PlatformGrantsDto;
 import com.example.iamsystem.platform.dto.RoleGrantDto;
 import com.example.iamsystem.platform.dto.RoleGrantRequestDto;
@@ -18,6 +20,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 import static com.example.iamsystem.permission.PermissionKey.USERS_READ;
 import static com.example.iamsystem.permission.PermissionKey.USERS_UPDATE;
@@ -43,16 +47,31 @@ public class PlatformGrantController {
 
     @PostMapping("/grants/roles")
     @RequirePermission(USERS_UPDATE)
-    @Operation(summary = "Grant a platform role to a platform user on one tenant, or on all tenants without tenantId (Requires: users:update in the platform tenant)")
-    public ResponseEntity<RoleGrantDto> grantRole(@RequestBody @Valid RoleGrantRequestDto request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(platformGrantService.grantRole(request));
+    @Operation(summary = "Grant platform roles to a platform user on one tenant, or on all tenants without tenantId (Requires: users:update in the platform tenant)")
+    public ResponseEntity<List<RoleGrantDto>> grantRoles(@RequestBody @Valid RoleGrantRequestDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(platformGrantService.grantRoles(request));
     }
 
-    @DeleteMapping("/grants/roles/{id}")
+    @DeleteMapping("/grants/roles")
     @RequirePermission(USERS_UPDATE)
-    @Operation(summary = "Remove a role grant; never your own (Requires: users:update in the platform tenant)")
-    public ResponseEntity<Void> revokeRoleGrant(@PathVariable Long id) {
-        platformGrantService.revokeRoleGrant(id);
+    @Operation(summary = "Remove role grants of a platform user on one tenant, or their all-tenants grants without tenantId; never your own (Requires: users:update in the platform tenant)")
+    public ResponseEntity<Void> revokeRoles(@RequestBody @Valid RoleGrantRequestDto request) {
+        platformGrantService.revokeRoles(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/grants/permissions")
+    @RequirePermission(USERS_UPDATE)
+    @Operation(summary = "Grant permissions to a platform user on one tenant, or on all tenants without tenantId (Requires: users:update in the platform tenant)")
+    public ResponseEntity<List<PermissionGrantDto>> grantPermissions(@RequestBody @Valid PermissionGrantRequestDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(platformGrantService.grantPermissions(request));
+    }
+
+    @DeleteMapping("/grants/permissions")
+    @RequirePermission(USERS_UPDATE)
+    @Operation(summary = "Remove permission grants of a platform user on one tenant, or their all-tenants grants without tenantId; never your own (Requires: users:update in the platform tenant)")
+    public ResponseEntity<Void> revokePermissions(@RequestBody @Valid PermissionGrantRequestDto request) {
+        platformGrantService.revokePermissions(request);
         return ResponseEntity.noContent().build();
     }
 }

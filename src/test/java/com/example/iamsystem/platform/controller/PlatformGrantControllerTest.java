@@ -3,6 +3,7 @@ package com.example.iamsystem.platform.controller;
 import com.example.iamsystem.client.service.ClientService;
 import com.example.iamsystem.platform.config.PlatformProperties;
 import com.example.iamsystem.platform.config.PlatformProperties.RootUser;
+import com.example.iamsystem.platform.dto.PermissionGrantRequestDto;
 import com.example.iamsystem.platform.dto.RoleGrantRequestDto;
 import com.example.iamsystem.platform.service.PlatformBootstrap;
 import com.example.iamsystem.role.repository.RoleRepository;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,13 +34,18 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
 import static com.example.iamsystem.security.userdetails.TestActors.actorOf;
 import static com.example.iamsystem.user.repository.TestUserLookup.findByUsername;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -49,7 +56,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Role grants through the API, and their effect inside tenants, against MySQL.
+ * Role and permission grants through the API, and their effect inside tenants and on the platform endpoints, against MySQL.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -77,6 +84,8 @@ class PlatformGrantControllerTest {
     private UserFactory userFactory;
     @Autowired
     private TransactionTemplate transactionTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private long platformId;
     private long acmeId;
@@ -104,14 +113,14 @@ class PlatformGrantControllerTest {
     }
 
     @Test
-    @DisplayName("A role granted on a tenant is listed and works there; once revoked it no longer does")
-    void grantRole_worksUntilRevoked() throws Exception {
-        long grantId = jsonMapper.readTree(grantRole(platformRoot, support, "VIEWER", acmeId)
+    @DisplayName("A role granted on a tenant is listed and works there; once removed it no longer does")
+    void grantRoles_workUntilRemoved() throws Exception {
+        long grantId = jsonMapper.readTree(grantRoles(platformRoot, support, acmeId, "VIEWER")
                         .andExpect(status().isCreated())
-                        .andExpect(jsonPath("$.roleName").value("VIEWER"))
-                        .andExpect(jsonPath("$.tenantId").value(acmeId))
+                        .andExpect(jsonPath("$[0].roleName").value("VIEWER"))
+                        .andExpect(jsonPath("$[0].tenantId").value(acmeId))
                         .andReturn().getResponse().getContentAsString())
-                .get("id").asLong();
+                .get(0).get("id").asLong();
 
         mockMvc.perform(get("/api/platform/users/{id}/grants", support.getId()).with(actingAs(platformRoot)))
                 .andExpect(status().isOk())
@@ -119,47 +128,87 @@ class PlatformGrantControllerTest {
         mockMvc.perform(get("/api/users").with(supportIn(acmeId))).andExpect(status().isOk());
         mockMvc.perform(get("/api/users").with(supportIn(globexId))).andExpect(status().isForbidden());
 
-        mockMvc.perform(delete("/api/platform/grants/roles/{id}", grantId).with(actingAs(platformRoot)))
-                .andExpect(status().isNoContent());
+        removeRoles(platformRoot, support, acmeId, "VIEWER").andExpect(status().isNoContent());
         mockMvc.perform(get("/api/users").with(supportIn(acmeId))).andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("A role granted without a tenant applies on every standard tenant")
-    void grantRoleOnAllTenants_appliesEverywhere() throws Exception {
-        grantRole(platformRoot, support, "VIEWER", null)
+    @DisplayName("Removing grants removes only the given roles on the given tenant, and ignores roles not granted")
+    void removeRoles_removesOnlyWhatIsNamed() throws Exception {
+        grantRoles(platformRoot, support, acmeId, "VIEWER", "USER_MANAGER").andExpect(status().isCreated());
+        grantRoles(platformRoot, support, null, "VIEWER").andExpect(status().isCreated());
+
+        removeRoles(platformRoot, support, acmeId, "VIEWER", "ADMIN").andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/platform/users/{id}/grants", support.getId()).with(actingAs(platformRoot)))
+                .andExpect(jsonPath("$.roleGrants.length()").value(2))
+                .andExpect(jsonPath("$.roleGrants[?(@.roleName == 'VIEWER')].tenantId", contains(nullValue())))
+                .andExpect(jsonPath("$.roleGrants[?(@.roleName == 'USER_MANAGER')].tenantId", contains((int) acmeId)));
+    }
+
+    @Test
+    @DisplayName("Removing with an unknown role removes nothing, and nobody removes their own grants")
+    void invalidRemovals_areRejected() throws Exception {
+        grantRoles(platformRoot, support, acmeId, "VIEWER").andExpect(status().isCreated());
+        long platformViewer = roleRepository.getRequiredByNameAndTenantId("VIEWER", platformId).getId();
+
+        send(delete("/api/platform/grants/roles"), actingAs(platformRoot),
+                new RoleGrantRequestDto(support.getId(), Set.of(platformViewer, 999_999L), acmeId))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/platform/users/{id}/grants", support.getId()).with(actingAs(platformRoot)))
+                .andExpect(jsonPath("$.roleGrants.length()").value(1));
+        removeRoles(platformRoot, platformRoot, acmeId, "VIEWER").andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Several roles are granted at once, and roles granted without a tenant apply on every standard tenant")
+    void grantSeveralRolesOnAllTenants_appliesEverywhere() throws Exception {
+        grantRoles(platformRoot, support, null, "VIEWER", "USER_MANAGER")
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.tenantId").doesNotExist());
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].tenantId").doesNotExist());
 
         mockMvc.perform(get("/api/users").with(supportIn(acmeId))).andExpect(status().isOk());
         mockMvc.perform(get("/api/users").with(supportIn(globexId))).andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("The same grant can't be given twice")
-    void duplicateGrant_isRejected() throws Exception {
-        grantRole(platformRoot, support, "VIEWER", acmeId).andExpect(status().isCreated());
-        grantRole(platformRoot, support, "VIEWER", acmeId).andExpect(status().isBadRequest());
-        grantRole(platformRoot, support, "VIEWER", null).andExpect(status().isCreated());
-        grantRole(platformRoot, support, "VIEWER", null).andExpect(status().isBadRequest());
+    @DisplayName("Granting what the user already has keeps the existing grant instead of adding another")
+    void repeatedGrant_keepsTheExistingOne() throws Exception {
+        long first = jsonMapper.readTree(grantRoles(platformRoot, support, acmeId, "VIEWER")
+                .andReturn().getResponse().getContentAsString()).get(0).get("id").asLong();
+        grantRoles(platformRoot, support, acmeId, "VIEWER", "USER_MANAGER")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$[?(@.roleName == 'VIEWER')].id", contains((int) first)));
+        grantRoles(platformRoot, support, null, "VIEWER").andExpect(status().isCreated());
+        grantRoles(platformRoot, support, null, "VIEWER").andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/platform/users/{id}/grants", support.getId()).with(actingAs(platformRoot)))
+                .andExpect(jsonPath("$.roleGrants.length()").value(3));
     }
 
     @Test
-    @DisplayName("Only platform roles, on standard tenants, to platform users other than the root and yourself")
-    void invalidGrants_areRejected() throws Exception {
+    @DisplayName("Only platform roles, all or nothing, on standard tenants, to platform users other than the root and yourself")
+    void invalidRoleGrants_areRejected() throws Exception {
         long acmeViewer = roleRepository.getRequiredByNameAndTenantId("VIEWER", acmeId).getId();
+        long platformViewer = roleRepository.getRequiredByNameAndTenantId("VIEWER", platformId).getId();
 
-        send(post("/api/platform/grants/roles"), actingAs(platformRoot), new RoleGrantRequestDto(support.getId(), acmeViewer, acmeId))
+        send(post("/api/platform/grants/roles"), actingAs(platformRoot),
+                new RoleGrantRequestDto(support.getId(), Set.of(platformViewer, acmeViewer), acmeId))
                 .andExpect(status().isNotFound());
-        grantRole(platformRoot, support, "VIEWER", platformId).andExpect(status().isBadRequest());
-        grantRole(platformRoot, support, "VIEWER", 999_999L).andExpect(status().isNotFound());
-        grantRole(platformRoot, acmeRoot, "VIEWER", acmeId).andExpect(status().isNotFound());
-        grantRole(platformRoot, platformRoot, "VIEWER", acmeId).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/platform/users/{id}/grants", support.getId()).with(actingAs(platformRoot)))
+                .andExpect(jsonPath("$.roleGrants").isEmpty());
+        send(post("/api/platform/grants/roles"), actingAs(platformRoot), new RoleGrantRequestDto(support.getId(), Set.of(), acmeId))
+                .andExpect(status().isUnprocessableEntity());
+        grantRoles(platformRoot, support, platformId, "VIEWER").andExpect(status().isBadRequest());
+        grantRoles(platformRoot, support, 999_999L, "VIEWER").andExpect(status().isNotFound());
+        grantRoles(platformRoot, acmeRoot, acmeId, "VIEWER").andExpect(status().isNotFound());
+        grantRoles(platformRoot, platformRoot, acmeId, "VIEWER").andExpect(status().isForbidden());
 
         long admin = roleRepository.getRequiredByNameAndTenantId("ADMIN", platformId).getId();
         send(put("/api/users/roles"), actingAs(platformRoot), Map.of("username", "support", "roleIds", Set.of(admin)))
                 .andExpect(status().isNoContent());
-        grantRole(support, platformRoot, "VIEWER", acmeId)
+        grantRoles(support, platformRoot, acmeId, "VIEWER")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("The platform root already holds every permission on every tenant"));
     }
@@ -167,14 +216,79 @@ class PlatformGrantControllerTest {
     @Test
     @DisplayName("Grants are managed only from the platform tenant: a tenant's root can't, even with users:update")
     void tenantRoot_cannotManageGrants() throws Exception {
-        grantRole(acmeRoot, support, "VIEWER", acmeId).andExpect(status().isForbidden());
+        grantRoles(acmeRoot, support, acmeId, "VIEWER").andExpect(status().isForbidden());
         mockMvc.perform(get("/api/platform/users/{id}/grants", support.getId()).with(actingAs(acmeRoot)))
                 .andExpect(status().isForbidden());
     }
 
-    private ResultActions grantRole(User actor, User grantee, String platformRoleName, Long tenantId) throws Exception {
-        long roleId = roleRepository.getRequiredByNameAndTenantId(platformRoleName, platformId).getId();
-        return send(post("/api/platform/grants/roles"), actingAs(actor), new RoleGrantRequestDto(grantee.getId(), roleId, tenantId));
+    @Test
+    @DisplayName("Permissions granted on a tenant are listed and work there; once removed they no longer do")
+    void grantPermissions_workUntilRemoved() throws Exception {
+        grantPermissions(support, acmeId, "users:read", "roles:read")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$[*].permissionName", containsInAnyOrder("users:read", "roles:read")));
+
+        mockMvc.perform(get("/api/platform/users/{id}/grants", support.getId()).with(actingAs(platformRoot)))
+                .andExpect(jsonPath("$.permissionGrants.length()").value(2))
+                .andExpect(jsonPath("$.roleGrants").isEmpty());
+        mockMvc.perform(get("/api/users").with(supportIn(acmeId))).andExpect(status().isOk());
+        mockMvc.perform(post("/api/users").with(supportIn(acmeId)).contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(new UserCreationDto("dave", PASSWORD, null, "dave@acme.com", null))))
+                .andExpect(status().isForbidden());
+
+        send(delete("/api/platform/grants/permissions"), actingAs(platformRoot), new PermissionGrantRequestDto(support.getId(),
+                Set.of(permissionId("users:read"), permissionId("roles:read")), acmeId))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/users").with(supportIn(acmeId))).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/platform/users/{id}/grants", support.getId()).with(actingAs(platformRoot)))
+                .andExpect(jsonPath("$.permissionGrants").isEmpty());
+    }
+
+    @Test
+    @DisplayName("A tenants:* permission granted on all tenants works on the platform endpoints for every tenant")
+    void platformPermissionGrant_worksOnThePlatformEndpoints() throws Exception {
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", globexId).with(actingAs(support))).andExpect(status().isForbidden());
+
+        grantPermissions(support, null, "tenants:suspend").andExpect(status().isCreated());
+
+        mockMvc.perform(put("/api/platform/tenants/{id}/suspend", globexId).with(actingAs(support)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUSPENDED"));
+    }
+
+    @Test
+    @DisplayName("An unknown permission grants nothing, and nobody grants permissions to themselves")
+    void invalidPermissionGrants_areRejected() throws Exception {
+        send(post("/api/platform/grants/permissions"), actingAs(platformRoot),
+                new PermissionGrantRequestDto(support.getId(), Set.of(permissionId("users:read"), 999_999L), acmeId))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/platform/users/{id}/grants", support.getId()).with(actingAs(platformRoot)))
+                .andExpect(jsonPath("$.permissionGrants").isEmpty());
+        grantPermissions(platformRoot, acmeId, "users:read").andExpect(status().isForbidden());
+    }
+
+    private ResultActions grantPermissions(User grantee, Long tenantId, String... permissions) throws Exception {
+        Set<Long> permissionIds = Arrays.stream(permissions).map(this::permissionId).collect(Collectors.toSet());
+        return send(post("/api/platform/grants/permissions"), actingAs(platformRoot),
+                new PermissionGrantRequestDto(grantee.getId(), permissionIds, tenantId));
+    }
+
+    private ResultActions grantRoles(User actor, User grantee, Long tenantId, String... platformRoleNames) throws Exception {
+        Set<Long> roleIds = Arrays.stream(platformRoleNames)
+                .map(name -> roleRepository.getRequiredByNameAndTenantId(name, platformId).getId())
+                .collect(Collectors.toSet());
+        return send(post("/api/platform/grants/roles"), actingAs(actor), new RoleGrantRequestDto(grantee.getId(), roleIds, tenantId));
+    }
+
+    private ResultActions removeRoles(User actor, User grantee, Long tenantId, String... platformRoleNames) throws Exception {
+        Set<Long> roleIds = Arrays.stream(platformRoleNames)
+                .map(name -> roleRepository.getRequiredByNameAndTenantId(name, platformId).getId())
+                .collect(Collectors.toSet());
+        return send(delete("/api/platform/grants/roles"), actingAs(actor), new RoleGrantRequestDto(grantee.getId(), roleIds, tenantId));
+    }
+
+    private long permissionId(String name) {
+        return jdbcTemplate.queryForObject("SELECT id FROM permissions WHERE name = ?", Long.class, name);
     }
 
     /**

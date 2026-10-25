@@ -1,6 +1,8 @@
 package com.example.iamsystem.platform.mapper;
 
+import com.example.iamsystem.platform.dto.PermissionGrantDto;
 import com.example.iamsystem.platform.dto.RoleGrantDto;
+import com.example.iamsystem.platform.entity.PlatformPermissionGrant;
 import com.example.iamsystem.platform.entity.PlatformRoleGrant;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -17,4 +19,12 @@ public interface PlatformGrantMapper {
     RoleGrantDto toDto(PlatformRoleGrant grant);
 
     List<RoleGrantDto> toRoleGrantDtos(List<PlatformRoleGrant> grants);
+
+    @Mapping(target = "userId", source = "user.id")
+    @Mapping(target = "permissionId", source = "permission.id")
+    @Mapping(target = "permissionName", source = "permission.name")
+    @Mapping(target = "tenantId", source = "tenant.id")
+    PermissionGrantDto toDto(PlatformPermissionGrant grant);
+
+    List<PermissionGrantDto> toPermissionGrantDtos(List<PlatformPermissionGrant> grants);
 }
