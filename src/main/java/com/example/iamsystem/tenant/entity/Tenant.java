@@ -32,6 +32,10 @@ public class Tenant implements Serializable {
     private String name;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false)
+    private TenantType type = TenantType.STANDARD;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TenantStatus status;
 

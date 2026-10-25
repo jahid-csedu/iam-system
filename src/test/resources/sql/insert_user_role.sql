@@ -6,8 +6,8 @@ delete from `users`;
 delete from `clients`;
 delete from `tenants`;
 
-INSERT INTO `tenants` (`id`, `name`, `status`, `created_at`, `updated_at`)
-VALUES (1, 'Test Tenant', 'ACTIVE', '2025-06-27 14:10:14.550149', '2025-06-27 14:10:14.550149');
+INSERT INTO `tenants` (`id`, `name`, `type`, `status`, `created_at`, `updated_at`)
+VALUES (1, 'Test Tenant', 'STANDARD', 'ACTIVE', '2025-06-27 14:10:14.550149', '2025-06-27 14:10:14.550149');
 
 INSERT INTO `clients` (`id`, `tenant_id`, `client_id`, `name`, `type`,
                        `access_token_ttl_seconds`, `refresh_token_enabled`, `refresh_token_ttl_seconds`, `created_at`, `updated_at`)

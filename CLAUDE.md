@@ -181,7 +181,8 @@ Package by feature. Each feature uses only the sub-packages it needs, always wit
 Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enums/` or `aspect/` packages:
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
-- `tenant/`: `Tenant` + `TenantStatus`, `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
+- `platform/`: the platform level. `PlatformBootstrap` creates the platform tenant (+ console + predefined roles) at startup
+- `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
   (direct permissions), `UserService` (paged list, find, delete);
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
@@ -349,3 +350,7 @@ Design debt
 - 2026-10-25: Step 10a (suspended tenants). `ClientResolver` refuses clients of a non-ACTIVE tenant (403 "Tenant is
   suspended"), which covers login, refresh and forgot-password.
   Next: step 10b (platform tenant).
+- 2026-10-25: Step 10b (platform tenant). Flyway `V10__tenant_type.sql`: `tenants.type` + `uk_tenants_platform` (one
+  platform). `PlatformBootstrap` (ApplicationRunner) creates the "Platform" tenant with its console and predefined roles on
+  first startup, through the same services signup uses. Decision: created in Java, not by migration.
+  Next: step 10c (platform root from config).

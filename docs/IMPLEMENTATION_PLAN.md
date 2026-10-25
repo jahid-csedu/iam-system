@@ -54,7 +54,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 9a | RS256 signing with configured keys, `/.well-known/jwks.json`, `iss`/`aud`/`jti`/`kid` | `9fdae12` |
 | 9b | Sessions (`V9`), single-use rotating opaque refresh tokens, reuse detection, logout, 401 on refresh errors | `efe589f` |
 | 9c | `POST /api/auth/introspect` (RFC 7662 style), `/token/validate` removed, filter refuses non-ACTIVE tenants | `1e90eea` |
-| 10a | Suspended tenant: login, refresh and forgot-password answer 403 (`ClientResolver`) | step 10a commit |
+| 10a | Suspended tenant: login, refresh and forgot-password answer 403 (`ClientResolver`) | `4327479` |
+| 10b | Platform tenant (`V10` `tenants.type`), created at startup by `PlatformBootstrap` | step 10b commit |
 
 ---
 
@@ -217,7 +218,7 @@ Small sub-steps, each touching only a few classes:
 | Sub-step | What |
 |---|---|
 | 10a (DONE) | Suspended tenant: login, refresh and forgot-password refused with 403 (`ClientResolver`) |
-| 10b | Platform tenant: `tenants.type` (`STANDARD`/`PLATFORM`, one platform), platform tenant row + console client + roles (migration) |
+| 10b (DONE) | Platform tenant: `tenants.type` (`STANDARD`/`PLATFORM`, one platform); the tenant + console client + roles are created at startup by `PlatformBootstrap` |
 | 10c | Platform root created at startup from `IAM_PLATFORM_ROOT_USERNAME/PASSWORD/EMAIL` (WARN when missing) |
 | 10d | `tenants:*` PLATFORM keys; `GET /api/platform/tenants` (list, view) for platform users only |
 | 10e | Suspend / activate a tenant (never the platform tenant); sessions kept |

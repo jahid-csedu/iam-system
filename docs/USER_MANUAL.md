@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10a (suspended tenants).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10b (platform tenant).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -69,7 +69,8 @@ them, delete them, or create more. Later changes to the predefined set never aff
 | Docker (with ELK logging) | `docker compose up --build` | app `:8080`, Kibana `:5601` |
 | Local JVM (needs MySQL on `localhost:3366`, e.g. `docker compose up db`) | `./gradlew bootRun` | `http://localhost:8080` (override with `SERVER_PORT=8081` in `.env`) |
 
-The database schema and the permission catalog are created automatically (Flyway) on first start. Mail settings
+The database schema and the permission catalog are created automatically (Flyway) on first start, and so is the
+**Platform** tenant of the super users (its name is therefore taken; platform users arrive in the next steps). Mail settings
 (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs and new passwords are only ever
 sent by email. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 
