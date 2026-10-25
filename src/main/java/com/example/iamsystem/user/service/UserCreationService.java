@@ -3,8 +3,10 @@ package com.example.iamsystem.user.service;
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.authorization.AuthorizationService;
+import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
+import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserDto;
@@ -16,11 +18,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.example.iamsystem.common.exception.ErrorMessage.PLATFORM_MANAGEMENT_USERS_ONLY;
 import static com.example.iamsystem.permission.PermissionKey.USERS_CREATE_MANAGEMENT;
 
 /**
  * Creates users inside the current user's tenant. Root users are created only at tenant signup.
  * Creating a management user needs {@code users:create-management} on top of the endpoint's {@code users:create}.
+ * The platform tenant has management users only.
  */
 @Service
 @RequiredArgsConstructor
@@ -45,7 +49,11 @@ public class UserCreationService {
         if (userType == UserType.MANAGEMENT) {
             authorizationService.checkPermission(creator, USERS_CREATE_MANAGEMENT);
         }
-        User user = userFactory.newUser(request, tenantRepository.getReferenceById(creator.tenantId()), userType);
+        Tenant tenant = tenantRepository.getReferenceById(creator.tenantId());
+        if (tenant.isPlatform() && userType == UserType.REGULAR) {
+            throw new UserInputNotValidException(PLATFORM_MANAGEMENT_USERS_ONLY);
+        }
+        User user = userFactory.newUser(request, tenant, userType);
         user.setCreatedBy(userRepository.getReferenceById(creator.userId()));
         return userMapper.toDto(userRepository.save(user));
     }

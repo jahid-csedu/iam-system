@@ -405,3 +405,7 @@ Design debt
   count now (`countPlatformGrants`). Step 10 re-split again: 10j per-tenant platform checks, 10k grant endpoints,
   10l remove `is_super_user`; platform tenant = management users only (own small commit).
   Next: platform tenant without regular users, then 10j.
+- 2026-10-25: Step 10i+ (platform tenant content). The platform tenant refuses REGULAR users (`UserCreationService`) and
+  application clients (`ClientService`), 400; it holds only management users and its console. Roadmap items 11
+  (client-scoped regular users) and 12 (self-registration per tenant, Auth0-like, required later) added.
+  Next: step 10j (per-tenant platform checks).

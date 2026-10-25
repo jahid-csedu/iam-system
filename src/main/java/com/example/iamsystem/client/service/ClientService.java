@@ -25,6 +25,7 @@ import java.util.Set;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.CLIENT_EXISTS;
 import static com.example.iamsystem.common.exception.ErrorMessage.CONSOLE_CLIENT_NOT_DELETABLE;
+import static com.example.iamsystem.common.exception.ErrorMessage.PLATFORM_CONSOLE_ONLY;
 
 /**
  * Manages the client applications of the current user's tenant, and creates each new tenant's management console.
@@ -63,10 +64,14 @@ public class ClientService {
     @Transactional
     public ClientDto createClient(ClientRequestDto request) {
         Long tenantId = currentUserProvider.requireCurrentTenantId();
+        Tenant tenant = tenantRepository.getReferenceById(tenantId);
+        if (tenant.isPlatform()) {
+            throw new UserInputNotValidException(PLATFORM_CONSOLE_ONLY);
+        }
         if (clientRepository.existsByNameAndTenantId(request.name(), tenantId)) {
             throw new ClientAlreadyExistsException(CLIENT_EXISTS);
         }
-        Client client = newClient(tenantRepository.getReferenceById(tenantId), request.name(), ClientType.APPLICATION);
+        Client client = newClient(tenant, request.name(), ClientType.APPLICATION);
         return clientMapper.toDto(clientRepository.save(client));
     }
 

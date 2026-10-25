@@ -17,6 +17,8 @@ public class ErrorMessage {
     public static final String ROLE_NOT_FOUND = "Role not found";
     public static final String CLIENT_NOT_FOUND = "Client not found";
     public static final String TENANT_NOT_FOUND = "Tenant not found";
+    public static final String PLATFORM_MANAGEMENT_USERS_ONLY = "The platform tenant has management users only";
+    public static final String PLATFORM_CONSOLE_ONLY = "The platform tenant has no application clients, only its management console";
     public static final String INVALID_TENANT_HEADER = "X-Tenant-Id must be a tenant id";
     public static final String PLATFORM_TENANT_NOT_SUSPENDABLE = "The platform tenant can't be suspended";
     public static final String CLIENT_EXISTS = "Client name already exists";

@@ -3,7 +3,10 @@ package com.example.iamsystem.user.service;
 import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserAlreadyExistsException;
+import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
+import com.example.iamsystem.tenant.entity.Tenant;
+import com.example.iamsystem.tenant.entity.TenantType;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserDto;
@@ -23,6 +26,7 @@ import static com.example.iamsystem.permission.PermissionKey.USERS_CREATE_MANAGE
 import static com.example.iamsystem.user.service.UserTestData.TENANT;
 import static com.example.iamsystem.user.service.UserTestData.actor;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
+import static com.example.iamsystem.user.service.UserTestData.tenant;
 import static com.example.iamsystem.user.service.UserTestData.user;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -57,6 +61,20 @@ class UserCreationServiceTest {
         service = new UserCreationService(userRepository, tenantRepository, userFactory, authorizationService, currentUserProvider,
                 userMapper);
         request = new UserCreationDto("alice", "Password1!", "Alice", "alice@example.com", null);
+    }
+
+    @Test
+    @DisplayName("The platform tenant refuses regular users")
+    void createUser_regularUserInPlatformTenant_isRefused() {
+        Tenant platform = tenant(1L, "Platform");
+        platform.setType(TenantType.PLATFORM);
+        User platformRoot = rootUser(1, "platform-root");
+        platformRoot.setTenant(platform);
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(platformRoot));
+        when(tenantRepository.getReferenceById(1L)).thenReturn(platform);
+
+        assertThrows(UserInputNotValidException.class, () -> service.createUser(request));
+        verifyNoInteractions(userFactory);
     }
 
     @Test

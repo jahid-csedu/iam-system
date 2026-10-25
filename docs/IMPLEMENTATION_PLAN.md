@@ -63,7 +63,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 10f | `POST /api/platform/tenants`: super users create tenants through the signup service | `0effa3d` |
 | 10g | `X-Tenant-Id`: the platform root works inside any tenant through the normal APIs | `fdca718` |
 | 10h | Platform grants (`V12`); grants give TENANT keys inside the granted tenant(s) | `ef6937f` (query fixed in 10i) |
-| 10i | Platform roles may hold `tenants:*` keys; PLATFORM keys only through grants; grant query fixed | step 10i commit |
+| 10i | Platform roles may hold `tenants:*` keys; PLATFORM keys only through grants; grant query fixed | `89b1e0a` |
+| 10i+ | The platform tenant refuses regular users and application clients | step 10i+ commit |
 
 ---
 
@@ -234,7 +235,7 @@ Small sub-steps, each touching only a few classes:
 | 10g (DONE) | `X-Tenant-Id`: the platform root works inside any tenant through the normal APIs; audit records platform user + tenant |
 | 10h (DONE) | `platform_role_grants` / `platform_permission_grants` (tenant or all, NULL = all standard tenants); with `X-Tenant-Id` a platform user holds the TENANT keys its grants give on that tenant |
 | 10i (DONE) | Platform roles may hold `tenants:*` keys (platform tenant only); PLATFORM keys count only through grants |
-| 10i+ | The platform tenant has management users only (no regular users) |
+| 10i+ (DONE) | The platform tenant has management users only (no regular users) and no application clients |
 | 10j | Platform endpoints check per tenant (list/view only granted tenants, suspend/activate the path tenant, create needs an all-tenants grant) |
 | 10k | Endpoints to give and remove grants (only to management users of the platform tenant, only platform roles, no self-grants) |
 | 10l | Remove the unused `is_super_user` column |

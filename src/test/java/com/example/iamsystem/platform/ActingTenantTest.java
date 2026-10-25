@@ -214,6 +214,26 @@ class ActingTenantTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    @DisplayName("The platform tenant takes management users only, and no application clients")
+    void platformTenant_refusesRegularUsersAndApplicationClients() throws Exception {
+        send(post("/api/users"), platformRootToken, new UserCreationDto("plain", PASSWORD, null, "plain@platform.test", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("The platform tenant has management users only"));
+        send(post("/api/clients"), platformRootToken, Map.of("name", "Shop"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("The platform tenant has no application clients, only its management console"));
+    }
+
+    @Test
+    @DisplayName("Inside a standard tenant the platform root still creates regular users and application clients")
+    void platformRootInsideATenant_createsRegularUsersAndClients() throws Exception {
+        send(post("/api/users").header("X-Tenant-Id", acmeId), platformRootToken,
+                new UserCreationDto("plain", PASSWORD, null, "plain@acme.com", null)).andExpect(status().isCreated());
+        send(post("/api/clients").header("X-Tenant-Id", acmeId), platformRootToken, Map.of("name", "Shop"))
+                .andExpect(status().isCreated());
+    }
+
     private long permissionId(String name) {
         return jdbcTemplate.queryForObject("SELECT id FROM permissions WHERE name = ?", Long.class, name);
     }
