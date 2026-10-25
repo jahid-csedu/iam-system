@@ -61,7 +61,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   Model (agreed 2026-10-25): a reserved built-in platform tenant (`tenants.type = PLATFORM`, exactly one). Super users are
   normal users in it. Its root (the first super user) is created at startup from `IAM_PLATFORM_ROOT_*` config when the
   platform has no root; without the config there is no platform user (WARN), and there is no public signup into it.
-  This replaces the unused `is_super_user` flag.
+  This replaced the unused `is_super_user` flag (dropped in step 10m). Done in step 10.
   - The platform root can do everything in every tenant (every TENANT key anywhere) plus every platform key
     (`tenants:read`, `tenants:create`, `tenants:suspend`, `tenants:activate`).
   - Other platform users get **grants**: a role or a single permission **on one tenant or on all tenants**
@@ -267,7 +267,6 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   Introspection uses the same query, so the API and other applications agree on what "active" means. `User.@Version` is
   optimistic locking only. Permissions are read from the database on
   every check (`PermissionRepository.isGrantedToUser`).
-- `is_super_user` exists in schema and entity but is never read.
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
@@ -429,3 +428,6 @@ Design debt
   user's grants of those ids) and `DELETE` with the same body (204), all or nothing; existing grants are kept, missing
   ones ignored (no "already exists" error, no delete by grant id). The listing adds `permissionGrants`.
   Next: step 10m (remove `is_super_user`).
+- 2026-10-25: Step 10m. Flyway `V13__drop_super_user_flag.sql` drops `users.is_super_user` (and the `User` field).
+  Step 10 complete (platform tenant, platform root, tenant suspension, `X-Tenant-Id`, grants).
+  Next: step 11 (client status), or one of the security and quality fixes; owner decides.

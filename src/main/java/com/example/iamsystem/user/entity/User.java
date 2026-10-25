@@ -68,9 +68,6 @@ public class User implements Serializable {
     @Column(name = "is_root_user", nullable = false)
     private boolean isRootUser = false;
 
-    @Column(name = "is_super_user", nullable = false)
-    private boolean isSuperUser = false;
-
     @Column(name = "active")
     private boolean active;
 

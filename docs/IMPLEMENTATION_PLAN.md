@@ -67,7 +67,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 10i+ | The platform tenant refuses regular users and application clients | `bdf6d18` |
 | 10j | Platform endpoints check PLATFORM keys per tenant (`TenantScope`) | `08de269` |
 | 10k | Role grants API (`/api/platform/grants/roles`, `/api/platform/users/{id}/grants`) | `10cf07e` |
-| 10l | Permission grants; grants given and removed in bulk (`roleIds` / `permissionIds`, `DELETE` with the same body) | step 10l commit |
+| 10l | Permission grants; grants given and removed in bulk (`roleIds` / `permissionIds`, `DELETE` with the same body) | `f03eff7` |
+| 10m | `is_super_user` dropped (`V13`); step 10 complete | step 10m commit |
 
 ---
 
@@ -220,7 +221,7 @@ by the bearer access token; introspection is public until clients get secrets; t
   live, the user is active and unlocked, and the tenant is ACTIVE; otherwise just `{ "active": false }`.
 - `/api/auth/token/validate` removed.
 
-### Step 10: Platform tenant, super users, tenant suspension
+### Step 10: Platform tenant, super users, tenant suspension (DONE, kept for reference)
 
 **Goal:** the platform level. Design agreed 2026-10-25 (see CLAUDE.md "Platform"): the platform root does everything in
 every tenant; other platform users get role/permission grants on one tenant or on all tenants; `X-Tenant-Id` lets a
@@ -242,7 +243,7 @@ Small sub-steps, each touching only a few classes:
 | 10j (DONE) | Platform endpoints check per tenant (list/view only granted tenants, suspend/activate the path tenant, create needs an all-tenants grant) |
 | 10k (DONE) | Role grants API (only to platform management users, only platform roles, no self-grants; `users:update` in the platform tenant) |
 | 10l (DONE) | Permission grants API (`/api/platform/grants/permissions`) |
-| 10m | Remove the unused `is_super_user` column |
+| 10m (DONE) | Remove the unused `is_super_user` column |
 
 **Done when:** a suspended tenant's users cannot log in, refresh or pass introspection; tenant users can never call
 platform endpoints or act in another tenant; platform users act in a tenant only with a grant (or as platform root).
