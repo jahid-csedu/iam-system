@@ -1,6 +1,6 @@
 package com.example.iamsystem.security.filter;
 
-import com.example.iamsystem.security.jwt.JwtTokenUtil;
+import com.example.iamsystem.security.jwt.TokenVerifier;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.user.repository.UserRepository;
 import io.jsonwebtoken.Claims;
@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -23,8 +24,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import static com.example.iamsystem.security.jwt.JwtConstant.BEARER;
-import static com.example.iamsystem.security.jwt.JwtConstant.REQUEST_HEADER;
 import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 
 /**
@@ -37,7 +36,9 @@ import static com.example.iamsystem.security.jwt.TokenType.ACCESS_TOKEN;
 @Slf4j
 public class JwtRequestFilter extends OncePerRequestFilter {
 
-    private final JwtTokenUtil tokenUtil;
+    private static final String BEARER = "Bearer ";
+
+    private final TokenVerifier tokenVerifier;
     private final UserRepository userRepository;
 
     @Override
@@ -52,7 +53,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     }
 
     private static Optional<String> extractToken(HttpServletRequest request) {
-        String header = request.getHeader(REQUEST_HEADER);
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header == null || !header.startsWith(BEARER)) {
             return Optional.empty();
         }
@@ -63,9 +64,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         Long userId;
         Integer version;
         try {
-            Claims claims = tokenUtil.parseClaims(token, ACCESS_TOKEN);
-            userId = tokenUtil.userIdOf(claims);
-            version = tokenUtil.versionOf(claims);
+            Claims claims = tokenVerifier.parseClaims(token, ACCESS_TOKEN);
+            userId = tokenVerifier.userIdOf(claims);
+            version = tokenVerifier.versionOf(claims);
         } catch (ExpiredJwtException e) {
             log.debug("Ignoring an expired access token of user {}", e.getClaims().getSubject());
             return Optional.empty();

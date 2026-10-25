@@ -114,8 +114,9 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   - whether refresh tokens are issued (e.g. app X gets refresh tokens, app Y gets access tokens only) and their expiry,
   - which user claims go into the JWT body (user id, username, email, …).
 - First rollout: tokens carry only basic user information. The IAM doesn't manage other applications' roles or permissions.
-- Other applications verify tokens through IAM endpoints. Planned: asymmetric signing + JWKS endpoint for local
-  verification, plus an introspection endpoint that reflects revocation and tenant suspension.
+- Other applications verify tokens through IAM endpoints: asymmetric signing + JWKS endpoint for local verification
+  (done in step 9a: RS256, one platform key set; per-tenant keys are roadmap item 10), plus an introspection endpoint that
+  reflects revocation and tenant suspension (planned).
 - Logout and revocation: store refresh tokens (hashed) in the database. This replaces the `@Version`-based revocation.
 
 ### Tenant lifecycle
@@ -182,8 +183,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `@RequirePermission(PermissionKey)` on every protected endpoint
 - `authorization/`: `AuthorizationService` = the only place answering "does user X hold service:action?";
   `@RequirePermission` + `AuthorizationAspect` enforce it on endpoints
-- `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, validate) and DTOs
-- `security/`: Spring Security wiring: `config/`, `filter/` (JWT filter), `jwt/` (`JwtTokenUtil`, `JwtConstant`, `TokenType`),
+- `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, validate) and DTOs;
+  `JwksController` (`/.well-known/jwks.json`)
+- `security/`: Spring Security wiring: `config/` (incl. `JwtProperties`), `filter/` (JWT filter), `jwt/` (`SigningKeys` = the
+  RSA key set, `TokenIssuer`, `TokenVerifier`, `TokenType`),
   `userdetails/` (`AuthenticatedActor` = the request principal; `CurrentUserProvider`, the single owner of "who is logged in"
   and of the current tenant id; `TenantAuthenticationProvider` = login inside the client's tenant; `DefaultUserDetails`/
   `DefaultUserDetailsService` for login and refresh only), `event/` (lockout listeners, by user id), `config/LockoutProperties`
@@ -205,8 +208,12 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   authentication details to `TenantAuthenticationProvider`; the console client refuses regular users (403).
   Refresh: `{ client_id, refresh_token }`, only through the issuing client, and refused when the client has refresh tokens off.
 - Token settings live on the client (`access_token_ttl_seconds`, `refresh_token_enabled`, `refresh_token_ttl_seconds`,
-  `client_token_claims`). `JwtTokenUtil.generateAccessToken/generateRefreshToken(user, client)` read them; defaults are
-  `ClientService.DEFAULT_TOKEN_SETTINGS` (5 min, refresh on for 24 h, `USERNAME`). Only the signing secrets stay in `JwtConstant`.
+  `client_token_claims`). `TokenIssuer.issueAccessToken/issueRefreshToken(user, client)` read them; defaults are
+  `ClientService.DEFAULT_TOKEN_SETTINGS` (5 min, refresh on for 24 h, `USERNAME`).
+- Tokens are RS256-signed by the first key of `iam.jwt.keys` (kid + PKCS#8 PEM private key, public key derived); every
+  configured key is published at `GET /.well-known/jwks.json` (public) and accepted by `TokenVerifier`, which only takes
+  RS256 by a known `kid` and the expected `typ` (`at+jwt` access, `rt+jwt` refresh). No key configured → a temporary key
+  with a WARN. `iss` = `iam.jwt.issuer` + `/tenants/{id}`, `aud` = `client_id`, plus `jti`.
 - `POST /api/tenants/signup` (public) creates a tenant + its root user + predefined roles + management console (its `client_id` is in the response). `POST /api/users` (`users:create`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
@@ -218,13 +225,12 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`), never the `User` entity.
   `JwtRequestFilter` finds it with one query (`UserRepository.findActor`) that only matches the current token version and an
   active, unlocked user; anything else leaves the request unauthenticated (401). Permissions are read from the database on
-  every check (`PermissionRepository.isGrantedToUser`). Tokens carry only `sub`, `version`, `iat`, `exp`.
-- Token lifetimes and claims come from the client (see above); the signing secrets live in `security/jwt/JwtConstant.java`.
+  every check (`PermissionRepository.isGrantedToUser`).
 - `is_super_user` exists in schema and entity but is never read.
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- JWT secrets are hard-coded in `JwtConstant` (HMAC, so any verifier could also forge tokens). `mail.debug=true`.
+- `mail.debug=true`.
 - Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit, is
   stored in plain text, and the endpoint reveals whether a username/email exists.
 - `/api/auth/token/validate` ignores the token version (revoked tokens are reported as valid).
@@ -295,3 +301,8 @@ Design debt
   longer than access (422 otherwise); claims from `TokenClaim` (never roles/permissions); no refresh token when disabled.
   Decisions: defaults 5 min / refresh on 24 h / username for every client (option A); console settings editable.
   Next: step 9 (token redesign: asymmetric signing, JWKS, refresh-token store, introspection).
+- 2026-10-25: Step 9a (RS256 + JWKS). Hard-coded HMAC secrets and `JwtConstant` removed; `JwtTokenUtil` split into
+  `TokenIssuer`/`TokenVerifier`; `SigningKeys` from `iam.jwt.keys` (temporary key + WARN when none); `GET /.well-known/jwks.json`;
+  access tokens get `typ: at+jwt`, `kid`, `iss` (per tenant), `aud`, `jti`. Decisions: one platform key set (per-tenant keys
+  → roadmap item 10), RS256, logout by bearer token (9b), public introspection until client secrets (9c).
+  Next: step 9b (sessions, opaque rotated refresh tokens, logout).

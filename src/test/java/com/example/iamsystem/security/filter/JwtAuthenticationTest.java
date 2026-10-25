@@ -1,7 +1,7 @@
 package com.example.iamsystem.security.filter;
 
 import com.example.iamsystem.client.repository.ClientRepository;
-import com.example.iamsystem.security.jwt.JwtTokenUtil;
+import com.example.iamsystem.security.jwt.TokenIssuer;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
@@ -46,7 +46,7 @@ class JwtAuthenticationTest {
     @Autowired
     private UserRepository userRepository;
     @Autowired
-    private JwtTokenUtil tokenUtil;
+    private TokenIssuer tokenIssuer;
     @Autowired
     private ClientRepository clientRepository;
 
@@ -131,7 +131,7 @@ class JwtAuthenticationTest {
      * A token for the root user's current version, issued by the same code login uses.
      */
     private String freshToken() {
-        return tokenUtil.generateAccessToken(findByUsername(userRepository, "acme-root").orElseThrow(),
+        return tokenIssuer.issueAccessToken(findByUsername(userRepository, "acme-root").orElseThrow(),
                 clientRepository.findByClientId(consoleClientId).orElseThrow());
     }
 

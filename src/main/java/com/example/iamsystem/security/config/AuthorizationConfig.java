@@ -1,5 +1,6 @@
 package com.example.iamsystem.security.config;
 
+import com.example.iamsystem.auth.controller.JwksController;
 import com.example.iamsystem.security.JwtAuthenticationEntryPoint;
 import com.example.iamsystem.security.filter.JwtRequestFilter;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,8 @@ public class AuthorizationConfig {
             "/api/tenants/signup",
             "/api/auth/**",
             "/api/password/reset-request",
-            "/api/password/reset"
+            "/api/password/reset",
+            JwksController.JWKS_PATH
     };
 
     private static final String[] OPENAPI_ENDPOINTS = {

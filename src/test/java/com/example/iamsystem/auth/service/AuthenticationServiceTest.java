@@ -10,7 +10,8 @@ import com.example.iamsystem.common.exception.InvalidClientException;
 import com.example.iamsystem.common.exception.JwtException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
-import com.example.iamsystem.security.jwt.JwtTokenUtil;
+import com.example.iamsystem.security.jwt.TokenIssuer;
+import com.example.iamsystem.security.jwt.TokenVerifier;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
 import com.example.iamsystem.tenant.entity.Tenant;
@@ -60,7 +61,9 @@ class AuthenticationServiceTest {
     @Mock
     private ClientResolver clientResolver;
     @Mock
-    private JwtTokenUtil jwtTokenUtil;
+    private TokenIssuer tokenIssuer;
+    @Mock
+    private TokenVerifier tokenVerifier;
 
     @InjectMocks
     private AuthenticationService service;
@@ -115,7 +118,7 @@ class AuthenticationServiceTest {
         givenAuthenticated(regular);
 
         assertThrows(NoAccessException.class, () -> service.login(new UserLoginDto(CONSOLE_ID, "carol", "Password1!")));
-        verify(jwtTokenUtil, never()).generateAccessToken(any(), any());
+        verify(tokenIssuer, never()).issueAccessToken(any(), any());
     }
 
     @Test
@@ -134,7 +137,7 @@ class AuthenticationServiceTest {
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Bad credentials"));
 
         assertThrows(BadCredentialsException.class, () -> service.login(new UserLoginDto(CONSOLE_ID, "alice", "wrong")));
-        verifyNoInteractions(jwtTokenUtil);
+        verifyNoInteractions(tokenIssuer);
     }
 
     @Test
@@ -143,7 +146,7 @@ class AuthenticationServiceTest {
         when(clientResolver.resolve(APP_ID)).thenReturn(app);
         givenRefreshClaims();
         when(userDetailsService.requireUsableUser(1L)).thenReturn(new DefaultUserDetails(manager));
-        when(jwtTokenUtil.isIssuedFor(claims, manager)).thenReturn(true);
+        when(tokenVerifier.isIssuedFor(claims, manager)).thenReturn(true);
         givenIssuedTokens(manager, APP_ID);
 
         assertTokens(service.refresh(new JwtRefreshTokenDto(APP_ID, "refresh-token")), "alice");
@@ -165,10 +168,10 @@ class AuthenticationServiceTest {
         when(clientResolver.resolve(APP_ID)).thenReturn(app);
         givenRefreshClaims();
         when(userDetailsService.requireUsableUser(1L)).thenReturn(new DefaultUserDetails(manager));
-        when(jwtTokenUtil.isIssuedFor(claims, manager)).thenReturn(false);
+        when(tokenVerifier.isIssuedFor(claims, manager)).thenReturn(false);
 
         assertThrows(JwtException.class, () -> service.refresh(new JwtRefreshTokenDto(APP_ID, "refresh-token")));
-        verify(jwtTokenUtil, never()).generateAccessToken(any(), any());
+        verify(tokenIssuer, never()).issueAccessToken(any(), any());
     }
 
     @Test
@@ -177,13 +180,13 @@ class AuthenticationServiceTest {
         app.setRefreshTokenEnabled(false);
         when(clientResolver.resolve(APP_ID)).thenReturn(app);
         givenAuthenticated(regular);
-        when(jwtTokenUtil.generateAccessToken(regular, app)).thenReturn("access-token");
+        when(tokenIssuer.issueAccessToken(regular, app)).thenReturn("access-token");
 
         JwtResponse response = service.login(new UserLoginDto(APP_ID, "carol", "Password1!"));
 
         assertEquals("access-token", response.getAccessToken());
         assertNull(response.getRefreshToken());
-        verify(jwtTokenUtil, never()).generateRefreshToken(any(), any());
+        verify(tokenIssuer, never()).issueRefreshToken(any(), any());
     }
 
     @Test
@@ -200,7 +203,7 @@ class AuthenticationServiceTest {
     @DisplayName("An expired refresh token is rejected as an invalid token")
     void refresh_withExpiredRefreshToken_isRejectedAsInvalidToken() {
         when(clientResolver.resolve(APP_ID)).thenReturn(app);
-        when(jwtTokenUtil.parseClaims("expired", REFRESH_TOKEN)).thenThrow(new ExpiredJwtException(null, null, "expired"));
+        when(tokenVerifier.parseClaims("expired", REFRESH_TOKEN)).thenThrow(new ExpiredJwtException(null, null, "expired"));
 
         assertThrows(JwtException.class, () -> service.refresh(new JwtRefreshTokenDto(APP_ID, "expired")));
     }
@@ -210,7 +213,7 @@ class AuthenticationServiceTest {
     void validate_reportsWhetherTheAccessTokenIsValid() {
         TokenValidationRequest request = new TokenValidationRequest();
         request.setToken("access-token");
-        when(jwtTokenUtil.isValid("access-token", ACCESS_TOKEN)).thenReturn(true);
+        when(tokenVerifier.isValid("access-token", ACCESS_TOKEN)).thenReturn(true);
 
         assertTrue(service.validate(request).isStatus());
     }
@@ -222,15 +225,15 @@ class AuthenticationServiceTest {
     }
 
     private void givenRefreshClaims() {
-        when(jwtTokenUtil.parseClaims("refresh-token", REFRESH_TOKEN)).thenReturn(claims);
-        when(jwtTokenUtil.userIdOf(claims)).thenReturn(1L);
-        when(jwtTokenUtil.clientIdOf(claims)).thenReturn(APP_ID);
+        when(tokenVerifier.parseClaims("refresh-token", REFRESH_TOKEN)).thenReturn(claims);
+        when(tokenVerifier.userIdOf(claims)).thenReturn(1L);
+        when(tokenVerifier.clientIdOf(claims)).thenReturn(APP_ID);
     }
 
     private void givenIssuedTokens(User user, String clientId) {
         Client client = clientId.equals(CONSOLE_ID) ? console : app;
-        when(jwtTokenUtil.generateAccessToken(user, client)).thenReturn("access-token");
-        when(jwtTokenUtil.generateRefreshToken(user, client)).thenReturn("refresh-token");
+        when(tokenIssuer.issueAccessToken(user, client)).thenReturn("access-token");
+        when(tokenIssuer.issueRefreshToken(user, client)).thenReturn("refresh-token");
     }
 
     private static void assertTokens(JwtResponse response, String username) {

@@ -43,3 +43,6 @@ This document outlines important features to consider for the evolution of the I
 9. **Emergency Access/Break-Glass Accounts:**
     *   **Description:** Define and implement secure procedures for granting temporary, highly privileged access in emergency situations, with strict auditing.
     *   **Why it's important:** Ensures business continuity during critical incidents while maintaining security. 
+10. **Per-Tenant Signing Keys:**
+    *   **Description:** Give every tenant its own RSA key pair for signing tokens, instead of one platform key set. Private keys are stored encrypted (under a platform master key, or in a KMS/HSM), every tenant publishes its own JWKS (e.g. `/tenants/{id}/.well-known/jwks.json`), and root users can rotate their tenant's key. Tokens already carry a `kid` and a tenant-specific `iss`, so the token format doesn't change.
+    *   **Why it's important:** A leaked or compromised key affects one tenant only, and a tenant can rotate its keys on its own schedule.

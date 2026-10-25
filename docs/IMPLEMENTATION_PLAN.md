@@ -50,7 +50,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 7b | Predefined roles (`V5`): `ADMIN`, `USER_MANAGER`, `VIEWER` templates copied into each new tenant at signup | `24b07c8` |
 | 7c | User types (`V6`): `MANAGEMENT`/`REGULAR`, `users:create-management`, direct user permissions | `b7dc4e1` |
 | 8a | Clients (`V7`): `client_id` login/refresh/forgot-password, console client per tenant, per-tenant usernames/emails | `5f2c416` |
-| 8b | Per-client token settings (`V8`): lifetimes, refresh on/off, selectable claims | step 8b commit |
+| 8b | Per-client token settings (`V8`): lifetimes, refresh on/off, selectable claims | `099f14b` |
+| 9a | RS256 signing with configured keys, `/.well-known/jwks.json`, `iss`/`aud`/`jti`/`kid` | step 9a commit |
 
 ---
 
@@ -177,16 +178,31 @@ What was built: `V8__client_token_settings.sql`; `TokenClaim`; `TokenSettingsDto
 
 **Goal:** other applications verify tokens safely; logout and revocation work.
 
-Proposed design:
-- Sign with RS256 (or ES256). Keys come from configuration/keystore with a `kid`; publish `GET /.well-known/jwks.json`.
-  Remove the hard-coded HMAC secrets in `JwtConstant`.
-- Claims: `iss` (identifies the tenant), `sub` (user id), `aud`/`azp` (client), plus the per-client user claims.
-- Refresh tokens: random opaque values stored **hashed** in a `refresh_tokens`/`sessions` table (user, client, expiry,
-  revoked), rotated on use. `POST /api/auth/logout` revokes them. This replaces the `@Version`-based revocation.
-- `POST /api/auth/introspect` (RFC 7662 style): active only if the token is valid, the user is active, and the tenant is ACTIVE.
-- Refresh-token errors answer 401 instead of 412 (access tokens already answer 401 since step 6b).
-- Rework `/token/validate` (fold into introspection).
-- **Open decisions:** key per tenant or one platform key; access-token default TTL.
+Decisions taken: one platform key set for now (per-tenant keys are roadmap item 10; `kid` + a tenant-specific `iss`
+keep that path open); RS256; without configured keys the app generates a temporary key and warns; logout is authenticated
+by the bearer access token; introspection is public until clients get secrets; the default access-token lifetime stays the
+5 minutes of step 8b (configurable per client). Split into three commits:
+
+**9a: asymmetric signing + JWKS (DONE)**
+- RS256 with configured RSA private keys (`iam.jwt.keys[n].kid` + `private-key` PEM); the first key signs, every key's
+  public half is published at `GET /.well-known/jwks.json`. Only the private key can sign; the public key verifies only,
+  and the verifier accepts RS256 signatures by known `kid`s only (no `none`, no HMAC with the public key).
+- No configured key: a temporary key is generated at startup with a WARN (tokens don't survive a restart).
+- Access token: header `typ: at+jwt` + `kid`; claims `iss` = `<iam.jwt.issuer>/tenants/{tenantId}`, `sub`, `aud` and
+  `client_id` = the client, `jti`, `iat`, `exp`, the client's claims (`version` stays until 9b).
+- Hard-coded HMAC secrets and `JwtConstant` removed; `JwtTokenUtil` split into `TokenIssuer` and `TokenVerifier`.
+
+**9b: sessions, opaque refresh tokens, logout**
+- `sessions` (one per login) and `refresh_tokens` (SHA-256 hash, rotated on every refresh; reusing a used token revokes the
+  session). Access tokens carry `sid`; the JWT filter checks the session instead of the `version` claim.
+- `version` claim dropped (`@Version` = optimistic locking only); a password change/reset, deactivation, lock or deletion
+  revokes the user's sessions. `POST /api/auth/logout` (bearer) revokes the current session (204).
+- Refresh-token errors answer 401 instead of 412.
+
+**9c: introspection**
+- `POST /api/auth/introspect` `{ token }` (RFC 7662 style): active only if signature and expiry are valid, the session is
+  live, the user is active and unlocked, and the tenant is ACTIVE; otherwise just `{ "active": false }`.
+- `/api/auth/token/validate` removed.
 
 ### Step 10: Platform tenant, super users, tenant suspension
 
@@ -206,11 +222,11 @@ Proposed design:
 | Item | Where it is handled |
 |---|---|
 | Public registration lets anyone become root with global power | Done: step 5 (signup creates an own tenant), step 6 (tenant isolation) |
-| Hard-coded HMAC JWT secrets | Step 9 |
+| Hard-coded HMAC JWT secrets | Step 9a |
 | JWT filter errors → 500 instead of 401 | Done in step 6b |
-| `/token/validate` ignores revocation | Step 9 |
+| `/token/validate` ignores revocation | Step 9c |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
-| `mail.debug=true`, `logging.level.root=DEBUG`, DB credentials in `application.properties` | Small config step (profiles + env) |
+| `mail.debug=true`, `logging.level.root=DEBUG`, DB credentials in `application.properties`; no JWT key configured only warns | Small config step (profiles + env); outside dev/test, fail at startup without a configured JWT key |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |

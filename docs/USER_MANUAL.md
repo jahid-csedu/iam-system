@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 8b (per-client token settings).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 9a (RS256 signing and JWKS).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -71,6 +71,21 @@ them, delete them, or create more. Later changes to the predefined set never aff
 The database schema and the permission catalog are created automatically (Flyway) on first start. Mail settings
 (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs and new passwords are only ever
 sent by email. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
+
+**Token signing key.** Tokens are signed with an RSA private key that only the IAM holds. Configure one with
+`IAM_JWT_KEYS_0_KID` (any id, e.g. `key-2026-10`) and `IAM_JWT_KEYS_0_PRIVATE_KEY` (a PKCS#8 RSA key of at least 2048 bits,
+base64 on one line; PEM header lines are optional):
+
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out jwt-key.pem
+grep -v -- ----- jwt-key.pem | tr -d '\n'     # the value for IAM_JWT_KEYS_0_PRIVATE_KEY
+```
+
+Put both in `.env` for `./gradlew bootRun`, or pass them to the `app` container (`-e` / `environment:`). Without a key the
+app generates a temporary one at startup (a WARN in the log) and every token becomes invalid when it restarts.
+**Rotating:** add the new key as `IAM_JWT_KEYS_0_*` and move the old one to `IAM_JWT_KEYS_1_*`; the first key signs, both
+are published, so tokens signed by the old key keep working. Remove the old key once its refresh tokens have expired.
+`IAM_JWT_ISSUER` (default `http://localhost:8080`) is the public base URL put into every token's `iss`.
 
 ---
 
@@ -224,14 +239,26 @@ Change them with `PUT /api/clients/{id}/token-settings` and the same body:
 | `refreshTokenTtlSeconds` | 3600 to 2592000 (1 hour to 30 days), always longer than the access token |
 | `claims` | Any of `USERNAME`, `EMAIL`, `FULL_NAME`, `USER_TYPE`, `TENANT_ID` (an empty list for none). Roles and permissions are never put into tokens. |
 
-Every access token also carries `sub` (the user id), `client_id`, `version`, `iat` and `exp`; refresh tokens carry only those.
+Every access token also carries `iss`, `sub` (the user id), `aud` and `client_id` (the client), `jti`, `version`, `iat` and
+`exp`; refresh tokens carry only those.
 A selected claim the user has no value for (for example no email) is left out.
 
 ## 7. For other applications (verifying users)
 
 | What | Request | Notes |
 |---|---|---|
-| Is this access token valid? | `POST /api/auth/token/validate` `{ "token": "..." }` → `{ "status": true }` | Public. Checks signature and expiry only (revocation in step 9). |
+| Public keys for verifying tokens | `GET /.well-known/jwks.json` → `{ "keys": [ { "kty": "RSA", "use": "sig", "alg": "RS256", "kid": "...", "n": "...", "e": "AQAB" } ] }` | Public. Cache it; fetch again when a token names an unknown `kid`. |
+| Is this access token valid? | `POST /api/auth/token/validate` `{ "token": "..." }` → `{ "status": true }` | Public. Checks signature and expiry only (replaced by introspection in step 9c). |
+
+**Verifying an access token locally** (any JWT library):
+1. The header must say `"alg": "RS256"` and `"typ": "at+jwt"`. Accept nothing else: never `none`, never an `HS*` algorithm
+   (that would let anyone sign tokens with the public key).
+2. Pick the JWKS key whose `kid` matches the header, and verify the signature with it.
+3. Check `exp`, that `iss` is `<IAM base URL>/tenants/<your tenant id>`, and that `aud` contains your `client_id`.
+
+The public key can only verify tokens; only the IAM's private key can sign them, so a changed token fails verification.
+A locally verified token stays valid until it expires even if the user is changed or locked meanwhile (keep access tokens
+short; introspection in step 9c will reflect revocation).
 
 The IAM manages only its own permissions; other applications decide their own authorization from the verified user.
 
@@ -252,8 +279,8 @@ The IAM manages only its own permissions; other applications decide their own au
 - **Usernames and emails** are unique per tenant: two tenants may both have a `bob`. Exception: a root user's username and
   email are unique across all users of all tenants. Login and forgot-password look the user up only inside the tenant of
   the request's `client_id`.
-- **Tokens** carry the user id as `sub`, the `client_id` they were issued through, the user's `version`, and the client's
-  selected claims. A refresh token only works through the client it was issued through.
+- **Tokens** are RS256-signed JWTs. They carry the tenant as `iss`, the user id as `sub`, the client they were issued through
+  as `aud` and `client_id`, the user's `version`, and the client's selected claims. A refresh token only works through the client it was issued through.
 
 ## 9. Status codes
 

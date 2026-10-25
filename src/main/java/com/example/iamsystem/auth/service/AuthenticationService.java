@@ -11,7 +11,8 @@ import com.example.iamsystem.client.service.ClientResolver;
 import com.example.iamsystem.common.exception.JwtException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
-import com.example.iamsystem.security.jwt.JwtTokenUtil;
+import com.example.iamsystem.security.jwt.TokenIssuer;
+import com.example.iamsystem.security.jwt.TokenVerifier;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
 import com.example.iamsystem.user.dto.UserLoginDto;
@@ -44,7 +45,8 @@ public class AuthenticationService {
     private final AuthenticationManager authenticationManager;
     private final DefaultUserDetailsService userDetailsService;
     private final ClientResolver clientResolver;
-    private final JwtTokenUtil jwtTokenUtil;
+    private final TokenIssuer tokenIssuer;
+    private final TokenVerifier tokenVerifier;
 
     /**
      * The username is looked up only inside the client's tenant; the management console accepts management users only.
@@ -79,18 +81,18 @@ public class AuthenticationService {
             throw new UserInputNotValidException(REFRESH_TOKENS_DISABLED);
         }
         Claims claims = parseRefreshToken(request.refreshToken())
-                .filter(parsed -> client.getClientId().equals(jwtTokenUtil.clientIdOf(parsed)))
+                .filter(parsed -> client.getClientId().equals(tokenVerifier.clientIdOf(parsed)))
                 .orElseThrow(() -> new JwtException(INVALID_TOKEN));
 
-        User user = userDetailsService.requireUsableUser(jwtTokenUtil.userIdOf(claims)).user();
-        if (!jwtTokenUtil.isIssuedFor(claims, user)) {
+        User user = userDetailsService.requireUsableUser(tokenVerifier.userIdOf(claims)).user();
+        if (!tokenVerifier.isIssuedFor(claims, user)) {
             throw new JwtException(INVALID_TOKEN);
         }
         return issueTokens(user, client);
     }
 
     public TokenValidationResponse validate(TokenValidationRequest request) {
-        return new TokenValidationResponse(jwtTokenUtil.isValid(request.getToken(), ACCESS_TOKEN));
+        return new TokenValidationResponse(tokenVerifier.isValid(request.getToken(), ACCESS_TOKEN));
     }
 
     private void checkClientAccepts(Client client, User user) {
@@ -102,8 +104,8 @@ public class AuthenticationService {
 
     private Optional<Claims> parseRefreshToken(String token) {
         try {
-            Claims claims = jwtTokenUtil.parseClaims(token, REFRESH_TOKEN);
-            jwtTokenUtil.userIdOf(claims);
+            Claims claims = tokenVerifier.parseClaims(token, REFRESH_TOKEN);
+            tokenVerifier.userIdOf(claims);
             return Optional.of(claims);
         } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
             return Optional.empty();
@@ -114,7 +116,7 @@ public class AuthenticationService {
      * A refresh token only when the client issues them.
      */
     private JwtResponse issueTokens(User user, Client client) {
-        String refreshToken = client.isRefreshTokenEnabled() ? jwtTokenUtil.generateRefreshToken(user, client) : null;
-        return new JwtResponse(user.getUsername(), refreshToken, jwtTokenUtil.generateAccessToken(user, client));
+        String refreshToken = client.isRefreshTokenEnabled() ? tokenIssuer.issueRefreshToken(user, client) : null;
+        return new JwtResponse(user.getUsername(), refreshToken, tokenIssuer.issueAccessToken(user, client));
     }
 }
