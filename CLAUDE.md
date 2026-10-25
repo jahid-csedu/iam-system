@@ -275,8 +275,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit and is
-  stored in plain text.
+- Password reset emails a plaintext new password (until forced change on first login). The OTP is stored in plain text.
 - The reset request answers a known user more slowly than an unknown one (the email is sent during the request), so
   timing still tells them apart; fix by sending emails in the background (`@Async`).
 
@@ -453,3 +452,8 @@ Design debt
   `OtpRequestOutcome` (`SENT`, `UNKNOWN_USER`, `NO_EMAIL`, `MAIL_FAILED`) that the audit records (`request_outcome`), with a WARN
   or ERROR log. Decisions: a failed email is no error for the caller; the timing difference is a known issue for now.
   Next: security fix 5 (OTP attempts and lookup by user).
+- 2026-10-25: Security fix 5. Flyway `V16__password_reset_otp_attempts.sql`: `failed_attempts`, OTPs no longer unique.
+  `resetPassword` finds the user in the client's tenant first and compares (constant time) with that user's OTP only,
+  locked for update; every failure is 400 "Invalid or expired OTP"; wrong guesses are counted (commits on the exception)
+  and the 5th deletes the OTP. `PasswordResetOTP` lost `@Data` (id-based equals, masked `toString`).
+  Next: security fix 6 (hashed OTPs).

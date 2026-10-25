@@ -3,6 +3,7 @@ package com.example.iamsystem.common.util;
 import com.example.iamsystem.auth.dto.IntrospectionRequest;
 import com.example.iamsystem.auth.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.passwordreset.dto.PasswordResetDto;
+import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.platform.config.PlatformProperties.RootUser;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
@@ -22,7 +23,7 @@ class SecretMaskTest {
     private static final String SECRET = "S3cret-value!";
 
     @Test
-    @DisplayName("Requests carrying a password, OTP or token never show it in toString, but keep the other fields")
+    @DisplayName("Requests and entities carrying a password, OTP or token never show it in toString, but keep the other fields")
     void credentialCarryingRecords_maskTheSecret() {
         List<Object> requests = List.of(
                 new UserLoginDto("client-1", "alice", SECRET),
@@ -32,7 +33,8 @@ class SecretMaskTest {
                 new PasswordResetDto("client-1", "alice", SECRET),
                 new JwtRefreshTokenDto("client-1", SECRET),
                 new IntrospectionRequest(SECRET),
-                new RootUser("alice", SECRET, "alice@acme.com", null));
+                new RootUser("alice", SECRET, "alice@acme.com", null),
+                pendingOtp());
 
         assertAll(requests.stream().map(request -> () -> {
             String text = request.toString();
@@ -40,5 +42,11 @@ class SecretMaskTest {
             assertTrue(text.contains(SecretMask.MASK), text);
         }));
         assertTrue(new UserLoginDto("client-1", "alice", SECRET).toString().contains("alice"));
+    }
+
+    private static PasswordResetOTP pendingOtp() {
+        PasswordResetOTP otp = new PasswordResetOTP();
+        otp.setOtp(SECRET);
+        return otp;
     }
 }

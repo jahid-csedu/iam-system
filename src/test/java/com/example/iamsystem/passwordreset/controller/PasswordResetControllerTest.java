@@ -37,6 +37,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -127,6 +128,38 @@ class PasswordResetControllerTest {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(RESET_REQUEST_ACCEPTED));
+    }
+
+    @Test
+    @DisplayName("After five wrong guesses the OTP is gone: even the right one is refused, with the same error")
+    void reset_afterTooManyWrongGuesses_refusesTheRightOtp() throws Exception {
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
+        String otp = lastEmailedSecret();
+        String wrongOtp = otp.equals("000000") ? "111111" : "000000";
+        clearInvocations(mailSender);
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", wrongOtp))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("Invalid or expired OTP"));
+        }
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid or expired OTP"));
+        verifyNoInteractions(mailSender);
+    }
+
+    @Test
+    @DisplayName("Wrong guesses below the limit leave the OTP usable")
+    void reset_afterAFewWrongGuesses_stillAcceptsTheRightOtp() throws Exception {
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
+        String otp = lastEmailedSecret();
+        String wrongOtp = otp.equals("000000") ? "111111" : "000000";
+
+        for (int attempt = 0; attempt < 4; attempt++) {
+            postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", wrongOtp)).andExpect(status().isBadRequest());
+        }
+        postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp)).andExpect(status().isOk());
     }
 
     @Test

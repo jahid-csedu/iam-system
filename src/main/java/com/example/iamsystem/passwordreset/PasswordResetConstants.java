@@ -15,9 +15,7 @@ public class PasswordResetConstants {
     public static final String PASSWORD_RESET_SUCCESS_BODY_PREFIX = "Your new password is: ";
 
     // Error Messages
-    public static final String INVALID_OTP = "Invalid OTP";
-    public static final String OTP_DOES_NOT_BELONG_TO_USER = "OTP does not belong to this user";
-    public static final String OTP_HAS_EXPIRED = "OTP has expired";
+    public static final String INVALID_OTP = "Invalid or expired OTP";
 
     // Controller Response Messages
     public static final String RESET_REQUEST_ACCEPTED =

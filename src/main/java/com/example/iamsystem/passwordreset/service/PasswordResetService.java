@@ -17,14 +17,14 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.INVALID_OTP;
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.OTP_DOES_NOT_BELONG_TO_USER;
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.OTP_HAS_EXPIRED;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_BODY_PREFIX;
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_SUBJECT;
 
@@ -42,6 +42,10 @@ public class PasswordResetService {
 
     private static final int OTP_BOUND = 1_000_000;
     private static final String OTP_FORMAT = "%06d";
+    /**
+     * Wrong guesses allowed against one OTP; the last one deletes it, and the user has to request a new one.
+     */
+    static final int MAX_FAILED_ATTEMPTS = 5;
 
     private final SecureRandom random = new SecureRandom();
     private final UserRepository userRepository;
@@ -76,11 +80,10 @@ public class PasswordResetService {
             return OtpRequestOutcome.NO_EMAIL;
         }
 
-        PasswordResetOTP existingOtp = otpRepository.findByUser(user);
-        if (existingOtp != null) {
+        otpRepository.findByUser(user).ifPresent(existingOtp -> {
             otpRepository.delete(existingOtp);
             otpRepository.flush();
-        }
+        });
 
         String otp = String.format(OTP_FORMAT, random.nextInt(OTP_BOUND));
         PasswordResetOTP resetOtp = new PasswordResetOTP();
@@ -107,11 +110,26 @@ public class PasswordResetService {
             target = "#identifier",
             detailsExpression = "T(java.util.Map).of('client_id', #clientId)"
     )
-    @Transactional
+    /**
+     * The OTP is compared only with the pending OTP of the user named by the identifier in the client's tenant. An unknown
+     * user, no pending OTP, an expired OTP and a wrong guess all get the same error. Wrong guesses are counted (the
+     * transaction commits on {@link InvalidPasswordResetOTPException}, so the count sticks), and the
+     * {@value #MAX_FAILED_ATTEMPTS}th one deletes the OTP.
+     */
+    @Transactional(noRollbackFor = InvalidPasswordResetOTPException.class)
     public void resetPassword(String clientId, String identifier, String otp) {
         Long tenantId = clientResolver.resolve(clientId).getTenant().getId();
-        PasswordResetOTP resetOtp = otpRepository.findByOtp(otp);
-        validateOtp(identifier, tenantId, resetOtp);
+        PasswordResetOTP resetOtp = findUser(identifier, tenantId)
+                .flatMap(otpRepository::findForUpdateByUser)
+                .orElseThrow(() -> new InvalidPasswordResetOTPException(INVALID_OTP));
+        if (resetOtp.isExpired()) {
+            otpRepository.delete(resetOtp);
+            throw new InvalidPasswordResetOTPException(INVALID_OTP);
+        }
+        if (!matches(resetOtp, otp)) {
+            recordFailedAttempt(resetOtp);
+            throw new InvalidPasswordResetOTPException(INVALID_OTP);
+        }
         newPasswordIssuer.issueNewPassword(resetOtp.getUser());
         otpRepository.delete(resetOtp);
     }
@@ -125,19 +143,21 @@ public class PasswordResetService {
     }
 
     /**
-     * The OTP must belong to the user named by the identifier, inside the client's tenant.
+     * Compares in constant time, so the response time doesn't tell how many leading digits were right.
      */
-    private static void validateOtp(String identifier, Long tenantId, PasswordResetOTP resetOtp) {
-        if (resetOtp == null) {
-            throw new InvalidPasswordResetOTPException(INVALID_OTP);
-        }
-        User owner = resetOtp.getUser();
-        boolean identifierMatches = identifier.equals(owner.getUsername()) || identifier.equals(owner.getEmail());
-        if (!identifierMatches || !tenantId.equals(owner.getTenant().getId())) {
-            throw new InvalidPasswordResetOTPException(OTP_DOES_NOT_BELONG_TO_USER);
-        }
-        if (resetOtp.getExpiryDate().isBefore(Instant.now())) {
-            throw new InvalidPasswordResetOTPException(OTP_HAS_EXPIRED);
+    private static boolean matches(PasswordResetOTP resetOtp, String otp) {
+        return MessageDigest.isEqual(resetOtp.getOtp().getBytes(StandardCharsets.UTF_8), otp.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void recordFailedAttempt(PasswordResetOTP resetOtp) {
+        resetOtp.setFailedAttempts(resetOtp.getFailedAttempts() + 1);
+        Long userId = resetOtp.getUser().getId();
+        if (resetOtp.getFailedAttempts() >= MAX_FAILED_ATTEMPTS) {
+            otpRepository.delete(resetOtp);
+            log.warn("Deleted the password-reset OTP of user {} after {} wrong guesses", userId, MAX_FAILED_ATTEMPTS);
+        } else {
+            log.warn("Wrong password-reset OTP for user {} ({} of {} attempts)", userId, resetOtp.getFailedAttempts(),
+                    MAX_FAILED_ATTEMPTS);
         }
     }
 }
