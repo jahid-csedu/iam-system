@@ -48,6 +48,10 @@ public class Tenant implements Serializable {
         this.status = status;
     }
 
+    public boolean isActive() {
+        return status == TenantStatus.ACTIVE;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

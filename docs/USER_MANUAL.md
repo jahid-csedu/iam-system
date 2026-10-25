@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 9c (token introspection).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10a (suspended tenants).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -297,7 +297,7 @@ The IAM manages only its own permissions; other applications decide their own au
 | `200` / `201` / `204` | OK / created / done without a body |
 | `400` | Already exists (tenant, user, role or client name in your tenant), deleting the management console, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
 | `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, a suspended tenant, wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
-| `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; or account locked, deactivated or expired |
+| `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; login, refresh or forgot-password for a suspended tenant ("Tenant is suspended"); or account locked, deactivated or expired |
 | `404` | Not found, including users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
 | `422` | Request body failed validation (the `errors` list shows which field), including token lifetimes out of range |

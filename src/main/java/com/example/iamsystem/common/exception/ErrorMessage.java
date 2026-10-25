@@ -20,6 +20,7 @@ public class ErrorMessage {
     public static final String CLIENT_NAME_REQUIRED = "Client name cannot be null or blank";
     public static final String CLIENT_ID_REQUIRED = "client_id is required";
     public static final String INVALID_CLIENT = "Unknown client_id";
+    public static final String TENANT_SUSPENDED = "Tenant is suspended";
     public static final String REFRESH_TOKENS_DISABLED = "This client doesn't issue refresh tokens";
     public static final String ACCESS_TOKEN_TTL_RANGE = "Access token lifetime must be between 60 and 3600 seconds";
     public static final String REFRESH_TOKEN_TTL_RANGE = "Refresh token lifetime must be between 3600 and 2592000 seconds";

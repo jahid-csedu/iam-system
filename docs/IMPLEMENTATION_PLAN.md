@@ -53,7 +53,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 8b | Per-client token settings (`V8`): lifetimes, refresh on/off, selectable claims | `099f14b` |
 | 9a | RS256 signing with configured keys, `/.well-known/jwks.json`, `iss`/`aud`/`jti`/`kid` | `9fdae12` |
 | 9b | Sessions (`V9`), single-use rotating opaque refresh tokens, reuse detection, logout, 401 on refresh errors | `efe589f` |
-| 9c | `POST /api/auth/introspect` (RFC 7662 style), `/token/validate` removed, filter refuses non-ACTIVE tenants | step 9c commit |
+| 9c | `POST /api/auth/introspect` (RFC 7662 style), `/token/validate` removed, filter refuses non-ACTIVE tenants | `1e90eea` |
+| 10a | Suspended tenant: login, refresh and forgot-password answer 403 (`ClientResolver`) | step 10a commit |
 
 ---
 
@@ -208,17 +209,31 @@ by the bearer access token; introspection is public until clients get secrets; t
 
 ### Step 10: Platform tenant, super users, tenant suspension
 
-**Goal:** the platform level.
+**Goal:** the platform level. Design agreed 2026-10-25 (see CLAUDE.md "Platform"): the platform root does everything in
+every tenant; other platform users get role/permission grants on one tenant or on all tenants; `X-Tenant-Id` lets a
+platform user work inside a tenant through the normal APIs; platform keys `tenants:read/create/suspend/activate`.
+Small sub-steps, each touching only a few classes:
 
-Proposed design:
-- A reserved `platform` tenant created by migration. The first super user is bootstrapped from config
-  (env vars) at startup if none exists; there is no public signup into it. Its own management-console client.
-- PLATFORM-scope permissions (`tenants:read`, `tenants:suspend`, `tenants:activate`, …) usable only by platform users.
-- `/api/platform/tenants` endpoints: list, view, suspend, activate.
-- Suspension blocks login, refresh and introspection for every user of the tenant. Already in place since 9c: the JWT
-  filter and introspection refuse users of a non-ACTIVE tenant; login and refresh still need the check.
-- Remove the unused `is_super_user` column.
-- **Done when:** a suspended tenant's users cannot log in, refresh or pass introspection; tenant users can never call platform endpoints.
+| Sub-step | What |
+|---|---|
+| 10a (DONE) | Suspended tenant: login, refresh and forgot-password refused with 403 (`ClientResolver`) |
+| 10b | Platform tenant: `tenants.type` (`STANDARD`/`PLATFORM`, one platform), platform tenant row + console client + roles (migration) |
+| 10c | Platform root created at startup from `IAM_PLATFORM_ROOT_USERNAME/PASSWORD/EMAIL` (WARN when missing) |
+| 10d | `tenants:*` PLATFORM keys; `GET /api/platform/tenants` (list, view) for platform users only |
+| 10e | Suspend / activate a tenant (never the platform tenant); sessions kept |
+| 10f | Create a tenant with its root as a super user |
+| 10g | `X-Tenant-Id`: the platform root works inside any tenant through the normal APIs; audit records platform user + tenant |
+| 10h | `platform_role_grants` / `platform_permission_grants` (tenant or all); `AuthorizationService` checks grants per tenant |
+| 10i | Endpoints to give and remove platform grants (no self-grants) |
+| 10j | Remove the unused `is_super_user` column |
+
+**Done when:** a suspended tenant's users cannot log in, refresh or pass introspection; tenant users can never call
+platform endpoints or act in another tenant; platform users act in a tenant only with a grant (or as platform root).
+
+### Step 11: Client status
+
+`clients.status`, `clients:suspend` / `clients:activate` (tenant and platform users); a suspended client refuses login and
+refresh, and its sessions are refused by the filter and introspection.
 
 ### Security and quality fixes (slot in when the owner chooses; some are absorbed by steps above)
 

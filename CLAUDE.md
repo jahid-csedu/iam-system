@@ -54,10 +54,19 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
      └─ Regular users   log in, get tokens, self-service only
 ```
 - **Platform**: a group of super users, controlled by roles and permissions. Global, not per tenant.
-  Example power: block a tenant so none of its users (management or regular) can log in. More scopes later.
-  Proposed model: a reserved built-in `platform` tenant. Super users are normal users in it.
-  The first super user is bootstrapped from config at first startup, with no public signup into it.
+  Model (agreed 2026-10-25): a reserved built-in platform tenant (`tenants.type = PLATFORM`, exactly one). Super users are
+  normal users in it. Its root (the first super user) is created at startup from `IAM_PLATFORM_ROOT_*` config when the
+  platform has no root; without the config there is no platform user (WARN), and there is no public signup into it.
   This replaces the unused `is_super_user` flag.
+  - The platform root can do everything in every tenant (every TENANT key anywhere) plus every platform key
+    (`tenants:read`, `tenants:create`, `tenants:suspend`, `tenants:activate`).
+  - Other platform users get **grants**: a role or a single permission **on one tenant or on all tenants**
+    (`platform_role_grants` / `platform_permission_grants`, `tenant_id` NULL = all tenants). Platform roles live in the
+    platform tenant and may mix TENANT keys and `tenants:*` keys. Example: Alice holds `SUPPORT` on tenants 5 and 9.
+  - A platform user works inside a tenant through the normal APIs by sending `X-Tenant-Id`; every permission check then
+    asks "does this user hold this key on that tenant?". The header is ignored for tenant users. Every such action is
+    audit-logged with the platform user and the target tenant.
+  - No self-modification applies to platform users too.
 - **Tenant**: created by signup. The user who creates a tenant becomes its **only** root user.
   The root has every tenant-management permission inside that tenant and no access to any other tenant.
   Done (step 5): public `POST /api/tenants/signup` creates the tenant and its root user in one transaction;
@@ -124,8 +133,12 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
 ### Tenant lifecycle
 - `tenants.status` = `ACTIVE` / `SUSPENDED` (later maybe `DELETED`). A suspended tenant fails login, refresh and introspection.
   Locally verified access tokens stay valid until they expire, so access tokens must be short-lived.
-- Super users act on tenants only through platform endpoints. Acting *inside* a tenant (support access) is a future,
-  explicitly audited break-glass feature (roadmap #9).
+- Super users suspend, activate, list and create tenants through `/api/platform/tenants`, and act inside a tenant with
+  `X-Tenant-Id` (see Platform above). The platform tenant can never be suspended. Suspending keeps sessions (every check
+  refuses them while suspended), so reactivation restores unexpired sessions.
+  Done (step 10a): login, refresh and forgot-password of a suspended tenant's users answer 403 "Tenant is suspended"
+  (`ClientResolver`); the JWT filter and introspection refuse them since 9c.
+- Clients get a status of their own later (`clients:suspend`/`clients:activate`), in a step after step 10.
 
 ### Future (not now)
 - OAuth2/OIDC compatibility. The `client_id` choice keeps this path open.
@@ -330,3 +343,9 @@ Design debt
   (always 200). `/api/auth/token/validate` and `TokenVerifier.isValid` removed. The JWT filter now also refuses users of a
   non-ACTIVE tenant (ready for step 10). Step 9 complete.
   Next: step 10 (platform tenant, super users, tenant suspension).
+- 2026-10-25: Step 10 planned in small sub-steps (10a-10j; owner asked for commits touching only a few classes). Platform
+  design agreed: platform root does everything everywhere; platform users get role/permission grants per tenant or for all
+  tenants; `X-Tenant-Id` to act inside a tenant; `tenants:*` keys; client suspension after step 10.
+- 2026-10-25: Step 10a (suspended tenants). `ClientResolver` refuses clients of a non-ACTIVE tenant (403 "Tenant is
+  suspended"), which covers login, refresh and forgot-password.
+  Next: step 10b (platform tenant).
