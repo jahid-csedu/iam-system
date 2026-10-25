@@ -49,7 +49,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /**
      * Locks the user's row until the transaction ends, so per-user checks such as the password-reset request limit run
-     * one after another.
+     * one after another. Plain reads of the user don't wait, but updates and new rows referencing the user (a login's
+     * session) do, so keep such transactions short.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM User u WHERE u.id = :id")

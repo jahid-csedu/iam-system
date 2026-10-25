@@ -29,10 +29,12 @@ public class ResetRequestLimiter {
 
     /**
      * Records the request and returns {@code true} while the user is under the limit; over it, records nothing and
-     * returns {@code false}. The user's row stays locked until the caller's transaction ends, so parallel requests are
-     * counted one after another.
+     * returns {@code false}. Runs in its own short transaction: the user's row is locked while counting, so parallel
+     * requests are counted one after another, and the lock is released as soon as this method returns, before the
+     * caller makes the OTP and sends the email (otherwise the user's logins would wait for the email). A recorded request
+     * counts even if the caller fails later.
      */
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean tryRecord(User user) {
         userRepository.lockById(user.getId());
         Instant now = Instant.now();

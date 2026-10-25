@@ -462,3 +462,7 @@ Design debt
   the request gets the usual 200, sends nothing and is audited as `TOO_MANY_REQUESTS`. With 5 guesses per OTP that caps
   guessing at 15 per hour. Decision: never lock the account for wrong OTPs (anyone could lock anyone out).
   Next: security fix 6 (hashed OTPs).
+- 2026-10-25: Security fix 5c. `ResetRequestLimiter.tryRecord` runs in its own transaction (`REQUIRES_NEW`), so the
+  user-row lock lasts milliseconds instead of until the OTP email is sent (a login of that user had to wait for it).
+  Plan step 13 added: one email service, templates per purpose, asynchronous sending after commit.
+  Next: security fix 5d (mail timeouts), then 6 (hashed OTPs).
