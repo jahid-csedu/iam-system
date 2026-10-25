@@ -42,4 +42,24 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
                    OR EXISTS (SELECT 1 FROM User du JOIN du.permissions dp WHERE du = u AND dp.name = :name))
             """)
     boolean isGrantedToUser(@Param("userId") Long userId, @Param("name") String name);
+
+    /**
+     * Whether a platform user holds a permission inside a tenant through a grant on that tenant or on all tenants: a
+     * granted role that contains it, or the permission granted directly.
+     */
+    @Query(nativeQuery = true, value = """
+            SELECT EXISTS (
+                SELECT 1 FROM platform_role_grants g
+                JOIN role_permissions rp ON rp.role_id = g.role_id
+                JOIN permissions p ON p.id = rp.permission_id
+                WHERE g.user_id = :userId AND p.name = :name AND (g.tenant_id = :tenantId OR g.tenant_id IS NULL)
+                UNION ALL
+                SELECT 1 FROM platform_permission_grants g
+                JOIN permissions p ON p.id = g.permission_id
+                WHERE g.user_id = :userId AND p.name = :name AND (g.tenant_id = :tenantId OR g.tenant_id IS NULL)
+            )
+            """)
+    boolean isGrantedToPlatformUserInTenant(@Param("userId") Long userId,
+                                            @Param("name") String name,
+                                            @Param("tenantId") Long tenantId);
 }

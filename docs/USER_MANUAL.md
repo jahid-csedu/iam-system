@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10g (platform root works inside tenants).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10h (platform grants).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -281,7 +281,10 @@ Tenant users (their root included) get `403` on every `/api/platform/**` endpoin
 `/api/clients`, ...) and it works inside that tenant, as if you were its root: list and create users, manage roles,
 clients and token settings. This also works in a suspended tenant (for support). Every audited action records
 `acting_tenant_id`. A header that isn't a number gives `400`, an unknown tenant `404`. Changing your own password still
-changes yours. Today only the platform root can do this; other platform users get `403` until they receive grants.
+changes yours. The platform root can do everything there. Other platform users can do what their **grants** on that
+tenant (or on all tenants) allow: a granted platform role gives its permissions, a granted permission gives itself.
+Inside the Platform tenant itself (no header) they use their normal roles; grants don't apply there. There are no
+endpoints to give grants yet (step 10j).
 Tenant users' `X-Tenant-Id` is ignored: they always work in their own tenant.
 
 ## 7. For other applications (verifying users)

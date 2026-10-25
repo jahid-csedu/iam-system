@@ -258,7 +258,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `homeTenantId`), never the `User` entity. `tenantId` is the tenant the request works in (the tenant boundary used by the
   services); `homeTenantId` is the user's own tenant. They differ only when a platform user sends `X-Tenant-Id`
   (`ActingTenantResolver`, called by the JWT filter; ignored for tenant users; malformed 400, unknown 404). Inside another
-  tenant only the platform root holds permissions (grants come in 10h); audit adds `acting_tenant_id`. `JwtRequestFilter` finds it with one query (`UserSessionRepository.findActor`) that only matches a live
+  tenant the platform root holds every key; other platform users hold the TENANT keys their grants give on that tenant or
+  on all tenants (`PermissionRepository.isGrantedToPlatformUserInTenant`, native query over `platform_role_grants` +
+  `platform_permission_grants`); audit adds `acting_tenant_id`. Grants never apply inside the platform tenant itself. `JwtRequestFilter` finds it with one query (`UserSessionRepository.findActor`) that only matches a live
   session of an active, unlocked user of an `ACTIVE` tenant; anything else leaves the request unauthenticated (401).
   Introspection uses the same query, so the API and other applications agree on what "active" means. `User.@Version` is
   optimistic locking only. Permissions are read from the database on
@@ -390,3 +392,9 @@ Design debt
   `acting_tenant_id`. Decisions: services keep `actor.tenantId()` (owner: self-descriptive); `created_by` may be the
   platform root; the platform root may work inside a suspended tenant.
   Next: step 10h (platform grants).
+- 2026-10-25: Step 10h (platform grants). Flyway `V12__platform_grants.sql`: `platform_role_grants`,
+  `platform_permission_grants` (`tenant_id` NULL = all standard tenants, also later ones; unique per user + role/permission
+  + tenant). `AuthorizationService` evaluates them for platform users working in another tenant (TENANT keys only).
+  Step 10 re-split: 10i per-tenant platform checks, 10j grant endpoints, 10k remove `is_super_user`.
+  Decisions: grants only for platform management users and platform roles (checked when granting, 10j).
+  Next: step 10i (per-tenant platform permissions).

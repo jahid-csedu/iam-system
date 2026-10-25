@@ -5,6 +5,7 @@ import com.example.iamsystem.client.service.ClientService;
 import com.example.iamsystem.platform.config.PlatformProperties;
 import com.example.iamsystem.platform.config.PlatformProperties.RootUser;
 import com.example.iamsystem.platform.service.PlatformBootstrap;
+import com.example.iamsystem.role.repository.RoleRepository;
 import com.example.iamsystem.role.service.PredefinedRoleService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.tenant.entity.TenantType;
@@ -12,6 +13,7 @@ import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
+import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.repository.UserRepository;
 import com.example.iamsystem.user.service.UserFactory;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -40,8 +43,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * The platform root working inside a tenant through the normal APIs with {@code X-Tenant-Id}: real logins, real tokens
- * and the real filter against MySQL.
+ * Platform users working inside a tenant through the normal APIs with {@code X-Tenant-Id}: the platform root, and a
+ * platform user with grants. Real logins, real tokens and the real filter against MySQL. Grants are inserted directly
+ * (their endpoints come later).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -69,11 +73,16 @@ class ActingTenantTest {
     private UserFactory userFactory;
     @Autowired
     private TransactionTemplate transactionTemplate;
+    @Autowired
+    private RoleRepository roleRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private long platformId;
     private long acmeId;
     private String platformRootToken;
     private String acmeRootToken;
+    private String platformConsole;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -81,7 +90,7 @@ class ActingTenantTest {
                 userRepository, userFactory, new PlatformProperties(new RootUser("platform-root", PASSWORD, "root@platform.test", null)));
         transactionTemplate.executeWithoutResult(status -> bootstrap.run(null));
         platformId = tenantRepository.findByType(TenantType.PLATFORM).orElseThrow().getId();
-        String platformConsole = clientRepository.findAllByTenantIdOrderByName(platformId).getFirst().getClientId();
+        platformConsole = clientRepository.findAllByTenantIdOrderByName(platformId).getFirst().getClientId();
         platformRootToken = login(platformConsole, "platform-root");
 
         JsonNode acme = body(send(post("/api/tenants/signup"), null,
@@ -140,6 +149,66 @@ class ActingTenantTest {
         send(get("/api/users").header("X-Tenant-Id", acmeId), platformRootToken, null)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[*].username", contains("acme-root")));
+    }
+
+    @Test
+    @DisplayName("Without a grant, another platform user can't do anything inside a tenant")
+    void platformUserWithoutGrant_isForbidden() throws Exception {
+        String support = createSupportUser();
+
+        send(get("/api/users").header("X-Tenant-Id", acmeId), support, null).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("A role granted on one tenant gives its permissions in that tenant only")
+    void roleGrantOnOneTenant_appliesThereOnly() throws Exception {
+        String support = createSupportUser();
+        long globexId = signupGlobex();
+        grantRole("VIEWER", acmeId);
+
+        send(get("/api/users").header("X-Tenant-Id", acmeId), support, null).andExpect(status().isOk());
+        send(post("/api/users").header("X-Tenant-Id", acmeId), support,
+                new UserCreationDto("dave", PASSWORD, null, "dave@acme.com", null)).andExpect(status().isForbidden());
+        send(get("/api/users").header("X-Tenant-Id", globexId), support, null).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("A permission granted on all tenants applies in every standard tenant, but not in the platform tenant")
+    void permissionGrantOnAllTenants_appliesEverywhereButHome() throws Exception {
+        String support = createSupportUser();
+        long globexId = signupGlobex();
+        jdbcTemplate.update("""
+                INSERT INTO platform_permission_grants (user_id, permission_id, tenant_id, created_at)
+                SELECT u.id, p.id, NULL, NOW(6) FROM users u, permissions p WHERE u.username = 'support' AND p.name = 'users:read'
+                """);
+
+        send(get("/api/users").header("X-Tenant-Id", acmeId), support, null).andExpect(status().isOk());
+        send(get("/api/users").header("X-Tenant-Id", globexId), support, null).andExpect(status().isOk());
+        send(get("/api/users"), support, null).andExpect(status().isForbidden());
+    }
+
+    /**
+     * A management user of the platform tenant without roles, logged in; returns the access token.
+     */
+    private String createSupportUser() throws Exception {
+        send(post("/api/users"), platformRootToken,
+                new UserCreationDto("support", PASSWORD, "Support", "support@platform.test", UserType.MANAGEMENT))
+                .andExpect(status().isCreated());
+        return login(platformConsole, "support");
+    }
+
+    private long signupGlobex() throws Exception {
+        return body(send(post("/api/tenants/signup"), null,
+                new TenantSignupDto("Globex", new UserCreationDto("globex-root", PASSWORD, null, "root@globex.com", null))))
+                .get("tenant").get("id").asLong();
+    }
+
+    private void grantRole(String platformRoleName, long tenantId) {
+        long roleId = roleRepository.getRequiredByNameAndTenantId(platformRoleName, platformId).getId();
+        jdbcTemplate.update("""
+                INSERT INTO platform_role_grants (user_id, role_id, tenant_id, created_at)
+                SELECT id, ?, ?, NOW(6) FROM users WHERE username = 'support'
+                """, roleId, tenantId);
     }
 
     private String login(String clientId, String username) throws Exception {

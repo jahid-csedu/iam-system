@@ -19,6 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -91,12 +94,24 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @DisplayName("Inside another tenant other platform users hold nothing yet, whatever their own roles grant")
-    void hasPermission_otherPlatformUserInAnotherTenant_holdsNothing() {
+    @DisplayName("Inside another tenant other platform users hold exactly what their grants on that tenant give them")
+    void hasPermission_otherPlatformUserInAnotherTenant_holdsTheirGrants() {
+        AuthenticatedActor acting = new AuthenticatedActor(3L, "support", 1L, false, 30L).actingIn(100L);
+        when(permissionRepository.isGrantedToPlatformUserInTenant(3L, "users:read", 100L)).thenReturn(true);
+        when(permissionRepository.isGrantedToPlatformUserInTenant(3L, "users:create", 100L)).thenReturn(false);
+
+        assertTrue(authorizationService.hasPermission(acting, USERS_READ));
+        assertFalse(authorizationService.hasPermission(acting, USERS_CREATE));
+        verify(permissionRepository, never()).isGrantedToUser(any(), any());
+    }
+
+    @Test
+    @DisplayName("Grants never give PLATFORM permissions inside a tenant")
+    void hasPermission_otherPlatformUserInAnotherTenant_noPlatformPermissions() {
         AuthenticatedActor acting = new AuthenticatedActor(3L, "support", 1L, false, 30L).actingIn(100L);
 
-        assertFalse(authorizationService.hasPermission(acting, USERS_READ));
-        verifyNoInteractions(permissionRepository, tenantRepository);
+        assertFalse(authorizationService.hasPermission(acting, TENANTS_READ));
+        verifyNoInteractions(permissionRepository);
     }
 
     @Test
