@@ -6,6 +6,7 @@ import com.example.iamsystem.client.dto.ClientDto;
 import com.example.iamsystem.client.dto.ClientRequestDto;
 import com.example.iamsystem.client.dto.TokenSettingsDto;
 import com.example.iamsystem.client.entity.Client;
+import com.example.iamsystem.client.entity.ClientStatus;
 import com.example.iamsystem.client.entity.ClientType;
 import com.example.iamsystem.client.entity.TokenClaim;
 import com.example.iamsystem.client.mapper.ClientMapper;
@@ -16,6 +17,7 @@ import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,7 @@ import java.util.Set;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.CLIENT_EXISTS;
 import static com.example.iamsystem.common.exception.ErrorMessage.CONSOLE_CLIENT_NOT_DELETABLE;
+import static com.example.iamsystem.common.exception.ErrorMessage.CONSOLE_CLIENT_NOT_SUSPENDABLE;
 import static com.example.iamsystem.common.exception.ErrorMessage.PLATFORM_CONSOLE_ONLY;
 
 /**
@@ -32,6 +35,7 @@ import static com.example.iamsystem.common.exception.ErrorMessage.PLATFORM_CONSO
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ClientService {
 
     public static final String MANAGEMENT_CONSOLE_NAME = "Management Console";
@@ -121,6 +125,31 @@ public class ClientService {
         clientRepository.delete(client);
     }
 
+    /**
+     * Nobody can log in, refresh or reset passwords through the client, and the tokens of its sessions stop working until
+     * it is activated again; sessions are kept. The management console is never suspended. Suspending a suspended client
+     * changes nothing.
+     */
+    @Auditable(value = AuditEventType.CLIENT_SUSPEND, target = "#id")
+    @Transactional
+    public ClientDto suspendClient(Long id) {
+        Client client = clientRepository.getRequiredByIdAndTenantId(id, currentUserProvider.requireCurrentTenantId());
+        if (client.isManagementConsole()) {
+            throw new UserInputNotValidException(CONSOLE_CLIENT_NOT_SUSPENDABLE);
+        }
+        return changeStatus(client, ClientStatus.SUSPENDED);
+    }
+
+    /**
+     * Logins work again, and so do the tokens of unexpired sessions. Activating an active client changes nothing.
+     */
+    @Auditable(value = AuditEventType.CLIENT_ACTIVATE, target = "#id")
+    @Transactional
+    public ClientDto activateClient(Long id) {
+        return changeStatus(clientRepository.getRequiredByIdAndTenantId(id, currentUserProvider.requireCurrentTenantId()),
+                ClientStatus.ACTIVE);
+    }
+
     @Transactional(readOnly = true)
     public List<ClientDto> getClients() {
         return clientMapper.toDtoList(clientRepository.findAllByTenantIdOrderByName(currentUserProvider.requireCurrentTenantId()));
@@ -147,5 +176,13 @@ public class ClientService {
         client.setRefreshTokenTtlSeconds(settings.refreshTokenTtlSeconds());
         client.getTokenClaims().clear();
         client.getTokenClaims().addAll(settings.claims());
+    }
+
+    private ClientDto changeStatus(Client client, ClientStatus status) {
+        if (client.getStatus() != status) {
+            client.setStatus(status);
+            log.info("Client '{}' is now {}", client.getClientId(), status);
+        }
+        return clientMapper.toDto(client);
     }
 }

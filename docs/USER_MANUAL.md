@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10l (platform grants: roles and permissions, in bulk).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 11 (client status).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -46,6 +46,8 @@ How to use the system as a developer through Swagger UI or Postman.
 | `clients:create` | Register application clients |
 | `clients:update` | Rename clients and change their token settings |
 | `clients:delete` | Delete application clients (never the management console) |
+| `clients:suspend` | Suspend application clients (never the management console) |
+| `clients:activate` | Reactivate suspended clients |
 | `permissions:read` | List the catalog and view a permission |
 
 PLATFORM keys, for super users only. The platform root holds them all, on every tenant; other platform users hold them
@@ -235,6 +237,7 @@ and gets `403` on every management endpoint.
 | Refresh tokens | `POST /api/auth/token/refresh` `{ "client_id": "...", "refresh_token": "..." }` (the client the token was issued through) → a new access token **and a new refresh token**; the old refresh token is used up | Public (needs a valid refresh token) |
 | Log out | `POST /api/auth/logout` (no body) → `204`; ends the session of the Bearer token: its access token gets `401` here and its refresh token stops working | Any logged-in user |
 | Client token settings | `PUT /api/clients/{id}/token-settings` (see below); applies to tokens issued from then on | `clients:update` |
+| Suspend / activate a client | `PUT /api/clients/{id}/suspend` → the client with `"status": "SUSPENDED"`: at once nobody can log in, refresh or reset a password through it (`403` "Client is suspended"), and the access tokens of its sessions get `401` (introspection `active: false`); sessions are kept. `PUT /api/clients/{id}/activate` → `"ACTIVE"`, and unexpired tokens work again. The management console can't be suspended (`400`). | `clients:suspend` / `clients:activate` |
 | Clients | `GET /api/clients`, `GET /api/clients/{id}`, `POST /api/clients` `{ "name" }`, `PUT /api/clients/{id}` `{ "name" }` (rename), `DELETE /api/clients/{id}` (never the console) | `clients:read` / `create` / `update` / `delete` |
 | List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `users:read` |
 | Direct permissions | `PUT` / `DELETE /api/users/permissions` `{ "username", "permissionIds" }` (management users only, never yourself) | `users:update` |
@@ -360,9 +363,9 @@ The IAM manages only its own permissions; other applications decide their own au
 | Code | Meaning here |
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
-| `400` | Already exists (tenant, user, role or client name in your tenant), deleting the management console, suspending the platform tenant, a regular user or an application client in the platform tenant, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
+| `400` | Already exists (tenant, user, role or client name in your tenant), deleting or suspending the management console, suspending the platform tenant, a regular user or an application client in the platform tenant, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
 | `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, a suspended tenant, wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
-| `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; login, refresh or forgot-password for a suspended tenant ("Tenant is suspended"); or account locked, deactivated or expired |
+| `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; login, refresh or forgot-password for a suspended tenant ("Tenant is suspended") or through a suspended client ("Client is suspended"); or account locked, deactivated or expired |
 | `404` | Not found, including an unknown tenant in `X-Tenant-Id`, users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
 | `422` | Request body failed validation (the `errors` list shows which field), including token lifetimes out of range |

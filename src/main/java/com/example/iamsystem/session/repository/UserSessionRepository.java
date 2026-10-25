@@ -14,7 +14,7 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
 
     /**
      * The actor behind an access token: found only while its session is live, the user is active and unlocked, and the
-     * user's tenant is active.
+     * user's tenant and the session's client are active.
      */
     @Query("""
             SELECT new com.example.iamsystem.security.userdetails.AuthenticatedActor(
@@ -24,6 +24,7 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
               AND s.revokedAt IS NULL AND s.expiresAt > :now
               AND u.active = true AND (u.userLocked = false OR u.accountLockedUntil < :now)
               AND u.tenant.status = com.example.iamsystem.tenant.entity.TenantStatus.ACTIVE
+              AND s.client.status = com.example.iamsystem.client.entity.ClientStatus.ACTIVE
             """)
     Optional<AuthenticatedActor> findActor(@Param("sessionId") Long sessionId,
                                            @Param("userId") Long userId,

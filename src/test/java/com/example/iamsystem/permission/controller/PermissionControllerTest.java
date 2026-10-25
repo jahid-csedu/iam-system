@@ -90,7 +90,7 @@ class PermissionControllerTest {
         mockMvc.perform(get("/api/permissions").with(actingAs(reader)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", is(PermissionKey.values().length)))
-                .andExpect(jsonPath("$[0].name", is("clients:create")))
+                .andExpect(jsonPath("$[0].name", is("clients:activate")))
                 .andExpect(jsonPath("$[0].scope", is("TENANT")));
     }
 

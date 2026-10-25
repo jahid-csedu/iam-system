@@ -142,7 +142,10 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   refuses them while suspended), so reactivation restores unexpired sessions.
   Done (step 10a): login, refresh and forgot-password of a suspended tenant's users answer 403 "Tenant is suspended"
   (`ClientResolver`); the JWT filter and introspection refuse them since 9c.
-- Clients get a status of their own later (`clients:suspend`/`clients:activate`), in a step after step 10.
+- Clients have a status of their own (done in step 11): `PUT /api/clients/{id}/suspend|activate`
+  (`clients:suspend`/`clients:activate`); a suspended client refuses login, refresh and forgot-password (403, `ClientResolver`)
+  and its sessions' tokens are refused by the JWT filter and introspection (`UserSessionRepository.findActor`). The
+  management console is never suspended.
 
 ### Future (not now)
 - OAuth2/OIDC compatibility. The `client_id` choice keeps this path open.
@@ -263,7 +266,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   tenant the platform root holds every key; other platform users hold the TENANT keys their grants give on that tenant or
   on all tenants (`PermissionRepository.isGrantedToPlatformUserInTenant`, native query over `platform_role_grants` +
   `platform_permission_grants`); audit adds `acting_tenant_id`. Grants never apply inside the platform tenant itself. `JwtRequestFilter` finds it with one query (`UserSessionRepository.findActor`) that only matches a live
-  session of an active, unlocked user of an `ACTIVE` tenant; anything else leaves the request unauthenticated (401).
+  session of an active, unlocked user of an `ACTIVE` tenant, through an `ACTIVE` client; anything else leaves the request
+  unauthenticated (401).
   Introspection uses the same query, so the API and other applications agree on what "active" means. `User.@Version` is
   optimistic locking only. Permissions are read from the database on
   every check (`PermissionRepository.isGrantedToUser`).
@@ -431,3 +435,8 @@ Design debt
 - 2026-10-25: Step 10m. Flyway `V13__drop_super_user_flag.sql` drops `users.is_super_user` (and the `User` field).
   Step 10 complete (platform tenant, platform root, tenant suspension, `X-Tenant-Id`, grants).
   Next: step 11 (client status), or one of the security and quality fixes; owner decides.
+- 2026-10-25: Step 11 (client status, one commit by owner's request). Flyway `V14__client_status.sql`: `clients.status`,
+  keys `clients:suspend` / `clients:activate` (ADMIN template). `ClientService.suspendClient/activateClient` (idempotent,
+  audited, never the console); `ClientResolver` refuses suspended clients (403 "Client is suspended"); the session query
+  requires an ACTIVE client, so the filter and introspection refuse its tokens; `ClientDto.status`. Sessions are kept,
+  like tenant suspension. Next: owner decides (security fixes, ProblemDetail, migration baseline merge).

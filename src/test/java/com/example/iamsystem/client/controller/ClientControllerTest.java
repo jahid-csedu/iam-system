@@ -212,6 +212,49 @@ class ClientControllerTest {
     }
 
     @Test
+    @DisplayName("A suspended client refuses logins, refreshes and its tokens; activating it brings them back")
+    void suspendAndActivate_controlTheClient() throws Exception {
+        JsonNode shop = body(send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop")));
+        String shopClientId = shop.get("client_id").asString();
+        JsonNode tokens = body(login(shopClientId, "acme-root", "Password1!").andExpect(status().isOk()));
+        String accessToken = tokens.get("access_token").asString();
+
+        send(put("/api/clients/{id}/suspend", shop.get("id").asLong()), acmeRoot, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUSPENDED"));
+        login(shopClientId, "acme-root", "Password1!")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Client is suspended"));
+        refresh(shopClientId, tokens.get("refresh_token").asString()).andExpect(status().isForbidden());
+        getClients(accessToken).andExpect(status().isUnauthorized());
+        login(acmeConsole.get("client_id").asString(), "acme-root", "Password1!").andExpect(status().isOk());
+
+        send(put("/api/clients/{id}/activate", shop.get("id").asLong()), acmeRoot, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+        getClients(accessToken).andExpect(status().isOk());
+        login(shopClientId, "acme-root", "Password1!").andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("The management console can't be suspended, and another tenant's client is not found")
+    void suspend_neverTheConsoleNorAnotherTenantsClient() throws Exception {
+        send(put("/api/clients/{id}/suspend", acmeConsole.get("id").asLong()), acmeRoot, null)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("The management console client can't be suspended"));
+        long shopId = body(send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop"))).get("id").asLong();
+        send(put("/api/clients/{id}/suspend", shopId), globexRoot, null).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("New clients are active")
+    void newClients_areActive() throws Exception {
+        send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+        assertEquals("ACTIVE", acmeConsole.get("status").asString());
+    }
+
+    @Test
     @DisplayName("Managing clients needs the clients permissions")
     void clients_withoutPermission_areForbidden() throws Exception {
         send(post("/api/users"), acmeRoot, new UserCreationDto("bob", "Bob12345!", "Bob", "bob@acme.com", UserType.MANAGEMENT))
@@ -220,6 +263,8 @@ class ClientControllerTest {
 
         mockMvc.perform(get("/api/clients").with(actingAs(bob))).andExpect(status().isForbidden());
         send(post("/api/clients"), bob, new ClientRequestDto("Shop")).andExpect(status().isForbidden());
+        send(put("/api/clients/{id}/suspend", acmeConsole.get("id").asLong()), bob, null).andExpect(status().isForbidden());
+        send(put("/api/clients/{id}/activate", acmeConsole.get("id").asLong()), bob, null).andExpect(status().isForbidden());
     }
 
     private JsonNode signup(String tenantName, String username, String email) throws Exception {
@@ -240,6 +285,10 @@ class ClientControllerTest {
         return mockMvc.perform(post("/api/auth/token/refresh")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"client_id\":\"" + clientId + "\",\"refresh_token\":\"" + refreshToken + "\"}"));
+    }
+
+    private ResultActions getClients(String accessToken) throws Exception {
+        return mockMvc.perform(get("/api/clients").header("Authorization", "Bearer " + accessToken));
     }
 
     private ResultActions send(MockHttpServletRequestBuilder request, User actor, Object body) throws Exception {

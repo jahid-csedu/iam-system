@@ -39,6 +39,8 @@ public enum AuditEventType {
     CLIENT_UPDATE,
     CLIENT_TOKEN_SETTINGS_UPDATE,
     CLIENT_DELETE,
+    CLIENT_SUSPEND,
+    CLIENT_ACTIVATE,
 
     // Password Reset
     PASSWORD_RESET_OTP_REQUEST,

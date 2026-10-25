@@ -9,12 +9,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.example.iamsystem.common.exception.ErrorMessage.CLIENT_SUSPENDED;
 import static com.example.iamsystem.common.exception.ErrorMessage.INVALID_CLIENT;
 import static com.example.iamsystem.common.exception.ErrorMessage.TENANT_SUSPENDED;
 
 /**
  * Resolves the {@code client_id} of a public request (login, token refresh, password reset) to its client and tenant.
- * The clients of a tenant that isn't active are refused, so its users can't log in, refresh or reset passwords.
+ * A suspended client, or a client of a tenant that isn't active, is refused, so nobody can log in, refresh or reset
+ * passwords through it.
  */
 @Component
 @RequiredArgsConstructor
@@ -25,7 +27,7 @@ public class ClientResolver {
 
     /**
      * @throws InvalidClientException if no client has this {@code client_id} (401)
-     * @throws NoAccessException      if the client's tenant is suspended (403)
+     * @throws NoAccessException      if the client or its tenant is suspended (403)
      */
     @Transactional(readOnly = true)
     public Client resolve(String clientId) {
@@ -36,6 +38,10 @@ public class ClientResolver {
         if (!client.getTenant().isActive()) {
             log.warn("Request through client '{}' of suspended tenant {}", clientId, client.getTenant().getId());
             throw new NoAccessException(TENANT_SUSPENDED);
+        }
+        if (!client.isActive()) {
+            log.warn("Request through suspended client '{}'", clientId);
+            throw new NoAccessException(CLIENT_SUSPENDED);
         }
         return client;
     }

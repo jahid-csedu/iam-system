@@ -53,6 +53,10 @@ public class Client {
     @Column(nullable = false, updatable = false)
     private ClientType type;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ClientStatus status = ClientStatus.ACTIVE;
+
     @Column(name = "access_token_ttl_seconds", nullable = false)
     private int accessTokenTtlSeconds;
 
@@ -76,6 +80,10 @@ public class Client {
 
     @UpdateTimestamp
     private Instant updatedAt;
+
+    public boolean isActive() {
+        return status == ClientStatus.ACTIVE;
+    }
 
     public boolean isManagementConsole() {
         return type == ClientType.MANAGEMENT_CONSOLE;

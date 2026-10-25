@@ -22,9 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import static com.example.iamsystem.permission.PermissionKey.CLIENTS_ACTIVATE;
 import static com.example.iamsystem.permission.PermissionKey.CLIENTS_CREATE;
 import static com.example.iamsystem.permission.PermissionKey.CLIENTS_DELETE;
 import static com.example.iamsystem.permission.PermissionKey.CLIENTS_READ;
+import static com.example.iamsystem.permission.PermissionKey.CLIENTS_SUSPEND;
 import static com.example.iamsystem.permission.PermissionKey.CLIENTS_UPDATE;
 
 @RestController
@@ -68,6 +70,20 @@ public class ClientController {
     @Operation(summary = "Change a client's token lifetimes, refresh tokens and claims; applies to new tokens (Requires: clients:update)")
     public ResponseEntity<ClientDto> updateTokenSettings(@PathVariable Long id, @RequestBody @Valid TokenSettingsDto request) {
         return ResponseEntity.ok(clientService.updateTokenSettings(id, request));
+    }
+
+    @PutMapping("/{id}/suspend")
+    @RequirePermission(CLIENTS_SUSPEND)
+    @Operation(summary = "Suspend an application client: no logins or tokens through it; never the management console (Requires: clients:suspend)")
+    public ResponseEntity<ClientDto> suspendClient(@PathVariable Long id) {
+        return ResponseEntity.ok(clientService.suspendClient(id));
+    }
+
+    @PutMapping("/{id}/activate")
+    @RequirePermission(CLIENTS_ACTIVATE)
+    @Operation(summary = "Activate a suspended client again (Requires: clients:activate)")
+    public ResponseEntity<ClientDto> activateClient(@PathVariable Long id) {
+        return ResponseEntity.ok(clientService.activateClient(id));
     }
 
     @DeleteMapping("/{id}")

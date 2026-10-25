@@ -1,6 +1,7 @@
 package com.example.iamsystem.client.service;
 
 import com.example.iamsystem.client.entity.Client;
+import com.example.iamsystem.client.entity.ClientStatus;
 import com.example.iamsystem.client.repository.ClientRepository;
 import com.example.iamsystem.common.exception.InvalidClientException;
 import com.example.iamsystem.common.exception.NoAccessException;
@@ -41,6 +42,16 @@ class ClientResolverTest {
     @DisplayName("A client of a suspended tenant is refused")
     void clientOfSuspendedTenant_isRefused() {
         when(clientRepository.findByClientId("shop")).thenReturn(Optional.of(clientOf(TenantStatus.SUSPENDED)));
+
+        assertThrows(NoAccessException.class, () -> resolver.resolve("shop"));
+    }
+
+    @Test
+    @DisplayName("A suspended client of an active tenant is refused")
+    void suspendedClient_isRefused() {
+        Client client = clientOf(TenantStatus.ACTIVE);
+        client.setStatus(ClientStatus.SUSPENDED);
+        when(clientRepository.findByClientId("shop")).thenReturn(Optional.of(client));
 
         assertThrows(NoAccessException.class, () -> resolver.resolve("shop"));
     }

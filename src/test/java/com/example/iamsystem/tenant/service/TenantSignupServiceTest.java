@@ -1,6 +1,7 @@
 package com.example.iamsystem.tenant.service;
 
 import com.example.iamsystem.client.dto.ClientDto;
+import com.example.iamsystem.client.entity.ClientStatus;
 import com.example.iamsystem.client.entity.ClientType;
 import com.example.iamsystem.client.service.ClientService;
 import com.example.iamsystem.common.exception.TenantAlreadyExistsException;
@@ -77,7 +78,7 @@ class TenantSignupServiceTest {
             return user;
         });
         ClientDto console = new ClientDto(1L, "console-client-id-000001", "Management Console", ClientType.MANAGEMENT_CONSOLE,
-                ClientService.DEFAULT_TOKEN_SETTINGS);
+                ClientStatus.ACTIVE, ClientService.DEFAULT_TOKEN_SETTINGS);
         when(clientService.createManagementConsole(any(Tenant.class))).thenReturn(console);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

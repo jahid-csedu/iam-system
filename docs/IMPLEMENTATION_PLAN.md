@@ -68,7 +68,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 10j | Platform endpoints check PLATFORM keys per tenant (`TenantScope`) | `08de269` |
 | 10k | Role grants API (`/api/platform/grants/roles`, `/api/platform/users/{id}/grants`) | `10cf07e` |
 | 10l | Permission grants; grants given and removed in bulk (`roleIds` / `permissionIds`, `DELETE` with the same body) | `f03eff7` |
-| 10m | `is_super_user` dropped (`V13`); step 10 complete | step 10m commit |
+| 10m | `is_super_user` dropped (`V13`); step 10 complete | `ca015ec` |
+| 11 | Client status (`V14`): suspend / activate clients; suspended clients refuse logins and tokens | step 11 commit |
 
 ---
 
@@ -248,7 +249,7 @@ Small sub-steps, each touching only a few classes:
 **Done when:** a suspended tenant's users cannot log in, refresh or pass introspection; tenant users can never call
 platform endpoints or act in another tenant; platform users act in a tenant only with a grant (or as platform root).
 
-### Step 11: Client status
+### Step 11: Client status (DONE)
 
 `clients.status`, `clients:suspend` / `clients:activate` (tenant and platform users); a suspended client refuses login and
 refresh, and its sessions are refused by the filter and introspection.

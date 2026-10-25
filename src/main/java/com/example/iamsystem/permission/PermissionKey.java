@@ -25,6 +25,8 @@ public enum PermissionKey {
     CLIENTS_CREATE("clients:create", TENANT),
     CLIENTS_UPDATE("clients:update", TENANT),
     CLIENTS_DELETE("clients:delete", TENANT),
+    CLIENTS_SUSPEND("clients:suspend", TENANT),
+    CLIENTS_ACTIVATE("clients:activate", TENANT),
     PERMISSIONS_READ("permissions:read", TENANT),
     TENANTS_READ("tenants:read", PLATFORM),
     TENANTS_CREATE("tenants:create", PLATFORM),
