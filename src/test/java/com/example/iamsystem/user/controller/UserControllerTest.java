@@ -396,6 +396,19 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("The root user cannot delete itself")
+    @Sql("/sql/insert_user_role.sql")
+    void deleteUser_rootItself_isForbidden() throws Exception {
+        User root = findByUsername(userRepository, "root").orElseThrow();
+
+        mockMvc.perform(delete("/api/users/{id}", root.getId())
+                        .with(actingAs(root)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("The root user can't be deleted"));
+        assertTrue(userRepository.existsById(root.getId()));
+    }
+
+    @Test
     @DisplayName("Another user cannot delete the root user")
     @Sql("/sql/insert_user_role.sql")
     void deleteUser_rootByAnotherUser_isForbidden() throws Exception {

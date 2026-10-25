@@ -12,6 +12,7 @@ import static com.example.iamsystem.common.exception.ErrorMessage.NO_PERMISSION;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_PASSWORD_RESET;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ACCESS_CHANGE;
 import static com.example.iamsystem.common.exception.ErrorMessage.REGULAR_USER_ACCESS;
+import static com.example.iamsystem.common.exception.ErrorMessage.ROOT_USER_NOT_DELETABLE;
 
 /**
  * Decides what an actor may do to another user of the same tenant. Endpoint permissions are checked separately by
@@ -55,11 +56,13 @@ public class UserAccessPolicy {
     }
 
     /**
-     * The root user can only be deleted by themselves.
+     * Nobody deletes a root user, not even the root itself: a tenant always keeps its root, and nothing can create
+     * another one.
      */
     public void checkCanDelete(AuthenticatedActor actor, User target) {
-        if (target.isRootUser() && !actor.isUser(target.getId())) {
-            deny(actor, "delete", target);
+        if (target.isRootUser()) {
+            log.warn("User '{}' tried to delete the root user '{}'", actor.username(), target.getUsername());
+            throw new NoAccessException(ROOT_USER_NOT_DELETABLE);
         }
     }
 

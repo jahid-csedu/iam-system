@@ -256,6 +256,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
+- Nobody deletes a root user, not even the root itself (403), so every tenant keeps its root.
 - `PATCH /api/users/password` changes only your own password (old password required). `POST /api/users/{id}/password-reset`
   (`users:reset-password`) gives another user a new emailed password; never your own, never root's.
 - New passwords and OTPs are only ever sent by email: never in responses, logs or audit details.
@@ -278,7 +279,6 @@ Security
   stored in plain text, and the endpoint reveals whether a username/email exists.
 
 Broken / drift
-- A root user can delete itself, which leaves its tenant without a root (decide with the platform/tenant lifecycle work).
 - Audit events for failures are logged at ERROR level.
 - Ended sessions and used/expired refresh tokens are never purged (needs a cleanup job; roadmap item 6, session management).
 - Sessions slide forever while refreshed: no absolute session lifetime yet (roadmap item 6).
@@ -443,3 +443,6 @@ Design debt
   (SMTP auth + STARTTLS in `application.properties`). Next: security fix 2 (user deletion with a pending OTP).
 - 2026-10-25: Security fix 2. Flyway `V15__password_reset_otp_cascade.sql`: deleting a user deletes their pending reset
   OTPs (the delete failed on the foreign key before). Next: security fix 3 (nobody deletes a root user).
+- 2026-10-25: Security fix 3. `UserAccessPolicy.checkCanDelete` refuses every deletion of a root user, its own included
+  (403 "The root user can't be deleted"); a root could delete itself before and leave its tenant without one, and the same
+  went for the platform root. Next: security fix 4 (uniform reset-request response).

@@ -72,9 +72,9 @@ class UserAccessPolicyTest {
     }
 
     @Test
-    @DisplayName("The root user can only be deleted by itself")
-    void checkCanDelete_rootUser_onlyBySelf() {
-        assertDoesNotThrow(() -> policy.checkCanDelete(actor(root), root));
+    @DisplayName("Nobody deletes the root user, not even the root itself")
+    void checkCanDelete_rootUser_isRefused() {
+        assertThrows(NoAccessException.class, () -> policy.checkCanDelete(actor(root), root));
         assertThrows(NoAccessException.class, () -> policy.checkCanDelete(actor(manager), root));
     }
 

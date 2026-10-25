@@ -242,7 +242,7 @@ and gets `403` on every management endpoint.
 | List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `users:read` |
 | Direct permissions | `PUT` / `DELETE /api/users/permissions` `{ "username", "permissionIds" }` (management users only, never yourself) | `users:update` |
 | Find a user | `GET /api/users/{id}`, `/api/users/by-username?username=`, `/api/users/by-email?email=` | `users:read` |
-| Delete a user | `DELETE /api/users/{id}` (users they created stay, without a creator) | `users:delete` (a root user can only delete itself) |
+| Delete a user | `DELETE /api/users/{id}` (users they created stay, without a creator) | `users:delete` (never a root user, not even by itself: `403`) |
 | Roles | `GET /api/roles`, `GET /api/roles/{id}`, `GET /api/roles/name/{name}` | `roles:read` |
 | Change roles | `POST /api/roles`, `PUT /api/roles/{id}` `{ "name", "description" }`, `DELETE /api/roles/{id}` (also removes it from its users) | `roles:create` / `roles:update` / `roles:delete`, never on a role you hold |
 | Role permissions | `PUT /api/roles/permissions` / `DELETE /api/roles/permissions` `{ "roleId", "permissionIds" }` | `roles:update`, never on a role you hold |
@@ -350,7 +350,7 @@ The IAM manages only its own permissions; other applications decide their own au
 - **Password expiry:** passwords expire after 90 days; an expired password blocks login.
 - **Password resets** (forgot-password and reset by another user) generate a new password and send it **only by email**; it never
   appears in a response. A forgot-password OTP is valid for 5 minutes and replaces any earlier OTP of the user.
-- **One root per tenant**, created only by signup; a root user can't be deleted, or have its password reset, by anyone else.
+- **One root per tenant**, created only by signup; nobody can delete a root user (not even the root itself), and nobody else can reset its password.
 - **Tenant isolation:** users and roles of another tenant are reported as not found (`404`), never as forbidden.
 - **Usernames and emails** are unique per tenant: two tenants may both have a `bob`. Exception: a root user's username and
   email are unique across all users of all tenants. Login and forgot-password look the user up only inside the tenant of
