@@ -115,6 +115,13 @@ class AuthorizationServiceTest {
     }
 
     @Test
+    @DisplayName("A PLATFORM permission in a normally assigned role gives nothing: it takes effect only through grants")
+    void hasPermission_platformPermissionThroughNormalRole_isNotHeld() {
+        assertFalse(authorizationService.hasPermission(ALICE, TENANTS_READ));
+        verifyNoInteractions(permissionRepository);
+    }
+
+    @Test
     @DisplayName("The check throws only when the permission is missing")
     void checkPermission_throwsOnlyWhenPermissionMissing() {
         when(permissionRepository.isGrantedToUser(1L, "users:read")).thenReturn(true);

@@ -398,3 +398,10 @@ Design debt
   Step 10 re-split: 10i per-tenant platform checks, 10j grant endpoints, 10k remove `is_super_user`.
   Decisions: grants only for platform management users and platform roles (checked when granting, 10j).
   Next: step 10i (per-tenant platform permissions).
+- 2026-10-25: Step 10i (platform roles). The platform tenant's roles may hold PLATFORM keys
+  (`PermissionRepository.getRequiredPermissions`); standard tenants' roles and all direct user permissions stay TENANT
+  only. Decision (option A): PLATFORM keys take effect only through grants, so `AuthorizationService` never answers a
+  PLATFORM key from normal roles. Fix: the 10h grant query (`SELECT EXISTS`) failed on MySQL (Long vs boolean); it is a
+  count now (`countPlatformGrants`). Step 10 re-split again: 10j per-tenant platform checks, 10k grant endpoints,
+  10l remove `is_super_user`; platform tenant = management users only (own small commit).
+  Next: platform tenant without regular users, then 10j.

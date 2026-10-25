@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10h (platform grants).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10i (platform roles with tenants:* keys).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -48,7 +48,9 @@ How to use the system as a developer through Swagger UI or Postman.
 | `clients:delete` | Delete application clients (never the management console) |
 | `permissions:read` | List the catalog and view a permission |
 
-PLATFORM keys, for super users only (never part of a tenant's roles; the platform root holds them all):
+PLATFORM keys, for super users only. The platform root holds them all. Only the Platform tenant's roles can hold them
+(a standard tenant gets `404` "Some permissions not found"), and even there they take effect only when the role is
+**granted** on tenants, never through a normal role assignment:
 
 | Key | Allows |
 |---|---|

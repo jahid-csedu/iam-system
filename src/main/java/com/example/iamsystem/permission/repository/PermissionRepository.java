@@ -24,11 +24,22 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
      * Unknown or PLATFORM permissions count as missing.
      */
     default List<Permission> getRequiredTenantPermissions(Set<Long> ids) {
-        List<Permission> permissions = findAllByIdInAndScope(ids, PermissionScope.TENANT);
-        if (permissions.size() != ids.size()) {
+        return requireAll(ids, findAllByIdInAndScope(ids, PermissionScope.TENANT));
+    }
+
+    /**
+     * The permissions with these ids, of any scope: what the platform tenant's roles may hold.
+     * Unknown permissions count as missing.
+     */
+    default List<Permission> getRequiredPermissions(Set<Long> ids) {
+        return requireAll(ids, findAllById(ids));
+    }
+
+    private static List<Permission> requireAll(Set<Long> ids, List<Permission> found) {
+        if (found.size() != ids.size()) {
             throw new DataNotFoundException(PERMISSIONS_NOT_FOUND);
         }
-        return permissions;
+        return found;
     }
 
     /**
@@ -47,8 +58,15 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
      * Whether a platform user holds a permission inside a tenant through a grant on that tenant or on all tenants: a
      * granted role that contains it, or the permission granted directly.
      */
+    default boolean isGrantedToPlatformUserInTenant(Long userId, String name, Long tenantId) {
+        return countPlatformGrants(userId, name, tenantId) > 0;
+    }
+
+    /**
+     * MySQL returns EXISTS as a number, which a native query can't map to boolean; hence a count.
+     */
     @Query(nativeQuery = true, value = """
-            SELECT EXISTS (
+            SELECT COUNT(*) FROM (
                 SELECT 1 FROM platform_role_grants g
                 JOIN role_permissions rp ON rp.role_id = g.role_id
                 JOIN permissions p ON p.id = rp.permission_id
@@ -57,9 +75,7 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
                 SELECT 1 FROM platform_permission_grants g
                 JOIN permissions p ON p.id = g.permission_id
                 WHERE g.user_id = :userId AND p.name = :name AND (g.tenant_id = :tenantId OR g.tenant_id IS NULL)
-            )
+            ) grants
             """)
-    boolean isGrantedToPlatformUserInTenant(@Param("userId") Long userId,
-                                            @Param("name") String name,
-                                            @Param("tenantId") Long tenantId);
+    long countPlatformGrants(@Param("userId") Long userId, @Param("name") String name, @Param("tenantId") Long tenantId);
 }

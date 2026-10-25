@@ -2,6 +2,7 @@ package com.example.iamsystem.role.service;
 
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
+import com.example.iamsystem.permission.entity.Permission;
 import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.role.dto.RolePermissionDto;
 import com.example.iamsystem.role.entity.Role;
@@ -12,9 +13,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Set;
+
 
 /**
- * Attaches permissions to, and detaches them from, the roles of the current user's tenant.
+ * Attaches permissions to, and detaches them from, the roles of the current user's tenant. A standard tenant's roles
+ * hold TENANT permissions only; the platform tenant's roles may also hold PLATFORM ones, which take effect only when the
+ * role is granted on tenants (platform grants), never through a normal role assignment.
  */
 @Service
 @RequiredArgsConstructor
@@ -33,7 +39,7 @@ public class RolePermissionService {
     @Transactional
     public void assignPermissions(RolePermissionDto request) {
         Role role = getModifiableRole(request.roleId());
-        role.getPermissions().addAll(permissionRepository.getRequiredTenantPermissions(request.permissionIds()));
+        role.getPermissions().addAll(permissionsFor(role, request.permissionIds()));
         roleRepository.save(role);
     }
 
@@ -45,8 +51,14 @@ public class RolePermissionService {
     @Transactional
     public void removePermissions(RolePermissionDto request) {
         Role role = getModifiableRole(request.roleId());
-        permissionRepository.getRequiredTenantPermissions(request.permissionIds()).forEach(role.getPermissions()::remove);
+        permissionsFor(role, request.permissionIds()).forEach(role.getPermissions()::remove);
         roleRepository.save(role);
+    }
+
+    private List<Permission> permissionsFor(Role role, Set<Long> permissionIds) {
+        return role.getTenant().isPlatform()
+                ? permissionRepository.getRequiredPermissions(permissionIds)
+                : permissionRepository.getRequiredTenantPermissions(permissionIds);
     }
 
     private Role getModifiableRole(Long roleId) {

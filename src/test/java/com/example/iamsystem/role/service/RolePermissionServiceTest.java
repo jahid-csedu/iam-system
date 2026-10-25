@@ -7,8 +7,11 @@ import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.role.dto.RolePermissionDto;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.repository.RoleRepository;
-import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
+import com.example.iamsystem.security.userdetails.CurrentUserProvider;
+import com.example.iamsystem.tenant.entity.Tenant;
+import com.example.iamsystem.tenant.entity.TenantStatus;
+import com.example.iamsystem.tenant.entity.TenantType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -75,6 +78,22 @@ class RolePermissionServiceTest {
         verify(accessPolicy).checkCanModify(actor, role);
         assertEquals(Set.of(read, write), role.getPermissions());
         verify(roleRepository).save(role);
+    }
+
+    @Test
+    @DisplayName("A platform tenant's role may also hold PLATFORM permissions")
+    void assignPermissions_toPlatformRole_acceptsEveryScope() {
+        Tenant platform = new Tenant("Platform", TenantStatus.ACTIVE);
+        platform.setId(TENANT_ID);
+        platform.setType(TenantType.PLATFORM);
+        role.setTenant(platform);
+        when(roleRepository.getRequiredByIdAndTenantId(10L, TENANT_ID)).thenReturn(role);
+        when(permissionRepository.getRequiredPermissions(Set.of(1L))).thenReturn(List.of(read));
+
+        service.assignPermissions(new RolePermissionDto(10L, Set.of(1L)));
+
+        assertEquals(Set.of(read), role.getPermissions());
+        verify(permissionRepository, never()).getRequiredTenantPermissions(Set.of(1L));
     }
 
     @Test

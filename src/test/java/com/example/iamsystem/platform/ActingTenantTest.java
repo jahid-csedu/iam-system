@@ -32,6 +32,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.Map;
+import java.util.Set;
+
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
@@ -185,6 +188,34 @@ class ActingTenantTest {
         send(get("/api/users").header("X-Tenant-Id", acmeId), support, null).andExpect(status().isOk());
         send(get("/api/users").header("X-Tenant-Id", globexId), support, null).andExpect(status().isOk());
         send(get("/api/users"), support, null).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("A platform role may hold tenants:* keys, but a normally assigned role never gives them")
+    void platformRoleWithPlatformKey_givesNothingWithoutAGrant() throws Exception {
+        String support = createSupportUser();
+        long viewerId = roleRepository.getRequiredByNameAndTenantId("VIEWER", platformId).getId();
+        long tenantsRead = permissionId("tenants:read");
+
+        send(put("/api/roles/permissions"), platformRootToken, Map.of("roleId", viewerId, "permissionIds", Set.of(tenantsRead)))
+                .andExpect(status().isNoContent());
+        send(put("/api/users/roles"), platformRootToken, Map.of("username", "support", "roleIds", Set.of(viewerId)))
+                .andExpect(status().isNoContent());
+
+        send(get("/api/platform/tenants"), support, null).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("A standard tenant's role can't hold tenants:* keys")
+    void standardTenantRole_cannotHoldPlatformKeys() throws Exception {
+        long acmeViewerId = roleRepository.getRequiredByNameAndTenantId("VIEWER", acmeId).getId();
+
+        send(put("/api/roles/permissions"), acmeRootToken, Map.of("roleId", acmeViewerId, "permissionIds", Set.of(permissionId("tenants:read"))))
+                .andExpect(status().isNotFound());
+    }
+
+    private long permissionId(String name) {
+        return jdbcTemplate.queryForObject("SELECT id FROM permissions WHERE name = ?", Long.class, name);
     }
 
     /**
