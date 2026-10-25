@@ -116,7 +116,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
 - First rollout: tokens carry only basic user information. The IAM doesn't manage other applications' roles or permissions.
 - Other applications verify tokens through IAM endpoints: asymmetric signing + JWKS endpoint for local verification
   (done in step 9a: RS256, one platform key set; per-tenant keys are roadmap item 10), plus an introspection endpoint that
-  reflects revocation and tenant suspension (planned).
+  reflects revocation and tenant suspension (done in step 9c: `POST /api/auth/introspect`, public until clients get secrets).
 - Logout and revocation: store refresh tokens (hashed) in the database. This replaces the `@Version`-based revocation.
   Done (step 9b): a session per login (`sid` in access tokens), single-use rotating opaque refresh tokens with reuse
   detection, `POST /api/auth/logout`.
@@ -185,7 +185,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `@RequirePermission(PermissionKey)` on every protected endpoint
 - `authorization/`: `AuthorizationService` = the only place answering "does user X hold service:action?";
   `@RequirePermission` + `AuthorizationAspect` enforce it on endpoints
-- `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, logout, validate) and DTOs;
+- `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, logout),
+  `TokenIntrospectionService` (`/api/auth/introspect`) and DTOs;
   `JwksController` (`/.well-known/jwks.json`)
 - `security/`: Spring Security wiring: `config/` (incl. `JwtProperties`), `filter/` (JWT filter), `jwt/` (`SigningKeys` = the
   RSA key set, `TokenIssuer`, `TokenVerifier`: access tokens only),
@@ -233,7 +234,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - New passwords and OTPs are only ever sent by email: never in responses, logs or audit details.
 - The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`, `sessionId`), never the
   `User` entity. `JwtRequestFilter` finds it with one query (`UserSessionRepository.findActor`) that only matches a live
-  session of an active, unlocked user; anything else leaves the request unauthenticated (401). `User.@Version` is
+  session of an active, unlocked user of an `ACTIVE` tenant; anything else leaves the request unauthenticated (401).
+  Introspection uses the same query, so the API and other applications agree on what "active" means. `User.@Version` is
   optimistic locking only. Permissions are read from the database on
   every check (`PermissionRepository.isGrantedToUser`).
 - `is_super_user` exists in schema and entity but is never read.
@@ -243,7 +245,6 @@ Security
 - `mail.debug=true`.
 - Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit, is
   stored in plain text, and the endpoint reveals whether a username/email exists.
-- `/api/auth/token/validate` checks signature and expiry only (ended sessions are reported as valid; replaced in step 9c).
 
 Broken / drift
 - A root user can delete itself, which leaves its tenant without a root (decide with the platform/tenant lifecycle work).
@@ -324,3 +325,8 @@ Design debt
   (`InvalidTokenException` replaces `JwtException`); password change/reset end sessions. Decisions: own password change keeps
   the current session; deactivation/lock don't revoke (checked per request); sessions slide with each refresh.
   Next: step 9c (introspection).
+- 2026-10-25: Step 9c (introspection). `POST /api/auth/introspect` (RFC 7662 style, public): active with the token's claims
+  only for a valid token of a live session whose user is usable and whose tenant is ACTIVE, otherwise just `active: false`
+  (always 200). `/api/auth/token/validate` and `TokenVerifier.isValid` removed. The JWT filter now also refuses users of a
+  non-ACTIVE tenant (ready for step 10). Step 9 complete.
+  Next: step 10 (platform tenant, super users, tenant suspension).

@@ -4,15 +4,12 @@ import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.auth.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.auth.dto.JwtResponse;
-import com.example.iamsystem.auth.dto.TokenValidationRequest;
-import com.example.iamsystem.auth.dto.TokenValidationResponse;
 import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.client.service.ClientResolver;
 import com.example.iamsystem.common.exception.InvalidTokenException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.jwt.TokenIssuer;
-import com.example.iamsystem.security.jwt.TokenVerifier;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
 import com.example.iamsystem.security.userdetails.DefaultUserDetailsService;
@@ -33,7 +30,7 @@ import static com.example.iamsystem.common.exception.ErrorMessage.CONSOLE_CLIENT
 import static com.example.iamsystem.common.exception.ErrorMessage.REFRESH_TOKENS_DISABLED;
 
 /**
- * Login, token refresh, logout and token checks behind the {@code /api/auth} endpoints. Every login and refresh names its
+ * Login, token refresh and logout behind the {@code /api/auth} endpoints. Every login and refresh names its
  * client: the client decides the tenant the user is looked up in, and its tokens carry the client. Every login starts a
  * session, which its access tokens name and its refresh tokens keep alive.
  */
@@ -47,7 +44,6 @@ public class AuthenticationService {
     private final ClientResolver clientResolver;
     private final SessionService sessionService;
     private final TokenIssuer tokenIssuer;
-    private final TokenVerifier tokenVerifier;
     private final CurrentUserProvider currentUserProvider;
 
     /**
@@ -95,10 +91,6 @@ public class AuthenticationService {
     @Auditable(AuditEventType.LOGOUT)
     public void logout() {
         sessionService.revoke(currentUserProvider.requireCurrentActor().sessionId());
-    }
-
-    public TokenValidationResponse validate(TokenValidationRequest request) {
-        return new TokenValidationResponse(tokenVerifier.isValid(request.getToken()));
     }
 
     private void checkClientAccepts(Client client, User user) {

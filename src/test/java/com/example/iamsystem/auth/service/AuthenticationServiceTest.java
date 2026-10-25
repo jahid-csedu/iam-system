@@ -2,7 +2,6 @@ package com.example.iamsystem.auth.service;
 
 import com.example.iamsystem.auth.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.auth.dto.JwtResponse;
-import com.example.iamsystem.auth.dto.TokenValidationRequest;
 import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.client.entity.ClientType;
 import com.example.iamsystem.client.service.ClientResolver;
@@ -11,7 +10,6 @@ import com.example.iamsystem.common.exception.InvalidTokenException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.jwt.TokenIssuer;
-import com.example.iamsystem.security.jwt.TokenVerifier;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
@@ -43,7 +41,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -67,8 +64,6 @@ class AuthenticationServiceTest {
     private SessionService sessionService;
     @Mock
     private TokenIssuer tokenIssuer;
-    @Mock
-    private TokenVerifier tokenVerifier;
     @Mock
     private CurrentUserProvider currentUserProvider;
 
@@ -216,16 +211,6 @@ class AuthenticationServiceTest {
         service.logout();
 
         verify(sessionService).revoke(42L);
-    }
-
-    @Test
-    @DisplayName("Validation reports whether the access token is valid")
-    void validate_reportsWhetherTheAccessTokenIsValid() {
-        TokenValidationRequest request = new TokenValidationRequest();
-        request.setToken("access-token");
-        when(tokenVerifier.isValid("access-token")).thenReturn(true);
-
-        assertTrue(service.validate(request).isStatus());
     }
 
     private void givenAuthenticated(User user) {

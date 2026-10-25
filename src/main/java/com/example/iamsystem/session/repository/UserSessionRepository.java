@@ -13,7 +13,8 @@ import java.util.Optional;
 public interface UserSessionRepository extends JpaRepository<UserSession, Long> {
 
     /**
-     * The actor behind an access token: found only while its session is live and the user is active and unlocked.
+     * The actor behind an access token: found only while its session is live, the user is active and unlocked, and the
+     * user's tenant is active.
      */
     @Query("""
             SELECT new com.example.iamsystem.security.userdetails.AuthenticatedActor(
@@ -22,6 +23,7 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
             WHERE s.id = :sessionId AND u.id = :userId
               AND s.revokedAt IS NULL AND s.expiresAt > :now
               AND u.active = true AND (u.userLocked = false OR u.accountLockedUntil < :now)
+              AND u.tenant.status = com.example.iamsystem.tenant.entity.TenantStatus.ACTIVE
             """)
     Optional<AuthenticatedActor> findActor(@Param("sessionId") Long sessionId,
                                            @Param("userId") Long userId,

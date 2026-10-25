@@ -60,18 +60,6 @@ public class TokenVerifier {
         return claims.get(SESSION_ID, Long.class);
     }
 
-    /**
-     * Checks signature, expiry and type only.
-     */
-    public boolean isValid(String token) {
-        try {
-            parseAccessToken(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
-        }
-    }
-
     private Key verificationKey(Header header) {
         if (!(header instanceof ProtectedHeader protectedHeader)
                 || !Jwts.SIG.RS256.getId().equals(protectedHeader.getAlgorithm())) {

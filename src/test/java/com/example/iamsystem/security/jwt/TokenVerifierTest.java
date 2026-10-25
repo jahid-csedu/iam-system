@@ -21,10 +21,9 @@ import java.util.Date;
 import java.util.List;
 
 import static com.example.iamsystem.security.jwt.TestKeys.configuredKey;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TokenVerifierTest {
 
@@ -51,9 +50,9 @@ class TokenVerifierTest {
     }
 
     @Test
-    @DisplayName("A token we issued is valid")
-    void issuedToken_isValid() {
-        assertTrue(verifier.isValid(issuer.issueAccessToken(session)));
+    @DisplayName("A token we issued is accepted")
+    void issuedToken_isAccepted() {
+        assertDoesNotThrow(() -> verifier.parseAccessToken(issuer.issueAccessToken(session)));
     }
 
     @Test
@@ -94,7 +93,7 @@ class TokenVerifierTest {
         String token = new TokenIssuer(new SigningKeys(oldConfig), oldConfig).issueAccessToken(session);
         SigningKeys rotated = new SigningKeys(new JwtProperties("https://iam.test", List.of(configuredKey("new"), old)));
 
-        assertTrue(new TokenVerifier(rotated).isValid(token));
+        assertDoesNotThrow(() -> new TokenVerifier(rotated).parseAccessToken(token));
     }
 
     @Test
@@ -106,7 +105,7 @@ class TokenVerifierTest {
                 .signWith(key.privateKey(), Jwts.SIG.RS256)
                 .compact();
 
-        assertFalse(verifier.isValid(other));
+        assertThrows(JwtException.class, () -> verifier.parseAccessToken(other));
     }
 
     @Test
@@ -122,10 +121,10 @@ class TokenVerifierTest {
     }
 
     @Test
-    @DisplayName("A malformed or blank token is not valid")
-    void malformedToken_isNotValid() {
-        assertFalse(verifier.isValid("not-a-jwt"));
-        assertFalse(verifier.isValid(""));
+    @DisplayName("A malformed or blank token is rejected")
+    void malformedToken_isRejected() {
+        assertThrows(JwtException.class, () -> verifier.parseAccessToken("not-a-jwt"));
+        assertThrows(IllegalArgumentException.class, () -> verifier.parseAccessToken(""));
     }
 
     @Test

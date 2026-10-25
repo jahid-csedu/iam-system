@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 9b (sessions, rotating refresh tokens, logout).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 9c (token introspection).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -25,8 +25,8 @@ How to use the system as a developer through Swagger UI or Postman.
 | **No self-modification** | Nobody can change their own roles, change or delete a role they hold, or reset their own password through the management API. Another user with the permission must do it. |
 
 **Important limitations today:**
-- **Other applications can't yet ask whether a token was revoked** (introspection arrives with step 9c); a locally verified
-  access token stays valid until it expires.
+- **Introspection is public** (clients have no secrets yet): anyone holding a token can ask about it, and the answer only
+  reveals that token's own claims.
 
 ### The permission catalog
 
@@ -250,7 +250,7 @@ A selected claim the user has no value for (for example no email) is left out.
 | What | Request | Notes |
 |---|---|---|
 | Public keys for verifying tokens | `GET /.well-known/jwks.json` → `{ "keys": [ { "kty": "RSA", "use": "sig", "alg": "RS256", "kid": "...", "n": "...", "e": "AQAB" } ] }` | Public. Cache it; fetch again when a token names an unknown `kid`. |
-| Is this access token valid? | `POST /api/auth/token/validate` `{ "token": "..." }` → `{ "status": true }` | Public. Checks signature and expiry only (replaced by introspection in step 9c). |
+| Is this access token active right now? | `POST /api/auth/introspect` `{ "token": "..." }` → `200` `{ "active": true, "sub", "iss", "aud", "client_id", "sid", "jti", "iat", "exp", "token_type": "Bearer", ...the client's claims }`, or just `{ "active": false }` | Public. Active only while the signature and expiry are valid, the session hasn't ended (logout, password change or reset), the user is active and unlocked, and the tenant is active. An inactive answer never says why. |
 
 **Verifying an access token locally** (any JWT library):
 1. The header must say `"alg": "RS256"` and `"typ": "at+jwt"`. Accept nothing else: never `none`, never an `HS*` algorithm
@@ -259,8 +259,8 @@ A selected claim the user has no value for (for example no email) is left out.
 3. Check `exp`, that `iss` is `<IAM base URL>/tenants/<your tenant id>`, and that `aud` contains your `client_id`.
 
 The public key can only verify tokens; only the IAM's private key can sign them, so a changed token fails verification.
-A locally verified token stays valid until it expires even if the user is changed or locked meanwhile (keep access tokens
-short; introspection in step 9c will reflect revocation).
+A locally verified token stays valid until it expires even if the user logs out or is locked meanwhile. Applications that
+must notice that sooner call introspection instead (a database lookup per call), or keep access tokens short.
 
 The IAM manages only its own permissions; other applications decide their own authorization from the verified user.
 
@@ -296,7 +296,7 @@ The IAM manages only its own permissions; other applications decide their own au
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
 | `400` | Already exists (tenant, user, role or client name in your tenant), deleting the management console, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
-| `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
+| `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, a suspended tenant, wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
 | `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; or account locked, deactivated or expired |
 | `404` | Not found, including users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
 | `405` | The HTTP method isn't supported (for example creating a permission) |

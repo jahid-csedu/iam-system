@@ -52,7 +52,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 8a | Clients (`V7`): `client_id` login/refresh/forgot-password, console client per tenant, per-tenant usernames/emails | `5f2c416` |
 | 8b | Per-client token settings (`V8`): lifetimes, refresh on/off, selectable claims | `099f14b` |
 | 9a | RS256 signing with configured keys, `/.well-known/jwks.json`, `iss`/`aud`/`jti`/`kid` | `9fdae12` |
-| 9b | Sessions (`V9`), single-use rotating opaque refresh tokens, reuse detection, logout, 401 on refresh errors | step 9b commit |
+| 9b | Sessions (`V9`), single-use rotating opaque refresh tokens, reuse detection, logout, 401 on refresh errors | `efe589f` |
+| 9c | `POST /api/auth/introspect` (RFC 7662 style), `/token/validate` removed, filter refuses non-ACTIVE tenants | step 9c commit |
 
 ---
 
@@ -200,7 +201,7 @@ by the bearer access token; introspection is public until clients get secrets; t
   an own password change all but the current one; deactivation and lock are refused per request instead of revoking. `POST /api/auth/logout` (bearer) revokes the current session (204).
 - Refresh-token errors answer 401 instead of 412.
 
-**9c: introspection**
+**9c: introspection (DONE)**
 - `POST /api/auth/introspect` `{ token }` (RFC 7662 style): active only if signature and expiry are valid, the session is
   live, the user is active and unlocked, and the tenant is ACTIVE; otherwise just `{ "active": false }`.
 - `/api/auth/token/validate` removed.
@@ -214,7 +215,8 @@ Proposed design:
   (env vars) at startup if none exists; there is no public signup into it. Its own management-console client.
 - PLATFORM-scope permissions (`tenants:read`, `tenants:suspend`, `tenants:activate`, …) usable only by platform users.
 - `/api/platform/tenants` endpoints: list, view, suspend, activate.
-- Suspension blocks login, refresh and introspection for every user of the tenant.
+- Suspension blocks login, refresh and introspection for every user of the tenant. Already in place since 9c: the JWT
+  filter and introspection refuse users of a non-ACTIVE tenant; login and refresh still need the check.
 - Remove the unused `is_super_user` column.
 - **Done when:** a suspended tenant's users cannot log in, refresh or pass introspection; tenant users can never call platform endpoints.
 
@@ -223,9 +225,9 @@ Proposed design:
 | Item | Where it is handled |
 |---|---|
 | Public registration lets anyone become root with global power | Done: step 5 (signup creates an own tenant), step 6 (tenant isolation) |
-| Hard-coded HMAC JWT secrets | Step 9a |
+| Hard-coded HMAC JWT secrets | Done in step 9a |
 | JWT filter errors → 500 instead of 401 | Done in step 6b |
-| `/token/validate` ignores revocation | Step 9c |
+| `/token/validate` ignores revocation | Done in step 9c (replaced by introspection) |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
 | `mail.debug=true`, `logging.level.root=DEBUG`, DB credentials in `application.properties`; no JWT key configured only warns | Small config step (profiles + env); outside dev/test, fail at startup without a configured JWT key |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |

@@ -1,6 +1,9 @@
 package com.example.iamsystem.security.filter;
 
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
+import com.example.iamsystem.tenant.entity.Tenant;
+import com.example.iamsystem.tenant.entity.TenantStatus;
+import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
 import com.example.iamsystem.user.entity.User;
@@ -43,6 +46,8 @@ class JwtAuthenticationTest {
     private JsonMapper jsonMapper;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private TenantRepository tenantRepository;
 
     private String accessToken;
 
@@ -105,6 +110,17 @@ class JwtAuthenticationTest {
         lockRoot(Instant.now().minus(Duration.ofMinutes(1)));
 
         getUsers(accessToken).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("A token of a suspended tenant's user is rejected")
+    void tokenOfSuspendedTenant_isUnauthorized() throws Exception {
+        Tenant tenant = tenantRepository.findById(findByUsername(userRepository, "acme-root").orElseThrow().getTenant().getId())
+                .orElseThrow();
+        tenant.setStatus(TenantStatus.SUSPENDED);
+        tenantRepository.save(tenant);
+
+        getUsers(accessToken).andExpect(status().isUnauthorized());
     }
 
     private ResultActions getUsers(String token) throws Exception {

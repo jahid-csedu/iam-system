@@ -2,9 +2,10 @@ package com.example.iamsystem.auth.controller;
 
 import com.example.iamsystem.auth.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.auth.dto.JwtResponse;
-import com.example.iamsystem.auth.dto.TokenValidationRequest;
-import com.example.iamsystem.auth.dto.TokenValidationResponse;
+import com.example.iamsystem.auth.dto.IntrospectionRequest;
+import com.example.iamsystem.auth.dto.IntrospectionResponse;
 import com.example.iamsystem.auth.service.AuthenticationService;
+import com.example.iamsystem.auth.service.TokenIntrospectionService;
 import com.example.iamsystem.user.dto.UserLoginDto;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthenticationService authenticationService;
+    private final TokenIntrospectionService introspectionService;
 
     @PostMapping("/authenticate")
     @Operation(summary = "User authentication")
@@ -43,9 +45,9 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/token/validate")
-    @Operation(summary = "Token validation")
-    public ResponseEntity<TokenValidationResponse> validateToken(@Valid @RequestBody TokenValidationRequest request) {
-        return ResponseEntity.ok(authenticationService.validate(request));
+    @PostMapping("/introspect")
+    @Operation(summary = "Is this access token active right now? (RFC 7662 style; always 200)")
+    public ResponseEntity<IntrospectionResponse> introspect(@Valid @RequestBody IntrospectionRequest request) {
+        return ResponseEntity.ok(introspectionService.introspect(request));
     }
 }

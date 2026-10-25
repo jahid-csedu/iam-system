@@ -26,7 +26,7 @@ public class AuthorizationConfig {
             "/api/tenants/signup",
             "/api/auth/authenticate",
             "/api/auth/token/refresh",
-            "/api/auth/token/validate",
+            "/api/auth/introspect",
             "/api/password/reset-request",
             "/api/password/reset",
             JwksController.JWKS_PATH
