@@ -263,7 +263,7 @@ refresh, and its sessions are refused by the filter and introspection.
 | JWT filter errors → 500 instead of 401 | Done in step 6b |
 | `/token/validate` ignores revocation | Done in step 9c (replaced by introspection) |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
-| `mail.debug=true`, DB credentials in `application.properties`; no JWT key configured only warns | Small config step (profiles + env); outside dev/test, fail at startup without a configured JWT key |
+| `mail.debug=true` (done: security fix 1, `MailConfig` removed); DB credentials in `application.properties`; no JWT key configured only warns | Small config step (profiles + env); outside dev/test, fail at startup without a configured JWT key |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |

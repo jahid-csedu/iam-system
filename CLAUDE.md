@@ -222,7 +222,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `session/`: login sessions. `UserSession` + `RefreshToken` (hash only), `SessionService` (start, refresh-token checks and
   rotation with reuse detection, revoke one / all / all but one), `RefreshTokenGenerator` (random token + SHA-256 hash)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
-- `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (mail, OpenAPI), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
+- `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (OpenAPI; mail is Spring Boot's auto-configured sender from `spring.mail.*`), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
 ## Current behaviours to remember
@@ -274,7 +274,6 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- `mail.debug=true`.
 - Password reset emails a plaintext new password (until forced change on first login). The OTP has no attempt limit, is
   stored in plain text, and the endpoint reveals whether a username/email exists.
 
@@ -440,3 +439,6 @@ Design debt
   audited, never the console); `ClientResolver` refuses suspended clients (403 "Client is suspended"); the session query
   requires an ACTIVE client, so the filter and introspection refuse its tokens; `ClientDto.status`. Sessions are kept,
   like tenant suspension. Next: owner decides (security fixes, ProblemDetail, migration baseline merge).
+- 2026-10-25: Security fix 1 (mail debug). `MailConfig` set `mail.debug=true`, which printed every email (OTPs, new
+  passwords) to the console. Removed the class; Spring Boot's auto-configured sender reads `spring.mail.*`
+  (SMTP auth + STARTTLS in `application.properties`). Next: security fix 2 (user deletion with a pending OTP).
