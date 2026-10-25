@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10j (platform permissions per tenant).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10k (platform role grants).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -290,8 +290,20 @@ clients and token settings. This also works in a suspended tenant (for support).
 `acting_tenant_id`. A header that isn't a number gives `400`, an unknown tenant `404`. Changing your own password still
 changes yours. The platform root can do everything there. Other platform users can do what their **grants** on that
 tenant (or on all tenants) allow: a granted platform role gives its permissions, a granted permission gives itself.
-Inside the Platform tenant itself (no header) they use their normal roles; grants don't apply there. There are no
-endpoints to give grants yet (step 10j).
+Inside the Platform tenant itself (no header) they use their normal roles; grants don't apply there.
+
+**Giving grants** (from inside the Platform tenant, with `users:read` / `users:update` held there; the platform root has them):
+
+| What | Request |
+|---|---|
+| A platform user's grants | `GET /api/platform/users/{userId}/grants` → `{ "roleGrants": [ { "id", "userId", "roleId", "roleName", "tenantId", "createdAt" } ] }` (`tenantId` missing = all tenants) |
+| Grant a platform role | `POST /api/platform/grants/roles` `{ "userId", "roleId", "tenantId" }` → `201`; leave out `tenantId` for all standard tenants (also future ones) |
+| Remove a role grant | `DELETE /api/platform/grants/roles/{id}` → `204` |
+
+Rules: only roles of the Platform tenant (another tenant's role is `404`); only to management users of the Platform
+tenant (others `404`), never to yourself (`403`) and never to the platform root (`400`, it holds everything already);
+only on a standard tenant (the Platform tenant `400`, an unknown one `404`); the same grant twice is `400`. A standard
+tenant's users get `403`. Grants and their removal are audited and apply immediately.
 Tenant users' `X-Tenant-Id` is ignored: they always work in their own tenant.
 
 ## 7. For other applications (verifying users)

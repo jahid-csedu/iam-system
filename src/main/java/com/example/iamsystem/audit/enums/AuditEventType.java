@@ -11,6 +11,10 @@ public enum AuditEventType {
     TENANT_SUSPEND,
     TENANT_ACTIVATE,
 
+    // Platform Grants
+    PLATFORM_ROLE_GRANTED,
+    PLATFORM_ROLE_GRANT_REVOKED,
+
     // User Management
     USER_CREATION,
     PASSWORD_CHANGE,

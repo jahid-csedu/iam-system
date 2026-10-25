@@ -185,7 +185,8 @@ Package by feature. Each feature uses only the sub-packages it needs, always wit
 Shared code lives in `common/`. No generic top-level `util/`, `constant/`, `enums/` or `aspect/` packages:
 constants and helpers belong to the feature that owns them. Tests mirror the main package of the class under test.
 
-- `platform/`: the platform level. `PlatformBootstrap` creates the platform tenant (+ console + predefined roles) at startup,
+- `platform/`: the platform level. `PlatformGrantService`/`PlatformGrantController` (role grants; `entity/PlatformRoleGrant`);
+  `PlatformBootstrap` creates the platform tenant (+ console + predefined roles) at startup,
   and its root from `config/PlatformProperties` (`iam.platform.root.*`) while it has none; `PlatformTenantController`/
   `PlatformTenantService` (`/api/platform/tenants`, PLATFORM keys only)
 - `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
@@ -416,3 +417,9 @@ Design debt
   all-tenants grant); the controller has no `@RequirePermission` any more. Decisions: no access to a tenant = 403;
   no grants = empty list.
   Next: step 10k (grant endpoints).
+- 2026-10-25: Step 10k (role grants API). `PlatformRoleGrant` entity + repository + mapper; `PlatformGrantService`:
+  `GET /api/platform/users/{userId}/grants` (`users:read`), `POST /api/platform/grants/roles` (201) and
+  `DELETE /api/platform/grants/roles/{id}` (`users:update`), audited. Only from inside the platform tenant; only platform
+  roles; only to platform management users, never yourself or the platform root; only standard tenants or all; no
+  duplicates. Decision: grants are managed with `users:read`/`users:update` held in the platform tenant.
+  Next: step 10l (permission grants API).
