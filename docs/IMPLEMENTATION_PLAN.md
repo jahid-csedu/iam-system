@@ -301,6 +301,22 @@ invitations, MFA codes, notifications), so:
 - The reset request's `MAIL_FAILED` outcome can't be known during the request any more; decide then how to audit it.
 - Removes the reset-request timing difference (Known issues in `CLAUDE.md`).
 
+### Step 14: Reset link in admin-initiated reset emails (planned with the frontend, owner asked 2026-10-26)
+The two resets reach the user differently:
+- **Forgot-password (self-service):** the user starts on the frontend, so the email needs only the OTP; the frontend moves
+  from the request screen to the OTP screen and then the new-password screen.
+- **Reset by a management user:** the user didn't start anything and doesn't know where to go, so the email must also
+  carry a **link to the reset page**.
+
+To decide when the frontend exists:
+- Where the reset page URL comes from: a per-client setting (e.g. `password_reset_url`, like Auth0's application login
+  URL), a tenant setting, or the hosted IAM page; and which client an admin reset uses (the admin picks one, or the
+  tenant's default).
+- What the link carries: only `client_id` + identifier with the OTP typed by hand, or a long single-use reset token in
+  the link instead of the six-digit OTP (no typing; never put the short OTP itself in a URL, where browser history,
+  proxies and logs keep it).
+- A separate email template for this purpose (step 13).
+
 ## 5. After the target design: the feature roadmap (`IAM_ROADMAP.md`)
 
 Each item builds on a seam created above:
