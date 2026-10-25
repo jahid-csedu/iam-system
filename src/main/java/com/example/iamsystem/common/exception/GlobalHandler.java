@@ -24,6 +24,8 @@ import static com.example.iamsystem.common.exception.ErrorMessage.UNREADABLE_REQ
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
+import static org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
+import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 
@@ -164,6 +166,18 @@ public class GlobalHandler {
         log.error("Unknown error occurred", exception);
         ExceptionResponse response = new ExceptionResponse(INTERNAL_SERVER_ERROR.value(), "Unknown error occurred");
         return ResponseEntity.status(INTERNAL_SERVER_ERROR).body(response);
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    @ResponseStatus(TOO_MANY_REQUESTS)
+    public ResponseEntity<ExceptionResponse> handleTooManyRequestsException(TooManyRequestsException exception) {
+        return buildExceptionResponse(exception, TOO_MANY_REQUESTS);
+    }
+
+    @ExceptionHandler(EmailNotSentException.class)
+    @ResponseStatus(SERVICE_UNAVAILABLE)
+    public ResponseEntity<ExceptionResponse> handleEmailNotSentException(EmailNotSentException exception) {
+        return buildExceptionResponse(exception, SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(InvalidPasswordResetOTPException.class)

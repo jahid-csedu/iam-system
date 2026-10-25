@@ -66,6 +66,8 @@ public class ErrorMessage {
     public static final String UNREADABLE_REQUEST_BODY = "Request body is missing or malformed";
     public static final String IDENTIFIER_REQUIRED = "Username or email is required";
     public static final String OTP_REQUIRED = "OTP is required";
-    public static final String USER_HAS_NO_EMAIL = "User has no email address to send a new password to";
+    public static final String USER_HAS_NO_EMAIL = "User has no email address to send a password reset OTP to";
+    public static final String TOO_MANY_RESET_OTPS = "Too many password reset OTPs for this user in the last hour; try again later";
+    public static final String RESET_EMAIL_NOT_SENT = "The password reset email could not be sent; nothing was changed, try again later";
 }
 

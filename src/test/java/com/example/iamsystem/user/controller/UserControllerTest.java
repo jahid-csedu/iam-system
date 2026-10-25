@@ -1,5 +1,6 @@
 package com.example.iamsystem.user.controller;
 
+import com.example.iamsystem.passwordreset.dto.PasswordResetDto;
 import com.example.iamsystem.passwordreset.dto.PasswordResetRequestDto;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
 import com.example.iamsystem.permission.entity.Permission;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -43,6 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -465,9 +469,9 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("Root resets another user's password: it is emailed only to that user, and only the new password logs in")
+    @DisplayName("Root resets another user's password: the old one stops working and the emailed OTP sets a new one")
     @Sql("/sql/insert_user_role.sql")
-    void resetPassword_byRoot_emailsANewPasswordThatLogsIn() throws Exception {
+    void resetPassword_byRoot_emailsAnOtpAndDisablesTheOldPassword() throws Exception {
         User root = findByUsername(userRepository, "root").orElseThrow();
         User member = findByUsername(userRepository, "user").orElseThrow();
 
@@ -479,10 +483,29 @@ class UserControllerTest {
         verify(mailSender).send(mail.capture());
         assertArrayEquals(new String[]{"user@test.com"}, mail.getValue().getTo());
         String text = mail.getValue().getText();
-        String newPassword = text.substring(text.lastIndexOf(' ') + 1);
-
-        login("user", newPassword).andExpect(status().isOk());
+        String otp = text.substring(text.lastIndexOf(' ') + 1);
         login("user", "P@ssw0rd").andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/password/reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(
+                                new PasswordResetDto(FIXTURE_CONSOLE_CLIENT_ID, "user", otp, "Chosen-Password1!"))))
+                .andExpect(status().isOk());
+        login("user", "Chosen-Password1!").andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("When the reset email can't be sent, the admin gets 503 and the old password keeps working")
+    @Sql("/sql/insert_user_role.sql")
+    void resetPassword_whenTheEmailFails_changesNothing() throws Exception {
+        User root = findByUsername(userRepository, "root").orElseThrow();
+        User member = findByUsername(userRepository, "user").orElseThrow();
+        doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
+
+        mockMvc.perform(post("/api/users/{id}/password-reset", member.getId()).with(actingAs(root)))
+                .andExpect(status().isServiceUnavailable());
+
+        login("user", "P@ssw0rd").andExpect(status().isOk());
     }
 
     private ResultActions createUser(User creator, String username, UserType userType) throws Exception {

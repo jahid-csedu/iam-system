@@ -3,7 +3,6 @@ package com.example.iamsystem.passwordreset.service;
 import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.client.service.ClientResolver;
 import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
-import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
 import com.example.iamsystem.session.service.SessionService;
@@ -16,12 +15,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -29,13 +24,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -54,15 +45,13 @@ class PasswordResetServiceTest {
     @Mock
     private PasswordResetOTPRepository otpRepository;
     @Mock
-    private JavaMailSender mailSender;
-    @Mock
     private UserPasswordUpdater passwordUpdater;
     @Mock
     private SessionService sessionService;
     @Mock
     private ClientResolver clientResolver;
     @Mock
-    private ResetRequestLimiter requestLimiter;
+    private ResetOtpIssuer otpIssuer;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
     private PasswordResetService service;
@@ -71,15 +60,14 @@ class PasswordResetServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PasswordResetService(userRepository, otpRepository, mailSender, clientResolver,
-                new OtpExpirationProperties(5), requestLimiter, passwordEncoder, passwordUpdater, sessionService);
+        service = new PasswordResetService(userRepository, otpRepository, clientResolver, otpIssuer, passwordEncoder,
+                passwordUpdater, sessionService);
         Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
         tenant.setId(TENANT_ID);
         Client client = new Client();
         client.setClientId(CLIENT_ID);
         client.setTenant(tenant);
         lenient().when(clientResolver.resolve(CLIENT_ID)).thenReturn(client);
-        lenient().when(requestLimiter.tryRecord(any(User.class))).thenReturn(true);
 
         user = new User();
         user.setId(1L);
@@ -94,24 +82,12 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    @DisplayName("Requesting a reset by username in the client's tenant saves a six-digit OTP valid for the configured minutes and emails it")
-    void createPasswordResetOtp_byUsername_savesAndEmailsTheOtp() {
+    @DisplayName("Requesting a reset by username in the client's tenant emails the user an OTP")
+    void createPasswordResetOtp_byUsername_issuesAnOtp() {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
+        when(otpIssuer.issue(user)).thenReturn(OtpRequestOutcome.SENT);
 
         assertEquals(OtpRequestOutcome.SENT, service.createPasswordResetOtp(CLIENT_ID, "alice"));
-
-        ArgumentCaptor<PasswordResetOTP> saved = ArgumentCaptor.forClass(PasswordResetOTP.class);
-        verify(otpRepository).save(saved.capture());
-        String hash = saved.getValue().getOtpHash();
-        assertTrue(saved.getValue().getExpiryDate().isBefore(Instant.now().plus(Duration.ofMinutes(6))));
-
-        ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
-        verify(mailSender).send(mail.capture());
-        assertArrayEquals(new String[]{"alice@example.com"}, mail.getValue().getTo());
-        String otp = mail.getValue().getText().substring(mail.getValue().getText().length() - 6);
-        assertTrue(otp.matches("\\d{6}"));
-        assertNotEquals(otp, hash);
-        assertTrue(passwordEncoder.matches(otp, hash));
     }
 
     @Test
@@ -122,7 +98,7 @@ class PasswordResetServiceTest {
 
         service.createPasswordResetOtp(CLIENT_ID, "alice@example.com");
 
-        verify(otpRepository).save(any(PasswordResetOTP.class));
+        verify(otpIssuer).issue(user);
     }
 
     @Test
@@ -132,48 +108,16 @@ class PasswordResetServiceTest {
         when(userRepository.findByEmailAndTenantId("ghost", TENANT_ID)).thenReturn(Optional.empty());
 
         assertEquals(OtpRequestOutcome.UNKNOWN_USER, service.createPasswordResetOtp(CLIENT_ID, "ghost"));
-        verifyNoInteractions(otpRepository, mailSender);
+        verifyNoInteractions(otpIssuer);
     }
 
     @Test
-    @DisplayName("Requesting a reset for a user without an email address is no error, and saves and sends nothing")
-    void createPasswordResetOtp_userWithoutEmail_sendsNothing() {
-        user.setEmail(null);
+    @DisplayName("Whatever happened to the OTP, the outcome is passed on, never thrown")
+    void createPasswordResetOtp_passesTheOutcomeOn() {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
-
-        assertEquals(OtpRequestOutcome.NO_EMAIL, service.createPasswordResetOtp(CLIENT_ID, "alice"));
-        verifyNoInteractions(otpRepository, mailSender);
-    }
-
-    @Test
-    @DisplayName("A failed email is no error: the outcome says so")
-    void createPasswordResetOtp_mailFailure_isReported() {
-        when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
-        doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
-
-        assertEquals(OtpRequestOutcome.MAIL_FAILED, service.createPasswordResetOtp(CLIENT_ID, "alice"));
-    }
-
-    @Test
-    @DisplayName("Over the request limit, no OTP is made and nothing is sent")
-    void createPasswordResetOtp_overTheLimit_sendsNothing() {
-        when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
-        when(requestLimiter.tryRecord(user)).thenReturn(false);
+        when(otpIssuer.issue(user)).thenReturn(OtpRequestOutcome.TOO_MANY_REQUESTS);
 
         assertEquals(OtpRequestOutcome.TOO_MANY_REQUESTS, service.createPasswordResetOtp(CLIENT_ID, "alice"));
-        verifyNoInteractions(otpRepository, mailSender);
-    }
-
-    @Test
-    @DisplayName("Requesting a reset replaces the user's existing OTP")
-    void createPasswordResetOtp_replacesTheExistingOtp() {
-        when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
-        when(otpRepository.findByUser(user)).thenReturn(Optional.of(resetOtp));
-
-        service.createPasswordResetOtp(CLIENT_ID, "alice");
-
-        verify(otpRepository).delete(resetOtp);
-        verify(otpRepository).save(any(PasswordResetOTP.class));
     }
 
     @Test

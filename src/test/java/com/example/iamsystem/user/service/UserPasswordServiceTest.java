@@ -1,10 +1,13 @@
 package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.common.exception.DataNotFoundException;
+import com.example.iamsystem.common.exception.EmailNotSentException;
 import com.example.iamsystem.common.exception.InvalidPasswordException;
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.common.exception.TooManyRequestsException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
-import com.example.iamsystem.passwordreset.service.NewPasswordIssuer;
+import com.example.iamsystem.passwordreset.service.OtpRequestOutcome;
+import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.session.service.SessionService;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +29,7 @@ import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static com.example.iamsystem.user.service.UserTestData.user;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -45,7 +50,7 @@ class UserPasswordServiceTest {
     @Mock
     private UserPasswordUpdater passwordUpdater;
     @Mock
-    private NewPasswordIssuer newPasswordIssuer;
+    private ResetOtpIssuer otpIssuer;
     @Mock
     private SessionService sessionService;
 
@@ -56,7 +61,7 @@ class UserPasswordServiceTest {
     @BeforeEach
     void setUp() {
         service = new UserPasswordService(userRepository, accessPolicy, currentUserProvider, passwordEncoder,
-                passwordUpdater, newPasswordIssuer, sessionService);
+                passwordUpdater, otpIssuer, sessionService);
         root = rootUser(1, "root");
         member = user(2, "member");
     }
@@ -96,26 +101,46 @@ class UserPasswordServiceTest {
     }
 
     @Test
-    @DisplayName("Resetting another user's password issues them a new one by email")
-    void resetPassword_ofAnotherUser_issuesANewPassword() {
+    @DisplayName("Resetting another user's password emails them an OTP, then disables their password and ends their sessions")
+    void resetPassword_ofAnotherUser_emailsAnOtpAndDisablesThePassword() {
         when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(member);
+        when(otpIssuer.issue(member)).thenReturn(OtpRequestOutcome.SENT);
 
         service.resetPassword(2L);
 
         verify(accessPolicy).checkCanResetPassword(actor(root), member);
-        verify(newPasswordIssuer).issueNewPassword(member);
+        InOrder order = inOrder(otpIssuer, passwordUpdater, sessionService);
+        order.verify(otpIssuer).issue(member);
+        order.verify(passwordUpdater).disablePassword(member);
+        order.verify(sessionService).revokeAllOf(2L);
     }
 
     @Test
-    @DisplayName("A denied reset issues no new password")
-    void resetPassword_whenNotAllowed_issuesNothing() {
+    @DisplayName("When the OTP can't be sent, the reset fails and the password and sessions stay")
+    void resetPassword_withoutASentOtp_changesNothing() {
+        when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(member);
+
+        when(otpIssuer.issue(member)).thenReturn(OtpRequestOutcome.NO_EMAIL);
+        assertThrows(UserInputNotValidException.class, () -> service.resetPassword(2L));
+        when(otpIssuer.issue(member)).thenReturn(OtpRequestOutcome.TOO_MANY_REQUESTS);
+        assertThrows(TooManyRequestsException.class, () -> service.resetPassword(2L));
+        when(otpIssuer.issue(member)).thenReturn(OtpRequestOutcome.MAIL_FAILED);
+        assertThrows(EmailNotSentException.class, () -> service.resetPassword(2L));
+
+        verifyNoInteractions(passwordUpdater, sessionService);
+    }
+
+    @Test
+    @DisplayName("A denied reset sends nothing")
+    void resetPassword_whenNotAllowed_sendsNothing() {
         when(currentUserProvider.requireCurrentActor()).thenReturn(actor(member));
         when(userRepository.getRequiredByIdAndTenantId(1L, TENANT_ID)).thenReturn(root);
         doThrow(new NoAccessException("denied")).when(accessPolicy).checkCanResetPassword(actor(member), root);
 
         assertThrows(NoAccessException.class, () -> service.resetPassword(1L));
-        verifyNoInteractions(newPasswordIssuer);
+        verifyNoInteractions(otpIssuer, passwordUpdater);
     }
 
     @Test
@@ -125,7 +150,7 @@ class UserPasswordServiceTest {
         when(userRepository.getRequiredByIdAndTenantId(9L, TENANT_ID)).thenThrow(new DataNotFoundException("User not found"));
 
         assertThrows(DataNotFoundException.class, () -> service.resetPassword(9L));
-        verifyNoInteractions(newPasswordIssuer);
+        verifyNoInteractions(otpIssuer, passwordUpdater);
     }
 
     private void givenLoggedIn(User user) {

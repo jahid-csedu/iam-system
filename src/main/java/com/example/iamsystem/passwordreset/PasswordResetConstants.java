@@ -8,11 +8,9 @@ public class PasswordResetConstants {
 
     // Email Subjects
     public static final String PASSWORD_RESET_REQUEST_SUBJECT = "Password Reset Request";
-    public static final String PASSWORD_RESET_SUCCESS_SUBJECT = "Password Reset";
 
     // Email Bodies
     public static final String PASSWORD_RESET_REQUEST_BODY_PREFIX = "To reset your password, use the following OTP: ";
-    public static final String PASSWORD_RESET_SUCCESS_BODY_PREFIX = "Your new password is: ";
 
     // Error Messages
     public static final String INVALID_OTP = "Invalid or expired OTP";

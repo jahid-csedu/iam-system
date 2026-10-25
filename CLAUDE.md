@@ -28,7 +28,7 @@ What "clean" means for every class a step touches:
 - **Mask sensitive data.** Passwords, OTPs, tokens, keys and any other credential never appear in logs, audit details, exception
   messages or responses. Every class that holds one (request DTOs, configuration records, ...) overrides `toString()` and shows
   `SecretMask.MASK` instead of the value, and `SecretMaskTest` lists it, because frameworks log objects on their own (Spring MVC
-  logs request bodies at DEBUG). Only the email that delivers a new password or OTP contains it.
+  logs request bodies at DEBUG). Only the email that delivers an OTP contains it.
 - **Entities.** No Lombok `@Data`/`@AllArgsConstructor` on JPA entities; `equals`/`hashCode` based on id; no business logic that belongs in services.
 - **HTTP.** Correct status codes (201 on create, 204 for empty responses, 401/403/404 as appropriate).
 - **Clean imports.** No unused imports; delete them. No wildcard (`*`) imports, static ones included; import each class or member explicitly.
@@ -202,8 +202,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `UserValidator` (availability + password policy), `config/PasswordExpirationProperties`.
 - `client/`: client applications. `ClientService` (CRUD in the caller's tenant, creates each tenant's console),
   `ClientResolver` (public `client_id` → client and tenant), `ClientIdGenerator`
-- `passwordreset/`: self-service reset (OTP by email, user found by username or email in the client's tenant) and `NewPasswordIssuer`, the one
-  place that generates a new password and emails it (used by both resets); `config/OtpExpirationProperties`
+- `passwordreset/`: self-service reset (OTP by email, user found by username or email in the client's tenant; the user then
+  sets a password of their choice). `ResetOtpIssuer` is the one place that makes and emails OTPs (bcrypt hash only, used
+  by both resets), `ResetRequestLimiter` caps them at 3 per user per hour; `config/OtpExpirationProperties`
 - `role/`: tenant-owned roles. `RoleService` (CRUD), `RolePermissionService` (attach/detach permissions), `RoleAccessPolicy` (no changes to a role you hold),
   `PredefinedRoleService` (copies the `RoleTemplate`s into a new tenant during signup)
 - `permission/`: the read-only catalog. `PermissionKey` enum (key + scope) mirrors the `permissions` rows (a test keeps them in sync);
@@ -258,8 +259,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
 - Nobody deletes a root user, not even the root itself (403), so every tenant keeps its root.
 - `PATCH /api/users/password` changes only your own password (old password required). `POST /api/users/{id}/password-reset`
-  (`users:reset-password`) gives another user a new emailed password; never your own, never root's.
-- New passwords and OTPs are only ever sent by email: never in responses, logs or audit details.
+  (`users:reset-password`) emails another user a reset OTP, then disables their current password and ends their sessions
+  (nothing changes when the OTP can't be sent: 400 no email, 429 limit, 503 mail failure); never your own, never root's.
+  Passwords are set only by their owner (`UserPasswordUpdater`): own change with the old password, or reset with an OTP.
+- OTPs are only ever sent by email: never in responses, logs or audit details. No password is ever emailed.
 - The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`, `sessionId`,
   `homeTenantId`), never the `User` entity. `tenantId` is the tenant the request works in (the tenant boundary used by the
   services); `homeTenantId` is the user's own tenant. They differ only when a platform user sends `X-Tenant-Id`
@@ -275,7 +278,6 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- Password reset emails a plaintext new password (until forced change on first login).
 - The reset request answers a known user more slowly than an unknown one (the email is sent during the request), so
   timing still tells them apart; fixed by asynchronous email (plan step 13).
 
@@ -477,3 +479,9 @@ Design debt
   password is emailed any more by this flow. `UserPasswordUpdater` is the one place that sets a chosen password (policy,
   hash, expiry, ends a login lockout), used by the reset and by your own password change. Decisions (option B): users
   choose their password; a reset ends a login lockout. Next: 7b (admin reset emails an OTP, `NewPasswordIssuer` goes).
+- 2026-10-25: Security fix 7b (admin reset sends an OTP). `POST /api/users/{id}/password-reset` emails the user a reset OTP
+  through `ResetOtpIssuer` (extracted from `PasswordResetService`, shared by both resets, counted by the hourly limit),
+  then `UserPasswordUpdater.disablePassword` and all sessions end; if no OTP goes out nothing changes (400 / 429 / 503,
+  new `TooManyRequestsException`, `EmailNotSentException`). `NewPasswordIssuer` removed: no password is ever emailed.
+  Decisions: the old password stops working at once; admin OTPs count towards the limit; same 5-minute lifetime.
+  Security fixes done; remaining: fail startup without a JWT key outside dev/test (config step).

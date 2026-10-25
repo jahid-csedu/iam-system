@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -62,6 +63,20 @@ class UserPasswordUpdaterTest {
         assertEquals(0, member.getFailedLoginAttempts());
         assertFalse(member.isUserLocked());
         assertNull(member.getAccountLockedUntil());
+        verify(userRepository).save(member);
+    }
+
+    @Test
+    @DisplayName("A disabled password is replaced by the hash of an unknown random value")
+    void disablePassword_replacesTheHash() {
+        when(passwordEncoder.encode(any())).thenReturn("encoded-random");
+
+        updater.disablePassword(member);
+
+        ArgumentCaptor<String> raw = ArgumentCaptor.forClass(String.class);
+        verify(passwordEncoder).encode(raw.capture());
+        assertTrue(raw.getValue().length() >= 40);
+        assertEquals("encoded-random", member.getPassword());
         verify(userRepository).save(member);
     }
 

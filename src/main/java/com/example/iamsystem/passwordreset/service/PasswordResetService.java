@@ -4,7 +4,6 @@ import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.client.service.ClientResolver;
 import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
-import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
 import com.example.iamsystem.session.service.SessionService;
@@ -13,26 +12,17 @@ import com.example.iamsystem.user.repository.UserRepository;
 import com.example.iamsystem.user.service.UserPasswordUpdater;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Optional;
 
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.INVALID_OTP;
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_BODY_PREFIX;
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_SUBJECT;
 
 /**
  * Self-service password reset for users who are not logged in: an OTP is emailed, and with a valid OTP the user sets a
- * new password of their choice. The OTP is only ever sent by email, and the database keeps only a bcrypt hash of it (six
- * digits are too few for a fast hash).
+ * new password of their choice. The OTP is only ever sent by email ({@link ResetOtpIssuer}).
  * <p>
  * The request's {@code client_id} decides the tenant, and the user is found by username or email inside that tenant only
  * (both are unique per tenant).
@@ -42,28 +32,23 @@ import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWOR
 @Slf4j
 public class PasswordResetService {
 
-    private static final int OTP_BOUND = 1_000_000;
-    private static final String OTP_FORMAT = "%06d";
     /**
      * Wrong guesses allowed against one OTP; the last one deletes it, and the user has to request a new one.
      */
     static final int MAX_FAILED_ATTEMPTS = 5;
 
-    private final SecureRandom random = new SecureRandom();
     private final UserRepository userRepository;
     private final PasswordResetOTPRepository otpRepository;
-    private final JavaMailSender mailSender;
     private final ClientResolver clientResolver;
-    private final OtpExpirationProperties otpExpiration;
-    private final ResetRequestLimiter requestLimiter;
+    private final ResetOtpIssuer otpIssuer;
     private final PasswordEncoder passwordEncoder;
     private final UserPasswordUpdater passwordUpdater;
     private final SessionService sessionService;
 
     /**
-     * Replaces any earlier OTP of the user. An unknown user, a user without an email address, a user over the request limit
-     * ({@link ResetRequestLimiter}) and a failed email are not errors: the outcome is audited and logged, and the caller answers every request the same way, so nobody can find
-     * out which accounts exist. An OTP whose email failed stays unused until it expires or the next request replaces it.
+     * Emails the user an OTP ({@link ResetOtpIssuer}). An unknown user, a user without an email address, a user over the
+     * request limit and a failed email are not errors: the outcome is audited and logged, and the caller answers every
+     * request the same way, so nobody can find out which accounts exist.
      */
     @Auditable(
             value = AuditEventType.PASSWORD_RESET_OTP_REQUEST,
@@ -74,44 +59,12 @@ public class PasswordResetService {
     @Transactional
     public OtpRequestOutcome createPasswordResetOtp(String clientId, String identifier) {
         Long tenantId = clientResolver.resolve(clientId).getTenant().getId();
-        Optional<User> found = findUser(identifier, tenantId);
-        if (found.isEmpty()) {
+        Optional<User> user = findUser(identifier, tenantId);
+        if (user.isEmpty()) {
             log.warn("Password reset requested for an unknown user in tenant {}", tenantId);
             return OtpRequestOutcome.UNKNOWN_USER;
         }
-        User user = found.get();
-        if (user.getEmail() == null) {
-            log.warn("Password reset requested for user {}, who has no email address", user.getId());
-            return OtpRequestOutcome.NO_EMAIL;
-        }
-        if (!requestLimiter.tryRecord(user)) {
-            log.warn("Password reset for user {} refused: too many requests in the last hour", user.getId());
-            return OtpRequestOutcome.TOO_MANY_REQUESTS;
-        }
-
-        otpRepository.findByUser(user).ifPresent(existingOtp -> {
-            otpRepository.delete(existingOtp);
-            otpRepository.flush();
-        });
-
-        String otp = String.format(OTP_FORMAT, random.nextInt(OTP_BOUND));
-        PasswordResetOTP resetOtp = new PasswordResetOTP();
-        resetOtp.setUser(user);
-        resetOtp.setOtpHash(passwordEncoder.encode(otp));
-        resetOtp.setExpiryDate(Instant.now().plus(Duration.ofMinutes(otpExpiration.minutes())));
-        otpRepository.save(resetOtp);
-
-        SimpleMailMessage emailMessage = new SimpleMailMessage();
-        emailMessage.setTo(user.getEmail());
-        emailMessage.setSubject(PASSWORD_RESET_REQUEST_SUBJECT);
-        emailMessage.setText(PASSWORD_RESET_REQUEST_BODY_PREFIX + otp);
-        try {
-            mailSender.send(emailMessage);
-            return OtpRequestOutcome.SENT;
-        } catch (MailException e) {
-            log.error("Could not email the password-reset OTP to user {}", user.getId(), e);
-            return OtpRequestOutcome.MAIL_FAILED;
-        }
+        return otpIssuer.issue(user.get());
     }
 
     /**

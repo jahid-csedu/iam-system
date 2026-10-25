@@ -2,8 +2,11 @@ package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
+import com.example.iamsystem.common.exception.EmailNotSentException;
 import com.example.iamsystem.common.exception.InvalidPasswordException;
-import com.example.iamsystem.passwordreset.service.NewPasswordIssuer;
+import com.example.iamsystem.common.exception.TooManyRequestsException;
+import com.example.iamsystem.common.exception.UserInputNotValidException;
+import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.session.service.SessionService;
@@ -16,6 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.INVALID_OLD_PASSWORD;
+import static com.example.iamsystem.common.exception.ErrorMessage.RESET_EMAIL_NOT_SENT;
+import static com.example.iamsystem.common.exception.ErrorMessage.TOO_MANY_RESET_OTPS;
+import static com.example.iamsystem.common.exception.ErrorMessage.USER_HAS_NO_EMAIL;
 
 /**
  * Changing your own password, and resetting another user's password.
@@ -29,7 +35,7 @@ public class UserPasswordService {
     private final CurrentUserProvider currentUserProvider;
     private final PasswordEncoder passwordEncoder;
     private final UserPasswordUpdater passwordUpdater;
-    private final NewPasswordIssuer newPasswordIssuer;
+    private final ResetOtpIssuer otpIssuer;
     private final SessionService sessionService;
 
     /**
@@ -48,7 +54,10 @@ public class UserPasswordService {
     }
 
     /**
-     * Gives another user of the tenant a new random password, sent only to that user's email address.
+     * For another user of the tenant, typically when their account may be compromised: emails them a reset OTP (counted
+     * like their own requests), and once it is sent their current password stops working and all their sessions end, so
+     * only the OTP gets them back in, with a password they choose. Nothing changes when the OTP can't be sent. The OTP is
+     * issued before the user's row is changed, because the request limit locks that row in a transaction of its own.
      */
     @Auditable(
             value = AuditEventType.PASSWORD_RESET_BY_USER,
@@ -59,6 +68,15 @@ public class UserPasswordService {
         AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User target = userRepository.getRequiredByIdAndTenantId(userId, actor.tenantId());
         accessPolicy.checkCanResetPassword(actor, target);
-        newPasswordIssuer.issueNewPassword(target);
+        switch (otpIssuer.issue(target)) {
+            case SENT -> {
+                passwordUpdater.disablePassword(target);
+                sessionService.revokeAllOf(target.getId());
+            }
+            case NO_EMAIL -> throw new UserInputNotValidException(USER_HAS_NO_EMAIL);
+            case TOO_MANY_REQUESTS -> throw new TooManyRequestsException(TOO_MANY_RESET_OTPS);
+            case MAIL_FAILED -> throw new EmailNotSentException(RESET_EMAIL_NOT_SENT);
+            case UNKNOWN_USER -> throw new IllegalStateException("The OTP issuer never reports an unknown user");
+        }
     }
 }

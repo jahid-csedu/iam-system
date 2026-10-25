@@ -37,7 +37,7 @@ How to use the system as a developer through Swagger UI or Postman.
 | `users:create-management` | Also create management users (needed on top of `users:create`) |
 | `users:update` | Assign and remove the roles and direct permissions of other management users |
 | `users:delete` | Delete users |
-| `users:reset-password` | Reset another user's password (the new password is emailed to that user) |
+| `users:reset-password` | Reset another user's password (that user gets a reset OTP by email and chooses a new password) |
 | `roles:read` | List roles, and find them by id or name |
 | `roles:create` | Create roles |
 | `roles:update` | Rename roles, change their description, add and remove their permissions |
@@ -93,8 +93,8 @@ logs in like any root, through the Platform tenant's management console: its `cl
 Platform tenant is created ("Created the platform tenant ... (client_id ...)").
 The variables are read only then: changing them later changes nothing.
 
-Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs and new passwords are only ever
-sent by email. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
+Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs are only ever
+sent by email, and no password is ever emailed. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 
 **Token signing key.** Tokens are signed with an RSA private key that only the IAM holds. Configure one with
 `IAM_JWT_KEYS_0_KID` (any id, e.g. `key-2026-10`) and `IAM_JWT_KEYS_0_PRIVATEKEY` (a PKCS#8 RSA key of at least 2048 bits,
@@ -232,7 +232,7 @@ and gets `403` on every management endpoint.
 | What | Request | Who |
 |---|---|---|
 | Change own password | `PATCH /api/users/password` `{ "oldPassword": "...", "newPassword": "..." }` | Any logged-in user, for themselves only |
-| Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`; a new password is emailed to that user | `users:reset-password`; never your own password, never the root user's |
+| Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`: that user gets a reset OTP by email, their current password stops working at once and all their sessions end; they set a new password with the OTP (`POST /api/password/reset` through any client of the tenant). If the OTP can't be sent nothing changes: `400` (no email address), `429` (3 OTPs in the last hour), `503` (mail failure) | `users:reset-password`; never your own password, never the root user's |
 | Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → `200` and the OTP is emailed. The answer is the same when no such user exists, the user has no email address or the email fails, so it never tells whether an account exists. A user gets at most 3 OTPs per hour; further requests get the same answer but send nothing | Public |
 | Forgot password: reset with the OTP | `POST /api/password/reset` `{ "client_id": "...", "identifier": "<username or email>", "otp": "123456", "newPassword": "..." }` → `200`: the password is now the one you chose (password policy applies, `400` otherwise and the OTP stays usable), a login lockout ends, and every session of the user ends. Any problem (unknown user, no pending OTP, expired or wrong OTP) is `400` "Invalid or expired OTP"; the fifth wrong guess deletes the OTP, so request a new one | Public |
 | Refresh tokens | `POST /api/auth/token/refresh` `{ "client_id": "...", "refresh_token": "..." }` (the client the token was issued through) → a new access token **and a new refresh token**; the old refresh token is used up | Public (needs a valid refresh token) |
@@ -349,8 +349,9 @@ The IAM manages only its own permissions; other applications decide their own au
   its sessions. A deactivated or locked user's tokens are refused while that lasts. Roles and permissions are checked
   against the database on every request, so their changes apply immediately without ending sessions.
 - **Password expiry:** passwords expire after 90 days; an expired password blocks login.
-- **Password resets** (forgot-password and reset by another user) generate a new password and send it **only by email**; it never
-  appears in a response. A forgot-password OTP is valid for 5 minutes and replaces any earlier OTP of the user.
+- **Password resets** (forgot-password and reset by another user) email the user an **OTP**, never a password; the user then
+  chooses a new password with it. An OTP is valid for 5 minutes, replaces any earlier OTP of the user, allows 5 wrong
+  guesses, and a user gets at most 3 per hour.
 - **One root per tenant**, created only by signup; nobody can delete a root user (not even the root itself), and nobody else can reset its password.
 - **Tenant isolation:** users and roles of another tenant are reported as not found (`404`), never as forbidden.
 - **Usernames and emails** are unique per tenant: two tenants may both have a `bob`. Exception: a root user's username and

@@ -268,7 +268,7 @@ refresh, and its sessions are refused by the filter and introspection.
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |
 | Deleting a permission assigned to a role fails (FK) | Done in step 7a (permissions are read-only) |
-| Forgot-password hardening: OTP attempt limit (done: security fix 5; 3 OTPs per user per hour: fix 5b), hashed OTP (done: security fix 6, bcrypt), uniform response (no account enumeration; done: security fix 4, except the timing difference); emailed plaintext password → force a password change on first login after any reset | Own step after 8 |
+| Forgot-password hardening: OTP attempt limit (done: security fix 5; 3 OTPs per user per hour: fix 5b), hashed OTP (done: security fix 6, bcrypt), uniform response (no account enumeration; done: security fix 4, except the timing difference); emailed plaintext password (done: security fix 7, users choose their password with an OTP; nothing emails a password) | Done |
 | Deleting a user with a pending reset OTP fails (FK) | Done: security fix 2 (`V15`, ON DELETE CASCADE) |
 | A root user can delete itself, leaving its tenant without a root | Done: security fix 3 (nobody deletes a root user) |
 | `README.md` out of date | After step 5, and kept current afterwards |
@@ -288,12 +288,12 @@ creation and no API changes it.
 
 ### Step 13: Email service: asynchronous sending with templates (planned, owner asked 2026-10-25)
 Today each feature builds a `SimpleMailMessage` and sends it inside the request and its transaction
-(`PasswordResetService`, `NewPasswordIssuer`). A slow SMTP server slows the response, holds database locks longer, and
+(`ResetOtpIssuer`). A slow SMTP server slows the response, holds database locks longer, and
 makes a known user's reset request measurably slower than an unknown one's. More emails will come (verification,
 invitations, MFA codes, notifications), so:
 - One owner for email: an email service that every feature calls with a purpose and its values; nobody else touches
   `JavaMailSender`.
-- Common templates, one per purpose (reset OTP, new password, later verification, invitation, ...), with shared layout and
+- Common templates, one per purpose (reset OTP, later verification, invitation, ...), with shared layout and
   wording; per-tenant branding later.
 - Asynchronous: sent after the transaction commits (`@TransactionalEventListener(AFTER_COMMIT)` + `@Async` on its own
   executor), so requests never wait for SMTP and roll-backs never send. Failures are logged (ERROR) and maybe retried;
