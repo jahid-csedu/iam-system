@@ -268,12 +268,23 @@ refresh, and its sessions are refused by the filter and introspection.
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |
 | Deleting a permission assigned to a role fails (FK) | Done in step 7a (permissions are read-only) |
-| Forgot-password hardening: OTP attempt limit (done: security fix 5), hashed OTP, uniform response (no account enumeration; done: security fix 4, except the timing difference); emailed plaintext password → force a password change on first login after any reset | Own step after 8 |
+| Forgot-password hardening: OTP attempt limit (done: security fix 5; 3 OTPs per user per hour: fix 5b), hashed OTP, uniform response (no account enumeration; done: security fix 4, except the timing difference); emailed plaintext password → force a password change on first login after any reset | Own step after 8 |
 | Deleting a user with a pending reset OTP fails (FK) | Done: security fix 2 (`V15`, ON DELETE CASCADE) |
 | A root user can delete itself, leaving its tenant without a root | Done: security fix 3 (nobody deletes a root user) |
 | `README.md` out of date | After step 5, and kept current afterwards |
 
 ---
+
+### Step 12: Unlock, deactivate and activate users (planned, owner asked 2026-10-25)
+Today a locked user (5 wrong passwords) waits 15 minutes, and nobody can deactivate or reactivate a user: `active` is set at
+creation and no API changes it.
+- `PUT /api/users/{id}/unlock`: ends a login lockout at once (clears `user_locked`, `account_locked_until`,
+  `failed_login_attempts`).
+- `PUT /api/users/{id}/deactivate` / `activate`: a deactivated user can't log in or refresh, and the JWT filter and
+  introspection already refuse their tokens (`findActor` checks `active`). Decide then whether deactivation also revokes
+  sessions.
+- Permissions to decide then: new keys (e.g. `users:unlock`, `users:deactivate`) or `users:update`. Rules as for other user
+  changes: tenant-scoped (other tenants 404), never yourself, never the root user.
 
 ## 5. After the target design: the feature roadmap (`IAM_ROADMAP.md`)
 

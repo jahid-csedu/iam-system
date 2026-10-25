@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
@@ -160,6 +161,21 @@ class PasswordResetControllerTest {
             postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", wrongOtp)).andExpect(status().isBadRequest());
         }
         postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp)).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("A user gets at most three OTPs per hour; a fourth request gets the same answer and sends nothing")
+    void resetRequest_overTheHourlyLimit_sendsNothing() throws Exception {
+        for (int request = 0; request < 3; request++) {
+            postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
+        }
+        verify(mailSender, times(3)).send(any(SimpleMailMessage.class));
+        clearInvocations(mailSender);
+
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "root@acme.com"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(RESET_REQUEST_ACCEPTED));
+        verifyNoInteractions(mailSender);
     }
 
     @Test

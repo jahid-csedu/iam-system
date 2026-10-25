@@ -54,10 +54,11 @@ public class PasswordResetService {
     private final NewPasswordIssuer newPasswordIssuer;
     private final ClientResolver clientResolver;
     private final OtpExpirationProperties otpExpiration;
+    private final ResetRequestLimiter requestLimiter;
 
     /**
-     * Replaces any earlier OTP of the user. An unknown user, a user without an email address and a failed email are not
-     * errors: the outcome is audited and logged, and the caller answers every request the same way, so nobody can find
+     * Replaces any earlier OTP of the user. An unknown user, a user without an email address, a user over the request limit
+     * ({@link ResetRequestLimiter}) and a failed email are not errors: the outcome is audited and logged, and the caller answers every request the same way, so nobody can find
      * out which accounts exist. An OTP whose email failed stays unused until it expires or the next request replaces it.
      */
     @Auditable(
@@ -78,6 +79,10 @@ public class PasswordResetService {
         if (user.getEmail() == null) {
             log.warn("Password reset requested for user {}, who has no email address", user.getId());
             return OtpRequestOutcome.NO_EMAIL;
+        }
+        if (!requestLimiter.tryRecord(user)) {
+            log.warn("Password reset for user {} refused: too many requests in the last hour", user.getId());
+            return OtpRequestOutcome.TOO_MANY_REQUESTS;
         }
 
         otpRepository.findByUser(user).ifPresent(existingOtp -> {

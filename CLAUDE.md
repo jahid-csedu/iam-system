@@ -457,3 +457,8 @@ Design debt
   locked for update; every failure is 400 "Invalid or expired OTP"; wrong guesses are counted (commits on the exception)
   and the 5th deletes the OTP. `PasswordResetOTP` lost `@Data` (id-based equals, masked `toString`).
   Next: security fix 6 (hashed OTPs).
+- 2026-10-25: Security fix 5b (reset request limit). Flyway `V17__password_reset_requests.sql`. `ResetRequestLimiter`
+  allows 3 OTPs per user per hour (the user's row is locked while counting, `UserRepository.lockById`); over the limit
+  the request gets the usual 200, sends nothing and is audited as `TOO_MANY_REQUESTS`. With 5 guesses per OTP that caps
+  guessing at 15 per hour. Decision: never lock the account for wrong OTPs (anyone could lock anyone out).
+  Next: security fix 6 (hashed OTPs).

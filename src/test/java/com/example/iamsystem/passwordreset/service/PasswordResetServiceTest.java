@@ -54,6 +54,8 @@ class PasswordResetServiceTest {
     private NewPasswordIssuer newPasswordIssuer;
     @Mock
     private ClientResolver clientResolver;
+    @Mock
+    private ResetRequestLimiter requestLimiter;
 
     private PasswordResetService service;
     private User user;
@@ -62,13 +64,14 @@ class PasswordResetServiceTest {
     @BeforeEach
     void setUp() {
         service = new PasswordResetService(userRepository, otpRepository, mailSender, newPasswordIssuer, clientResolver,
-                new OtpExpirationProperties(5));
+                new OtpExpirationProperties(5), requestLimiter);
         Tenant tenant = new Tenant("Acme", TenantStatus.ACTIVE);
         tenant.setId(TENANT_ID);
         Client client = new Client();
         client.setClientId(CLIENT_ID);
         client.setTenant(tenant);
         lenient().when(clientResolver.resolve(CLIENT_ID)).thenReturn(client);
+        lenient().when(requestLimiter.tryRecord(any(User.class))).thenReturn(true);
 
         user = new User();
         user.setId(1L);
@@ -139,6 +142,16 @@ class PasswordResetServiceTest {
         doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
 
         assertEquals(OtpRequestOutcome.MAIL_FAILED, service.createPasswordResetOtp(CLIENT_ID, "alice"));
+    }
+
+    @Test
+    @DisplayName("Over the request limit, no OTP is made and nothing is sent")
+    void createPasswordResetOtp_overTheLimit_sendsNothing() {
+        when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
+        when(requestLimiter.tryRecord(user)).thenReturn(false);
+
+        assertEquals(OtpRequestOutcome.TOO_MANY_REQUESTS, service.createPasswordResetOtp(CLIENT_ID, "alice"));
+        verifyNoInteractions(otpRepository, mailSender);
     }
 
     @Test

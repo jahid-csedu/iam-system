@@ -8,5 +8,6 @@ public enum OtpRequestOutcome {
     SENT,
     UNKNOWN_USER,
     NO_EMAIL,
+    TOO_MANY_REQUESTS,
     MAIL_FAILED
 }
