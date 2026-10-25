@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 10e (platform: suspend and activate tenants).** This manual is updated in every step that changes how the system is
+> **Matches the code as of step 10f (platform: create tenants).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -53,7 +53,7 @@ PLATFORM keys, for super users only (never part of a tenant's roles; the platfor
 | Key | Allows |
 |---|---|
 | `tenants:read` | List and view all tenants (`/api/platform/tenants`) |
-| `tenants:create` | Create tenants with their root user (endpoint arrives in step 10f) |
+| `tenants:create` | Create tenants with their root user |
 | `tenants:suspend` | Suspend a tenant (never the platform tenant) |
 | `tenants:activate` | Reactivate a suspended tenant |
 
@@ -269,6 +269,7 @@ Log in as the platform root through the Platform tenant's console `client_id`, t
 
 | What | Request | Who |
 |---|---|---|
+| Create a tenant | `POST /api/platform/tenants` with the signup body `{ "tenantName", "rootUser": {...} }` → `201` with the tenant, its root user and its management console, exactly like signup (same rules; audited with you as the actor) | `tenants:create` |
 | List all tenants | `GET /api/platform/tenants?page=0&size=20` → paged like `GET /api/users`, each `{ "id", "name", "type": "PLATFORM"/"STANDARD", "status" }` | `tenants:read` |
 | View a tenant | `GET /api/platform/tenants/{id}` (`404` if unknown) | `tenants:read` |
 | Suspend a tenant | `PUT /api/platform/tenants/{id}/suspend` → the tenant with `"status": "SUSPENDED"`. At once, its users can't log in, refresh or reset passwords (`403` "Tenant is suspended"), their tokens get `401` and introspection says `active: false`. Sessions are kept. The platform tenant can't be suspended (`400`). | `tenants:suspend` |

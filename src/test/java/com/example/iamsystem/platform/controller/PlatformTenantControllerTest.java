@@ -168,6 +168,42 @@ class PlatformTenantControllerTest {
         mockMvc.perform(put("/api/platform/tenants/{id}/activate", acmeId).with(actingAs(acmeRoot))).andExpect(status().isForbidden());
     }
 
+    @Test
+    @DisplayName("The platform root creates a tenant whose new root logs in through the new console")
+    void platformRoot_createsATenant() throws Exception {
+        String response = createTenant("Globex", "globex-root", "root@globex.com", platformRoot)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tenant.name").value("Globex"))
+                .andExpect(jsonPath("$.tenant.type").value("STANDARD"))
+                .andExpect(jsonPath("$.rootUser.username").value("globex-root"))
+                .andReturn().getResponse().getContentAsString();
+        String globexConsole = jsonMapper.readTree(response).get("managementConsole").get("client_id").asString();
+
+        mockMvc.perform(post("/api/auth/authenticate").contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(new UserLoginDto(globexConsole, "globex-root", "Password1!"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Creating a tenant follows the signup rules: an existing name or a taken root username is refused")
+    void createTenant_followsTheSignupRules() throws Exception {
+        createTenant("Acme", "other-root", "other@acme.com", platformRoot).andExpect(status().isBadRequest());
+        createTenant("Globex", "acme-root", "root@globex.com", platformRoot).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("A tenant's root can't create tenants through the platform endpoint")
+    void tenantRoot_cannotCreateTenants() throws Exception {
+        createTenant("Globex", "globex-root", "root@globex.com", acmeRoot).andExpect(status().isForbidden());
+    }
+
+    private ResultActions createTenant(String name, String rootUsername, String rootEmail, User actor) throws Exception {
+        TenantSignupDto request = new TenantSignupDto(name, new UserCreationDto(rootUsername, "Password1!", null, rootEmail, null));
+        return mockMvc.perform(post("/api/platform/tenants").with(actingAs(actor))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(request)));
+    }
+
     private ResultActions login() throws Exception {
         return mockMvc.perform(post("/api/auth/authenticate").contentType(MediaType.APPLICATION_JSON)
                 .content(jsonMapper.writeValueAsString(new UserLoginDto(acmeConsoleClientId, "acme-root", "Password1!"))));

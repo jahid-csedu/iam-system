@@ -377,3 +377,6 @@ Design debt
   `tenants:activate`), idempotent, audited (`TENANT_SUSPEND`/`TENANT_ACTIVATE`); the platform tenant can't be suspended
   (400); sessions are kept, so activation restores unexpired ones.
   Next: step 10f (create a tenant as a super user).
+- 2026-10-25: Step 10f (create tenants). `POST /api/platform/tenants` (`tenants:create`) runs `TenantSignupService.signup`
+  (same body, rules and result; the `TENANT_SIGNUP` audit names the super user as actor). Public signup stays open.
+  Next: step 10g (`X-Tenant-Id` for the platform root).

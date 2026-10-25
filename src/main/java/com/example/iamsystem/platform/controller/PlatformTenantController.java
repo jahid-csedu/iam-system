@@ -3,19 +3,27 @@ package com.example.iamsystem.platform.controller;
 import com.example.iamsystem.authorization.RequirePermission;
 import com.example.iamsystem.platform.service.PlatformTenantService;
 import com.example.iamsystem.tenant.dto.TenantDto;
+import com.example.iamsystem.tenant.dto.TenantSignupDto;
+import com.example.iamsystem.tenant.dto.TenantSignupResultDto;
+import com.example.iamsystem.tenant.service.TenantSignupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.web.PagedModel;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import static com.example.iamsystem.permission.PermissionKey.TENANTS_ACTIVATE;
+import static com.example.iamsystem.permission.PermissionKey.TENANTS_CREATE;
 import static com.example.iamsystem.permission.PermissionKey.TENANTS_READ;
 import static com.example.iamsystem.permission.PermissionKey.TENANTS_SUSPEND;
 
@@ -31,6 +39,14 @@ public class PlatformTenantController {
     private static final String DEFAULT_PAGE_SIZE = "20";
 
     private final PlatformTenantService platformTenantService;
+    private final TenantSignupService tenantSignupService;
+
+    @PostMapping
+    @RequirePermission(TENANTS_CREATE)
+    @Operation(summary = "Create a tenant with its root user, predefined roles and management console, like signup (Requires: tenants:create)")
+    public ResponseEntity<TenantSignupResultDto> createTenant(@RequestBody @Valid TenantSignupDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(tenantSignupService.signup(request));
+    }
 
     @GetMapping
     @RequirePermission(TENANTS_READ)
