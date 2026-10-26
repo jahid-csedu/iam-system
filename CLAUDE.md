@@ -18,6 +18,9 @@
   updates the manual in the same commit, with the flows verified against the running app.
 - **Keep the frontend plan in sync:** the same steps also update `../IAM System UX/README.md` (the frontend team's plan:
   steps, mockups, API coverage matrix, backend gaps, changelog), following its section 9 "How this document evolves".
+- **No new plan steps:** `docs/IMPLEMENTATION_PLAN.md` keeps only its remaining steps. Anything new (a "later" option, a
+  follow-up, a feature idea) becomes a numbered item in `IAM_ROADMAP.md`, ordered by priority and work volume, and
+  documents refer to it as "roadmap item N".
 
 ## Code standards
 What "clean" means for every class a step touches:
@@ -121,7 +124,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   Another user with the right permission can do it for them. Example: A (with permission) can change B's roles, but never A's own.
 - A user with the permission to grant permissions or roles can grant ones they don't hold themselves (but never to themselves).
 - Role and permission changes apply immediately (no approval step). Future option: maker-checker approval,
-  switched on per tenant by the root user.
+  switched on per tenant by the root user (roadmap item 9).
 - The root user has every tenant-management permission implicitly (not through a role), so root's access can't be edited by anyone.
 
 ### Tokens
@@ -151,7 +154,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   management console is never suspended.
 
 ### Future (not now)
-- OAuth2/OIDC compatibility. The `client_id` choice keeps this path open.
+- OAuth2/OIDC compatibility (roadmap item 5). The `client_id` choice keeps this path open.
 - First priority is organizing the code structure toward this design.
 
 ### Open questions
@@ -285,7 +288,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
 - Nobody deletes a root user, not even the root itself (403), so every tenant keeps its root. Nobody deletes their own
-  account either (403 "You can't delete your own account"); self-service deletion is plan step 16.
+  account either (403 "You can't delete your own account"); self-service deletion is roadmap item 3.
 - Lockout: `FailedPasswordCounter` counts every wrong password (login, old password of a password change, current
   password of an email change) in one atomic update in its own transaction; 5 lock the account for 15 minutes (the filter
   then refuses its tokens); a correct one clears the count. A missing password is no guess.
@@ -325,8 +328,8 @@ Security
 
 Broken / drift
 - Audit events for failures are logged at ERROR level.
-- Ended sessions and used/expired refresh tokens are never purged (needs a cleanup job; roadmap item 6, session management).
-- Sessions slide forever while refreshed: no absolute session lifetime yet (roadmap item 6).
+- Ended sessions and used/expired refresh tokens are never purged (needs a cleanup job; roadmap item 1, session management).
+- Sessions slide forever while refreshed: no absolute session lifetime yet (roadmap item 1).
 - `GlobalHandler` still has one-off handlers per exception (the ProblemDetail step reworks it).
 
 Design debt
@@ -455,7 +458,8 @@ Design debt
   Next: platform tenant without regular users, then 10j.
 - 2026-10-25: Step 10i+ (platform tenant content). The platform tenant refuses REGULAR users (`UserCreationService`) and
   application clients (`ClientService`), 400; it holds only management users and its console. Roadmap items 11
-  (client-scoped regular users) and 12 (self-registration per tenant, Auth0-like, required later) added.
+  (client-scoped regular users) and 12 (self-registration per tenant, Auth0-like, required later) added (renumbered
+  2026-10-26: now items 6 and 2).
   Next: step 10j (per-tenant platform checks).
 - 2026-10-25: Step 10j (platform checks per tenant). `AuthorizationService.platformScope` (all tenants or the granted ones;
   tenant users 403) + `checkPlatformPermission(..., tenantId)` / `checkPlatformPermissionOnAllTenants`; one grant query
@@ -568,7 +572,7 @@ Design debt
   Decision: no `refresh_expires_in` (not standard).
 - 2026-10-26: Own account deletion. `UserAccessPolicy.checkCanDelete` refuses deleting yourself (403), like every other
   self-modification. Decisions (option A): another user deletes you; a deliberate self-service deletion with the current
-  password is plan step 16 (option B, with self-registration).
+  password is plan step 16 (option B, with self-registration; moved to roadmap item 3 the same day).
 - 2026-10-26: Profiles, commit 1 of 2. `local`, `dev`, `stage`, `prod` (owner's rule: optional in `local`, required
   everywhere else, `dev` included); `EnvironmentProfileCheck` (an `EnvironmentPostProcessor`) refuses a run without
   exactly one of them and names every missing required setting (`iam.required-settings`). DB, issuer, mail and CORS
@@ -584,3 +588,7 @@ Design debt
   root, unless `iam.platform.allow-missing-root` (test suite). Both keys and the root are listed in every profile file; compose
   mounts the PEM as a secret (`IAM_JWT_KEY_FILE`). `SigningKeyProperties` masks its key in `toString`. Decisions: keep
   the inline key for platforms without files; the root config is needed only until the root exists (owner).
+- 2026-10-26: Roadmap reorganized by priority and work volume (owner): 14 items in three priority groups, each with its
+  size (S/M/L) and the seam it builds on (moved from the plan's section 5). Plan step 16 became roadmap item 3;
+  maker-checker (item 9) and the OAuth2/OIDC provider (item 5) joined from CLAUDE.md; SSO and identity federation
+  merged (item 12). New rule: the plan takes no new steps, new ideas go to the roadmap.

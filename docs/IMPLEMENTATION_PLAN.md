@@ -6,6 +6,7 @@ This file lets any new session pick up the work without the conversation that pr
   Read it first.
 - **This file** holds the step-by-step technical plan for getting from the current code to the target design.
   Everything below the "Done" section is a **proposal**. Each step starts by confirming its open decisions with the owner.
+  The plan takes no new steps (owner, 2026-10-26): anything new goes into `IAM_ROADMAP.md`.
 
 ---
 
@@ -77,7 +78,7 @@ This file lets any new session pick up the work without the conversation that pr
 | Guesses | Wrong old/current passwords count like failed logins (`FailedPasswordCounter`, atomic, own transaction) | `1867199` |
 | Reasons | The 401 for a blocked account's token says why (locked until, deactivated, tenant or client suspended); 401 bodies are the usual error JSON | `d7cf5db` |
 | Expiry | Login and refresh answer with `token_type` and `expires_in` (`TokenIssuer` returns `IssuedAccessToken`, the one source of the lifetime); `Cache-Control: no-store` kept by a test | `175eaf6` |
-| Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is plan step 16 | `8a1947e` |
+| Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is roadmap item 3 | `8a1947e` |
 | Profiles 1 | `local` / `dev` / `stage` / `prod` profile files; `EnvironmentProfileCheck` (exactly one profile; required settings outside `local`) | `ba2e721` |
 | Profiles 2 | Every profile, `local` included, requires every setting: JWT key (PEM inline or `private-key-location`; a temporary key only in the test suite), platform root until it exists, DB, issuer, mail, CORS | `85a3a38` |
 
@@ -344,28 +345,7 @@ Origins", each client gets its own list, managed by the tenant:
 - Cache the origin lookup (every preflight would otherwise hit the database).
 - Frontend: an "Allowed web origins" field on the application detail page.
 
-### Step 16: Self-service account deletion (planned, owner asked 2026-10-26; with roadmap item 12)
-`DELETE /api/users/{id}` refuses your own account, so nobody deletes themselves by mistake. A deliberate "delete my
-account" (what self-registered regular users of an application expect, and what data-protection requests need) becomes
-its own endpoint when self-registration (roadmap item 12) gives regular users self-service:
-- `DELETE /api/me` (or a client-facing equivalent for regular users) with the current password in the body, counted by
-  `FailedPasswordCounter` like the email change; never the root (403); audited.
-- Decide then: delete at once or deactivate first with a grace period; whether management users may use it.
-- Frontend: a "Delete my account" danger zone on the account page, behind the password.
+## 5. After the plan: the feature roadmap
 
-## 5. After the target design: the feature roadmap (`IAM_ROADMAP.md`)
-
-Each item builds on a seam created above:
-
-| Roadmap item | Builds on |
-|---|---|
-| MFA | Login flow in `AuthenticationService`: password ok → MFA challenge → tokens; per-client or per-tenant MFA policy |
-| SSO / OIDC compatibility | `client_id` model + asymmetric tokens (step 9); consider Spring Authorization Server |
-| User groups | `AuthorizationService` permission resolution (user ∪ roles ∪ group roles) |
-| SCIM provisioning | Stable tenants, users and groups |
-| ABAC / fine-grained access | `AuthorizationService` gains attribute inputs |
-| Session management | Refresh-token/session table from step 9 |
-| Identity federation | Clients + OIDC |
-| API keys | A new authentication path producing an `AuthenticatedActor`; permission checks unchanged |
-| Break-glass access | Platform permissions + audited, time-limited override |
-| Maker-checker for role changes | Optional per tenant, switched on by root (agreed future option) |
+`IAM_ROADMAP.md` lists the features that come after these steps, by priority and work volume, each with the seam it
+builds on. New ideas go there, not into this plan.
