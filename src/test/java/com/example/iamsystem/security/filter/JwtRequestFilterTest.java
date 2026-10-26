@@ -1,6 +1,7 @@
 package com.example.iamsystem.security.filter;
 
 import com.example.iamsystem.client.entity.Client;
+import com.example.iamsystem.client.entity.ClientStatus;
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.security.config.JwtProperties;
 import com.example.iamsystem.security.jwt.SigningKeys;
@@ -8,6 +9,7 @@ import com.example.iamsystem.security.jwt.TokenIssuer;
 import com.example.iamsystem.security.jwt.TokenVerifier;
 import com.example.iamsystem.security.userdetails.ActingTenantResolver;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
+import com.example.iamsystem.session.dto.SessionAccountState;
 import com.example.iamsystem.session.entity.UserSession;
 import com.example.iamsystem.session.repository.UserSessionRepository;
 import com.example.iamsystem.tenant.entity.Tenant;
@@ -30,6 +32,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
@@ -131,14 +134,31 @@ class JwtRequestFilterTest {
     }
 
     @Test
-    @DisplayName("A token of an ended session, or of an inactive or locked user, leaves the request unauthenticated")
+    @DisplayName("A token of an ended session leaves the request unauthenticated, without a reason")
     void tokenWithoutLiveSession_leavesRequestUnauthenticated() throws Exception {
         bearer(tokenIssuer.issueAccessToken(session));
         when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.empty());
+        when(sessionRepository.findAccountState(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.empty());
 
         filter.doFilter(request, response, filterChain);
 
         assertNull(SecurityContextHolder.getContext().getAuthentication());
+        assertNull(request.getAttribute(JwtRequestFilter.REFUSAL_REASON));
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("A live session of a blocked account leaves the request unauthenticated and keeps the reason for the 401")
+    void tokenOfABlockedAccount_keepsTheReason() throws Exception {
+        bearer(tokenIssuer.issueAccessToken(session));
+        when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.empty());
+        when(sessionRepository.findAccountState(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.of(
+                new SessionAccountState(false, false, null, TenantStatus.ACTIVE, ClientStatus.ACTIVE)));
+
+        filter.doFilter(request, response, filterChain);
+
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+        assertEquals("Your account is deactivated", request.getAttribute(JwtRequestFilter.REFUSAL_REASON));
         verify(filterChain).doFilter(request, response);
     }
 

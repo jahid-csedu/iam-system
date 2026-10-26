@@ -33,7 +33,9 @@ import static com.example.iamsystem.security.userdetails.ActingTenantResolver.TE
 /**
  * Authenticates requests that carry a Bearer access token by putting an {@link AuthenticatedActor} into the security
  * context. A token that is malformed or expired, whose session has ended (logout, password change), or that belongs to
- * an inactive or locked user, leaves the request unauthenticated, so protected endpoints answer 401.
+ * an inactive or locked user, leaves the request unauthenticated, so protected endpoints answer 401. When the session is
+ * live but its account is blocked (locked, deactivated, tenant or client suspended), the reason is kept in the request
+ * attribute {@link #REFUSAL_REASON} for that 401 ({@code JwtAuthenticationEntryPoint}); only the token's holder sees it.
  * {@link ActingTenantResolver} then decides which tenant the request works in; its errors (a malformed or unknown
  * {@code X-Tenant-Id}) are answered through the regular exception handling.
  */
@@ -41,6 +43,7 @@ import static com.example.iamsystem.security.userdetails.ActingTenantResolver.TE
 @Slf4j
 public class JwtRequestFilter extends OncePerRequestFilter {
 
+    public static final String REFUSAL_REASON = JwtRequestFilter.class.getName() + ".refusalReason";
     private static final String BEARER = "Bearer ";
 
     private final TokenVerifier tokenVerifier;
@@ -61,7 +64,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
-            Optional<AuthenticatedActor> actor = extractToken(request).flatMap(this::findActor);
+            Optional<AuthenticatedActor> actor = extractToken(request).flatMap(token -> findActor(token, request));
             if (actor.isPresent()) {
                 try {
                     authenticate(actingTenantResolver.resolve(actor.get(), request.getHeader(TENANT_HEADER)), request);
@@ -82,7 +85,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         return Optional.of(header.substring(BEARER.length()));
     }
 
-    private Optional<AuthenticatedActor> findActor(String token) {
+    private Optional<AuthenticatedActor> findActor(String token, HttpServletRequest request) {
         Long userId;
         Long sessionId;
         try {
@@ -97,11 +100,17 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             return Optional.empty();
         }
 
-        Optional<AuthenticatedActor> actor = sessionId == null
-                ? Optional.empty()
-                : sessionRepository.findActor(sessionId, userId, Instant.now());
+        if (sessionId == null) {
+            log.warn("Rejected the access token of user {}: no session", userId);
+            return Optional.empty();
+        }
+        Instant now = Instant.now();
+        Optional<AuthenticatedActor> actor = sessionRepository.findActor(sessionId, userId, now);
         if (actor.isEmpty()) {
-            log.warn("Rejected the access token of user {}: session ended, or the account is inactive or locked", userId);
+            Optional<String> reason = sessionRepository.findAccountState(sessionId, userId, now)
+                    .flatMap(state -> state.refusalReason(now));
+            reason.ifPresent(message -> request.setAttribute(REFUSAL_REASON, message));
+            log.warn("Rejected the access token of user {}: {}", userId, reason.orElse("session ended"));
         }
         return actor;
     }

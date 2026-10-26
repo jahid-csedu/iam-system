@@ -1,6 +1,7 @@
 package com.example.iamsystem.session.repository;
 
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
+import com.example.iamsystem.session.dto.SessionAccountState;
 import com.example.iamsystem.session.entity.UserSession;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -29,6 +30,20 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     Optional<AuthenticatedActor> findActor(@Param("sessionId") Long sessionId,
                                            @Param("userId") Long userId,
                                            @Param("now") Instant now);
+
+    /**
+     * The account behind a live session (not revoked, not expired), whatever its status; empty for an ended session.
+     */
+    @Query("""
+            SELECT new com.example.iamsystem.session.dto.SessionAccountState(
+                u.active, u.userLocked, u.accountLockedUntil, u.tenant.status, s.client.status)
+            FROM UserSession s JOIN s.user u
+            WHERE s.id = :sessionId AND u.id = :userId
+              AND s.revokedAt IS NULL AND s.expiresAt > :now
+            """)
+    Optional<SessionAccountState> findAccountState(@Param("sessionId") Long sessionId,
+                                                   @Param("userId") Long userId,
+                                                   @Param("now") Instant now);
 
     @Modifying
     @Query("UPDATE UserSession s SET s.revokedAt = :now WHERE s.id = :sessionId AND s.revokedAt IS NULL")

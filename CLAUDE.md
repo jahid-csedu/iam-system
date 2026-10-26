@@ -288,7 +288,11 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   on all tenants (`PermissionRepository.isGrantedToPlatformUserInTenant`, native query over `platform_role_grants` +
   `platform_permission_grants`); audit adds `acting_tenant_id`. Grants never apply inside the platform tenant itself. `JwtRequestFilter` finds it with one query (`UserSessionRepository.findActor`) that only matches a live
   session of an active, unlocked user of an `ACTIVE` tenant, through an `ACTIVE` client; anything else leaves the request
-  unauthenticated (401).
+  unauthenticated (401). When the session is live but the account is blocked, a second query
+  (`UserSessionRepository.findAccountState`, `SessionAccountState.refusalReason`) puts the reason into a request attribute
+  and `JwtAuthenticationEntryPoint` answers 401 with it ("Your account is locked until ...", "Your account is
+  deactivated", "Tenant is suspended", "Client is suspended"); otherwise "A valid access token is required". Public
+  endpoints ignore a refused token as before.
   Introspection uses the same query, so the API and other applications agree on what "active" means. `User.@Version` is
   optimistic locking only. Permissions are read from the database on
   every check (`PermissionRepository.isGrantedToUser`); `AuthorizationService.permissionsOf` lists all of an actor's keys
@@ -535,3 +539,7 @@ Design debt
   atomic `incrementFailedLoginAttempts`; `recordSuccess`) used by the login listeners, `changeOwnPassword` and the own
   email change. Fixes a lost-update race in the login listener too (it read, added 1 and wrote back). Decision (option A):
   the same counter and lockout as login.
+- 2026-10-26: Refusal reasons. A token whose live session belongs to a blocked account gets 401 with the reason (owner
+  asked: a locked user should be told so); `JwtAuthenticationEntryPoint` writes the usual error JSON (`ExceptionResponse`)
+  instead of `sendError`. Decisions: 401, not login's 403 (the token can't be used; 403 means "stay logged in" to the
+  frontend); reasons only for live sessions (their holder owns the account), never for unknown or ended tokens.
