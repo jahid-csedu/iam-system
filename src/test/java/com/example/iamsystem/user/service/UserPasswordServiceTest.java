@@ -8,6 +8,7 @@ import com.example.iamsystem.common.exception.TooManyRequestsException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.passwordreset.service.OtpRequestOutcome;
 import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
+import com.example.iamsystem.security.service.FailedPasswordCounter;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.session.service.SessionService;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
@@ -53,6 +54,8 @@ class UserPasswordServiceTest {
     private ResetOtpIssuer otpIssuer;
     @Mock
     private SessionService sessionService;
+    @Mock
+    private FailedPasswordCounter failedPasswordCounter;
 
     private UserPasswordService service;
     private User root;
@@ -61,7 +64,7 @@ class UserPasswordServiceTest {
     @BeforeEach
     void setUp() {
         service = new UserPasswordService(userRepository, accessPolicy, currentUserProvider, passwordEncoder,
-                passwordUpdater, otpIssuer, sessionService);
+                passwordUpdater, otpIssuer, sessionService, failedPasswordCounter);
         root = rootUser(1, "root");
         member = user(2, "member");
     }
@@ -79,13 +82,14 @@ class UserPasswordServiceTest {
     }
 
     @Test
-    @DisplayName("A wrong old password is rejected")
+    @DisplayName("A wrong old password is rejected and counted like a failed login")
     void changeOwnPassword_withWrongOldPassword_isRejected() {
         givenLoggedIn(member);
         when(passwordEncoder.matches("wrong", "encoded-member")).thenReturn(false);
 
         assertThrows(InvalidPasswordException.class,
                 () -> service.changeOwnPassword(new PasswordChangeDto("wrong", "NewPassword1!")));
+        verify(failedPasswordCounter).recordFailure(2L);
         verifyNoInteractions(passwordUpdater, sessionService);
     }
 

@@ -69,12 +69,21 @@ public interface UserRepository extends JpaRepository<User, Long> {
     }
 
     /**
-     * Lockout bookkeeping, written directly so it never conflicts with a concurrent change of the user ({@code @Version}).
+     * Lockout bookkeeping ({@code FailedPasswordCounter}), written directly so it never conflicts with a concurrent change of
+     * the user ({@code @Version}). The increment is one statement, so parallel failures are all counted.
      */
     @Modifying
     @Transactional
-    @Query("UPDATE User u SET u.failedLoginAttempts = :attempts WHERE u.id = :userId")
-    void updateFailedLoginAttempts(@Param("userId") Long userId, @Param("attempts") int attempts);
+    @Query("UPDATE User u SET u.failedLoginAttempts = COALESCE(u.failedLoginAttempts, 0) + 1 WHERE u.id = :userId")
+    void incrementFailedLoginAttempts(@Param("userId") Long userId);
+
+    @Query("SELECT COALESCE(u.failedLoginAttempts, 0) FROM User u WHERE u.id = :userId")
+    int findFailedLoginAttempts(@Param("userId") Long userId);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE User u SET u.failedLoginAttempts = 0, u.userLocked = false, u.accountLockedUntil = null WHERE u.id = :userId")
+    void clearFailedLogins(@Param("userId") Long userId);
 
     @Modifying
     @Transactional

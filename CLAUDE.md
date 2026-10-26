@@ -223,7 +223,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `userdetails/` (`AuthenticatedActor` = the request principal; `CurrentUserProvider`, the single owner of "who is logged in"
   and of the current tenant id; `ActingTenantResolver` = which tenant a request works in (`X-Tenant-Id`);
   `TenantAuthenticationProvider` = login inside the client's tenant; `DefaultUserDetails`/
-  `DefaultUserDetailsService` for login and refresh only), `event/` (lockout listeners, by user id), `config/LockoutProperties`
+  `DefaultUserDetailsService` for login and refresh only), `event/` (login success/failure listeners), `service/FailedPasswordCounter` (the one owner of
+  wrong-password counting and the lockout), `config/LockoutProperties`
 - `session/`: login sessions. `UserSession` + `RefreshToken` (hash only), `SessionService` (start, refresh-token checks and
   rotation with reuse detection, revoke one / all / all but one), `RefreshTokenGenerator` (random token + SHA-256 hash)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
@@ -266,6 +267,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
 - Nobody deletes a root user, not even the root itself (403), so every tenant keeps its root.
+- Lockout: `FailedPasswordCounter` counts every wrong password (login, old password of a password change, current
+  password of an email change) in one atomic update in its own transaction; 5 lock the account for 15 minutes (the filter
+  then refuses its tokens); a correct one clears the count. A missing password is no guess.
 - `PATCH /api/users/{id}` (`users:update`) changes another user's `fullName` and `email` (left out = unchanged, `""` removes
   the name, an email can't be removed). A new email also needs `users:reset-password` (it receives the password resets),
   must be free in the tenant and not any root's (`UserValidator.validateEmailAvailable`; a root's email must be unused
@@ -293,8 +297,6 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- Wrong old or current passwords (`PATCH /api/users/password`, `PATCH /api/me` email change) aren't counted, so a stolen
-  access token allows unlimited password guesses there (login has the lockout); count them like failed logins.
 - The reset request answers a known user more slowly than an unknown one (the email is sent during the request), so
   timing still tells them apart; fixed by asynchronous email (plan step 13).
 
@@ -529,3 +531,7 @@ Design debt
   with a masked `currentPassword`): management users only (`UserAccessPolicy.checkIsManagementUser`, now also used by
   `MeService`), a new email needs the current password (400 otherwise), a root's email is checked across all tenants;
   answers like `GET /api/me`. Known issue added: wrong current/old passwords aren't counted.
+- 2026-10-26: Fix: wrong old/current passwords counted. `FailedPasswordCounter` (`recordFailure` in its own transaction,
+  atomic `incrementFailedLoginAttempts`; `recordSuccess`) used by the login listeners, `changeOwnPassword` and the own
+  email change. Fixes a lost-update race in the login listener too (it read, added 1 and wrote back). Decision (option A):
+  the same counter and lockout as login.

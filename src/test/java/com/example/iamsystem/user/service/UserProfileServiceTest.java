@@ -5,6 +5,7 @@ import com.example.iamsystem.common.exception.InvalidPasswordException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserAlreadyExistsException;
 import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
+import com.example.iamsystem.security.service.FailedPasswordCounter;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.user.dto.OwnProfileUpdateDto;
@@ -55,6 +56,8 @@ class UserProfileServiceTest {
     private ResetOtpIssuer resetOtpIssuer;
     @Mock
     private CurrentUserProvider currentUserProvider;
+    @Mock
+    private FailedPasswordCounter failedPasswordCounter;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
     private UserProfileService service;
@@ -64,7 +67,7 @@ class UserProfileServiceTest {
     @BeforeEach
     void setUp() {
         service = new UserProfileService(userRepository, accessPolicy, userValidator, authorizationService, resetOtpIssuer,
-                currentUserProvider, passwordEncoder, Mappers.getMapper(UserMapper.class));
+                currentUserProvider, passwordEncoder, failedPasswordCounter, Mappers.getMapper(UserMapper.class));
         manager = actor(user(1, "manager"));
         bob = user(2, "bob");
         bob.setFullName("Bob");
@@ -138,6 +141,7 @@ class UserProfileServiceTest {
         service.updateOwnProfile(new OwnProfileUpdateDto("Alice", "new@example.com", "Password1!"));
 
         verify(accessPolicy).checkIsManagementUser(alice);
+        verify(failedPasswordCounter).recordSuccess(alice);
         verify(userValidator).validateEmailAvailable("new@example.com", TENANT.getId());
         verify(resetOtpIssuer).discardPending(alice);
         verify(userRepository).save(alice);
@@ -146,7 +150,7 @@ class UserProfileServiceTest {
     }
 
     @Test
-    @DisplayName("A missing or wrong current password refuses your new email and changes nothing")
+    @DisplayName("A missing or wrong current password refuses your new email and changes nothing; only a wrong one counts as a failed login")
     void updateOwnProfile_newEmailWithoutTheRightPassword_isRefused() {
         User alice = ownAccount(user(3, "alice"));
 
@@ -156,6 +160,8 @@ class UserProfileServiceTest {
             assertEquals("Changing your email needs your current password, and it was missing or wrong", refused.getMessage());
         }
         assertEquals("alice@example.com", alice.getEmail());
+        verify(failedPasswordCounter).recordFailure(3L);
+        verify(failedPasswordCounter, never()).recordSuccess(any());
         verifyNoInteractions(userValidator, resetOtpIssuer);
         verify(userRepository, never()).save(any());
     }
@@ -179,7 +185,7 @@ class UserProfileServiceTest {
         service.updateOwnProfile(new OwnProfileUpdateDto("Alice Admin", null, null));
 
         assertEquals("Alice Admin", alice.getFullName());
-        verifyNoInteractions(userValidator, resetOtpIssuer);
+        verifyNoInteractions(userValidator, resetOtpIssuer, failedPasswordCounter);
     }
 
     @Test

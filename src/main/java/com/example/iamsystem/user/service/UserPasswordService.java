@@ -7,6 +7,7 @@ import com.example.iamsystem.common.exception.InvalidPasswordException;
 import com.example.iamsystem.common.exception.TooManyRequestsException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
+import com.example.iamsystem.security.service.FailedPasswordCounter;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.session.service.SessionService;
@@ -37,9 +38,11 @@ public class UserPasswordService {
     private final UserPasswordUpdater passwordUpdater;
     private final ResetOtpIssuer otpIssuer;
     private final SessionService sessionService;
+    private final FailedPasswordCounter failedPasswordCounter;
 
     /**
-     * Only for yourself, and always with the old password. Logs you out everywhere except the session making the change.
+     * Only for yourself, and always with the old password; a wrong one counts like a failed login. Logs you out everywhere
+     * except the session making the change.
      */
     @Auditable(AuditEventType.PASSWORD_CHANGE)
     @Transactional
@@ -47,6 +50,7 @@ public class UserPasswordService {
         AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User user = userRepository.getRequiredByIdAndTenantId(actor.userId(), actor.homeTenantId());
         if (!passwordEncoder.matches(request.oldPassword(), user.getPassword())) {
+            failedPasswordCounter.recordFailure(user.getId());
             throw new InvalidPasswordException(INVALID_OLD_PASSWORD);
         }
         passwordUpdater.updatePassword(user, request.newPassword());

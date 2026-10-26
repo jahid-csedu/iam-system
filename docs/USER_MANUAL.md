@@ -350,7 +350,10 @@ The IAM manages only its own permissions; other applications decide their own au
 
 - **Token lifetimes and claims** come from the client the user logged in through (defaults: 5 minutes / 24 hours / `username`).
   Tokens already issued keep their lifetime when the settings change.
-- **Lockout:** 5 failed logins lock the account for 15 minutes. While locked, the user's existing tokens are rejected too.
+- **Lockout:** 5 wrong passwords lock the account for 15 minutes. They count together wherever a password is checked:
+  login, the old password of `PATCH /api/users/password` and the current password of an email change (`PATCH /api/me`);
+  a correct one resets the count. While locked, the user's existing tokens are rejected too (`401`), so a stolen token
+  can't be used to guess the password.
 - **Sessions:** every login starts a session. It lasts as long as its refresh token (each refresh moves the end forward by the
   client's refresh lifetime), or, for a client without refresh tokens, as long as its access token.
 - **Refresh tokens are single use.** Each refresh returns a new one. Presenting a used refresh token again (a sign it was

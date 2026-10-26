@@ -5,6 +5,7 @@ import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.InvalidPasswordException;
 import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
+import com.example.iamsystem.security.service.FailedPasswordCounter;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.user.dto.OwnProfileUpdateDto;
@@ -40,6 +41,7 @@ public class UserProfileService {
     private final ResetOtpIssuer resetOtpIssuer;
     private final CurrentUserProvider currentUserProvider;
     private final PasswordEncoder passwordEncoder;
+    private final FailedPasswordCounter failedPasswordCounter;
     private final UserMapper userMapper;
 
     @Auditable(
@@ -60,7 +62,8 @@ public class UserProfileService {
     }
 
     /**
-     * Your own profile, as a management user (the root's only way to change theirs), always in your home tenant.
+     * Your own profile, as a management user (the root's only way to change theirs), always in your home tenant. A wrong
+     * current password counts like a failed login (a missing one is no guess).
      */
     @Auditable(
             value = AuditEventType.USER_UPDATE,
@@ -72,9 +75,7 @@ public class UserProfileService {
         User user = userRepository.getRequiredByIdAndTenantId(actor.userId(), actor.homeTenantId());
         accessPolicy.checkIsManagementUser(user);
         if (isNewEmail(user, request.email())) {
-            if (request.currentPassword() == null || !passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
-                throw new InvalidPasswordException(INVALID_CURRENT_PASSWORD);
-            }
+            checkCurrentPassword(user, request.currentPassword());
             if (user.isRootUser()) {
                 userValidator.validateEmailAvailableForRoot(request.email());
             } else {
@@ -82,6 +83,17 @@ public class UserProfileService {
             }
         }
         apply(user, request.changes());
+    }
+
+    private void checkCurrentPassword(User user, String currentPassword) {
+        if (currentPassword == null) {
+            throw new InvalidPasswordException(INVALID_CURRENT_PASSWORD);
+        }
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            failedPasswordCounter.recordFailure(user.getId());
+            throw new InvalidPasswordException(INVALID_CURRENT_PASSWORD);
+        }
+        failedPasswordCounter.recordSuccess(user);
     }
 
     /**
