@@ -14,6 +14,7 @@ import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.DefaultResourceLoader;
 
 import java.time.Duration;
 import java.util.List;
@@ -25,8 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class TokenIssuerTest {
 
-    private final JwtProperties properties = new JwtProperties("https://iam.test", List.of());
-    private final SigningKeys signingKeys = new SigningKeys(properties);
+    private final JwtProperties properties = new JwtProperties("https://iam.test", List.of(), true);
+    private final SigningKeys signingKeys = new SigningKeys(properties, new DefaultResourceLoader());
     private final TokenIssuer issuer = new TokenIssuer(signingKeys, properties);
     private final TokenVerifier verifier = new TokenVerifier(signingKeys);
     private Client client;

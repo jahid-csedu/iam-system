@@ -62,7 +62,8 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
 - **Platform**: a group of super users, controlled by roles and permissions. Global, not per tenant.
   Model (agreed 2026-10-25): a reserved built-in platform tenant (`tenants.type = PLATFORM`, exactly one). Super users are
   normal users in it. Its root (the first super user) is created at startup from `IAM_PLATFORM_ROOT_*` config when the
-  platform has no root; without the config there is no platform user (WARN), and there is no public signup into it.
+  platform has no root; without the config the startup stops (only the test suite runs without a platform user), and
+  there is no public signup into it.
   This replaced the unused `is_super_user` flag (dropped in step 10m). Done in step 10.
   - The platform root can do everything in every tenant (every TENANT key anywhere) plus every platform key
     (`tenants:read`, `tenants:create`, `tenants:suspend`, `tenants:activate`).
@@ -164,16 +165,18 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 ## Commands
 - Run tests: `./gradlew clean test` (**Docker must be running**: Testcontainers starts MySQL 8.0; jacoco report in `build/reports/jacoco`)
 - Run app: `./gradlew bootRun` (loads `.env`; profile `local` unless `.env` sets `SPRING_PROFILES_ACTIVE`; expects MySQL on
-  `localhost:3366`)
+  `localhost:3366`). IntelliJ's run configuration can load `.env` too, but it passes `# NAME=value` lines on (Spring binds
+  them), so `.env` and `example.env` never keep commented-out settings.
 - Run everything in Docker: `docker compose up --build` (app on :8080, MySQL on :3366, plus ELK)
   - App + DB only: `docker compose up --build app db`
   - The app container runs the `dev` profile, so it needs the mail and CORS settings from `.env` (a missing one stops
     it). DB settings and the issuer are set in `docker-compose.yml`.
 - Profiles: exactly one of `local`, `dev`, `stage`, `prod` (`test` for the suite), checked at startup by
   `EnvironmentProfileCheck`. `application.properties` holds what every environment shares and `iam.required-settings`;
-  `application-<profile>.properties` lists the environment's settings as `${ENV_VAR:default}`. Outside `local` every
-  required setting needs a value. A new environment-dependent setting goes into every profile file (and into
-  `iam.required-settings` when it's required outside `local`), `example.env` and the manual's profile table.
+  `application-<profile>.properties` lists the environment's settings as `${ENV_VAR:}`. Every profile, `local` included
+  (owner: everything can be tried locally), needs every required setting; only the test suite is relaxed (its own
+  `application.properties`). A new environment-dependent setting goes into every profile file, `iam.required-settings`,
+  `example.env` and the manual's profile table.
 - Swagger UI: http://localhost:8080/swagger-ui.html
 
 ## Database schema rules
@@ -200,7 +203,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `platform/`: the platform level. `PlatformGrantService`/`PlatformGrantController` (role and permission grants;
   `entity/PlatformRoleGrant`, `entity/PlatformPermissionGrant`);
   `PlatformBootstrap` creates the platform tenant (+ console + predefined roles) at startup,
-  and its root from `config/PlatformProperties` (`iam.platform.root.*`) while it has none; `PlatformTenantController`/
+  and its root from `config/PlatformProperties` (`iam.platform.root.*`) while it has none (missing config stops the
+  startup unless `iam.platform.allow-missing-root`, set by the test suite only); `PlatformTenantController`/
   `PlatformTenantService` (`/api/platform/tenants`, PLATFORM keys only)
 - `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
@@ -266,7 +270,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   Per-client origins are plan step 15.
 - Tokens are RS256-signed by the first key of `iam.jwt.keys` (kid + PKCS#8 PEM private key, public key derived); every
   configured key is published at `GET /.well-known/jwks.json` (public) and accepted by `TokenVerifier`, which only takes
-  RS256 by a known `kid` and `typ: at+jwt`. No key configured → a temporary key with a WARN.
+  RS256 by a known `kid` and `typ: at+jwt`. Each key is a kid plus the PEM inline (`private-key`) or a location to read it
+  from (`private-key-location`, e.g. `file:/run/secrets/...`; exactly one). No key configured → a temporary key with a
+  WARN only where `iam.jwt.allow-temporary-key` (the test suite only); everywhere else the startup stops.
   `iss` = `iam.jwt.issuer` + `/tenants/{id}`, `aud` = `client_id`, `sid` = session id, plus `jti`.
 - Sessions (`user_sessions`): one per login; expire with their latest refresh token (each refresh extends them by the
   client's refresh lifetime) or, without refresh tokens, with the access token. Refresh tokens (`refresh_tokens`) are
@@ -571,3 +577,10 @@ Design debt
   without defaults (one message lists every missing setting, and an empty value counts as missing); commit 2 adds the JWT key (also from a PEM
   file, temporary key only in `local`) and the platform root (required outside `local` only while the platform has no
   root).
+- 2026-10-26: Profiles, commit 2 of 2. `local` is now as strict as the others (owner: try everything locally; only the
+  test suite is relaxed). Signing keys: `private-key-location` (read through the `ResourceLoader`) next to
+  `private-key`, exactly one per key; an all-empty entry is no key; without a key the startup stops unless
+  `iam.jwt.allow-temporary-key` (test suite). Platform root: missing config stops the startup while the platform has no
+  root, unless `iam.platform.allow-missing-root` (test suite). Both keys and the root are listed in every profile file; compose
+  mounts the PEM as a secret (`IAM_JWT_KEY_FILE`). `SigningKeyProperties` masks its key in `toString`. Decisions: keep
+  the inline key for platforms without files; the root config is needed only until the root exists (owner).

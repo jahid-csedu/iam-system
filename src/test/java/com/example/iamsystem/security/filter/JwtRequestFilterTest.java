@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -46,8 +47,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class JwtRequestFilterTest {
 
-    private final JwtProperties properties = new JwtProperties("https://iam.test", List.of());
-    private final SigningKeys signingKeys = new SigningKeys(properties);
+    private final JwtProperties properties = new JwtProperties("https://iam.test", List.of(), true);
+    private final SigningKeys signingKeys = new SigningKeys(properties, new DefaultResourceLoader());
     private final TokenIssuer tokenIssuer = new TokenIssuer(signingKeys, properties);
     private final AuthenticatedActor actor = new AuthenticatedActor(1L, "alice", 100L, false, 10L);
 

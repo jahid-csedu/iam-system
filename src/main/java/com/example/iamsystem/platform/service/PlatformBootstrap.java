@@ -22,9 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Sets up the platform level at startup, the same way signup sets up a tenant. The first time the application runs on a
  * database it creates the platform tenant with its predefined roles and management console. While the platform tenant
- * has no root user, it creates one from {@link PlatformProperties}; without that configuration there is no super user
- * yet, which is logged as a warning. An invalid configuration (weak password, username or email already used by a root)
- * stops the startup.
+ * has no root user, it creates one from {@link PlatformProperties}. Without that configuration the startup stops, except
+ * in the local profile, where there is no super user yet and a warning says so. An invalid configuration (weak password,
+ * username or email already used by a root) stops the startup too.
  */
 @Component
 @RequiredArgsConstructor
@@ -32,6 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class PlatformBootstrap implements ApplicationRunner {
 
     public static final String PLATFORM_TENANT_NAME = "Platform";
+    private static final String NO_ROOT = "The platform has no root user: set IAM_PLATFORM_ROOT_USERNAME, "
+            + "IAM_PLATFORM_ROOT_PASSWORD and IAM_PLATFORM_ROOT_EMAIL";
 
     private final TenantRepository tenantRepository;
     private final PredefinedRoleService predefinedRoleService;
@@ -63,8 +65,10 @@ public class PlatformBootstrap implements ApplicationRunner {
     private void createPlatformRoot(Tenant platform) {
         RootUser root = properties.root();
         if (root == null || !root.isComplete()) {
-            log.warn("The platform has no root user: set IAM_PLATFORM_ROOT_USERNAME, IAM_PLATFORM_ROOT_PASSWORD and "
-                    + "IAM_PLATFORM_ROOT_EMAIL to create one at the next startup");
+            if (!properties.allowMissingRoot()) {
+                throw new IllegalStateException(NO_ROOT + " (needed until the platform has its root user)");
+            }
+            log.warn("{} to create one at the next startup", NO_ROOT);
             return;
         }
         UserCreationDto request = new UserCreationDto(root.username(), root.password(), root.fullName(), root.email(), null);

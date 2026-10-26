@@ -80,7 +80,7 @@ class PermissionsOfTest {
     @BeforeEach
     void setUp() {
         PlatformBootstrap bootstrap = new PlatformBootstrap(tenantRepository, predefinedRoleService, clientService,
-                userRepository, userFactory, new PlatformProperties(new RootUser("platform-root", PASSWORD, "root@platform.test", null)));
+                userRepository, userFactory, new PlatformProperties(new RootUser("platform-root", PASSWORD, "root@platform.test", null), false));
         transactionTemplate.executeWithoutResult(status -> bootstrap.run(null));
         platform = tenantRepository.findByType(TenantType.PLATFORM).orElseThrow();
         acmeId = signup("Acme", "acme-root");

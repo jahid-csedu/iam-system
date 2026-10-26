@@ -11,13 +11,20 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: password
       IAM_JWT_ISSUER: http://localhost:8080
+      IAM_JWT_KEYS_0_KID:
+      IAM_JWT_KEYS_0_PRIVATEKEYLOCATION: file:/run/secrets/jwt-signing-key.pem
       SPRING_MAIL_USERNAME:
       SPRING_MAIL_PASSWORD:
-      IAM_PLATFORM_ROOT_USERNAME: ${IAM_PLATFORM_ROOT_USERNAME:-}
-      IAM_PLATFORM_ROOT_PASSWORD: ${IAM_PLATFORM_ROOT_PASSWORD:-}
-      IAM_PLATFORM_ROOT_EMAIL: ${IAM_PLATFORM_ROOT_EMAIL:-}
-      IAM_PLATFORM_ROOT_FULL_NAME: ${IAM_PLATFORM_ROOT_FULL_NAME:-}
+      IAM_PLATFORM_ROOT_USERNAME:
+      IAM_PLATFORM_ROOT_PASSWORD:
+      IAM_PLATFORM_ROOT_EMAIL:
+      IAM_PLATFORM_ROOT_FULL_NAME:
       IAM_CORS_ALLOWEDORIGINS:
+    # The signing key's PEM file (IAM_JWT_KEY_FILE in .env, default ./jwt-key.pem), mounted read-only; the key never
+    # travels in an environment variable.
+    secrets:
+      - source: jwt_signing_key
+        target: jwt-signing-key.pem
     volumes:
       - ./logs:/app/logs # Shared with logstash
     depends_on:
@@ -81,6 +88,10 @@ services:
       - elasticsearch
     networks:
       - logging-network
+
+secrets:
+  jwt_signing_key:
+    file: ${IAM_JWT_KEY_FILE:-./jwt-key.pem}
 
 volumes:
   db_data:

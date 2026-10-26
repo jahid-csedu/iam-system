@@ -15,6 +15,7 @@ import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.DefaultResourceLoader;
 
 import java.time.Instant;
 import java.util.Date;
@@ -27,8 +28,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TokenVerifierTest {
 
-    private final JwtProperties properties = new JwtProperties("https://iam.test", List.of());
-    private final SigningKeys signingKeys = new SigningKeys(properties);
+    private static final DefaultResourceLoader RESOURCES = new DefaultResourceLoader();
+
+    private final JwtProperties properties = new JwtProperties("https://iam.test", List.of(), true);
+    private final SigningKeys signingKeys = new SigningKeys(properties, RESOURCES);
     private final TokenIssuer issuer = new TokenIssuer(signingKeys, properties);
     private final TokenVerifier verifier = new TokenVerifier(signingKeys);
     private UserSession session;
@@ -77,7 +80,7 @@ class TokenVerifierTest {
     @Test
     @DisplayName("A token signed with a key that isn't ours is rejected, even under one of our key ids")
     void tokenSignedWithAnotherKey_isRejected() {
-        SigningKey foreign = new SigningKeys(new JwtProperties("https://iam.test", List.of(configuredKey("foreign")))).current();
+        SigningKey foreign = new SigningKeys(new JwtProperties("https://iam.test", List.of(configuredKey("foreign")), false), RESOURCES).current();
         String underOurKid = accessTokenClaims(signingKeys.current().kid()).signWith(foreign.privateKey(), Jwts.SIG.RS256).compact();
         String underItsOwnKid = accessTokenClaims(foreign.kid()).signWith(foreign.privateKey(), Jwts.SIG.RS256).compact();
 
@@ -89,9 +92,9 @@ class TokenVerifierTest {
     @DisplayName("A token signed with an older key that is still configured stays valid")
     void tokenOfAnOlderConfiguredKey_staysValid() {
         SigningKeyProperties old = configuredKey("old");
-        JwtProperties oldConfig = new JwtProperties("https://iam.test", List.of(old));
-        String token = new TokenIssuer(new SigningKeys(oldConfig), oldConfig).issueAccessToken(session).token();
-        SigningKeys rotated = new SigningKeys(new JwtProperties("https://iam.test", List.of(configuredKey("new"), old)));
+        JwtProperties oldConfig = new JwtProperties("https://iam.test", List.of(old), false);
+        String token = new TokenIssuer(new SigningKeys(oldConfig, RESOURCES), oldConfig).issueAccessToken(session).token();
+        SigningKeys rotated = new SigningKeys(new JwtProperties("https://iam.test", List.of(configuredKey("new"), old), false), RESOURCES);
 
         assertDoesNotThrow(() -> new TokenVerifier(rotated).parseAccessToken(token));
     }

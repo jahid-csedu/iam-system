@@ -1,6 +1,8 @@
 package com.example.iamsystem.common.config;
 
+import com.example.iamsystem.platform.config.PlatformProperties;
 import com.example.iamsystem.security.config.CorsProperties;
+import com.example.iamsystem.security.config.JwtProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
@@ -11,10 +13,13 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.support.ResourcePropertySource;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,9 +34,12 @@ class EnvironmentProfileCheckTest {
             "SPRING_DATASOURCE_USERNAME", "iam",
             "SPRING_DATASOURCE_PASSWORD", "db-password",
             "IAM_JWT_ISSUER", "https://iam.example.com",
+            "IAM_JWT_KEYS_0_KID", "key-1",
             "SPRING_MAIL_USERNAME", "iam@example.com",
             "SPRING_MAIL_PASSWORD", "mail-password",
             "IAM_CORS_ALLOWEDORIGINS", "https://console.example.com");
+
+    private static final String[] PROFILES = {"local", "dev", "stage", "prod"};
 
     private final EnvironmentProfileCheck check = new EnvironmentProfileCheck();
 
@@ -45,37 +53,48 @@ class EnvironmentProfileCheckTest {
     }
 
     @Test
-    @DisplayName("Dev, stage and prod name every missing or empty setting with its environment variable")
-    void requiredProfiles_nameEveryMissingSetting() throws IOException {
-        for (String profile : new String[]{"dev", "stage", "prod"}) {
+    @DisplayName("Every profile, local included, names every missing or empty setting with its environment variable")
+    void everyProfile_namesEveryMissingSetting() throws IOException {
+        for (String profile : PROFILES) {
             IllegalStateException refused = assertThrows(IllegalStateException.class,
                     () -> run(environment(Map.of("SPRING_MAIL_PASSWORD", " "), profile)));
 
             assertEquals("The '" + profile + "' profile needs these settings: spring.datasource.url (SPRING_DATASOURCE_URL), "
                     + "spring.datasource.username (SPRING_DATASOURCE_USERNAME), spring.datasource.password "
-                    + "(SPRING_DATASOURCE_PASSWORD), iam.jwt.issuer (IAM_JWT_ISSUER), spring.mail.username "
+                    + "(SPRING_DATASOURCE_PASSWORD), iam.jwt.issuer (IAM_JWT_ISSUER), iam.jwt.keys[0].kid (IAM_JWT_KEYS_0_KID), "
+                    + "spring.mail.username "
                     + "(SPRING_MAIL_USERNAME), spring.mail.password (SPRING_MAIL_PASSWORD), iam.cors.allowed-origins "
                     + "(IAM_CORS_ALLOWEDORIGINS)", refused.getMessage());
         }
     }
 
     @Test
-    @DisplayName("Dev, stage and prod start when every setting has a value")
-    void requiredProfiles_withEverySetting_start() {
-        for (String profile : new String[]{"dev", "stage", "prod"}) {
+    @DisplayName("Every profile starts when every setting has a value")
+    void everyProfile_withEverySetting_starts() {
+        for (String profile : PROFILES) {
             assertDoesNotThrow(() -> run(environment(ALL_VARIABLES, profile)));
         }
     }
 
     @Test
-    @DisplayName("Local starts with nothing set: database defaults, no mail and no CORS origins")
-    void local_startsWithNothingSet() throws IOException {
-        StandardEnvironment local = environment(Map.of(), "local");
+    @DisplayName("Every profile reads the signing key, the platform root and the origins, and allows no key or root to be missing")
+    void everyProfile_bindsKeyRootAndOrigins() throws IOException {
+        Map<String, Object> variables = new HashMap<>(ALL_VARIABLES);
+        variables.put("IAM_JWT_KEYS_0_PRIVATEKEYLOCATION", "file:/run/secrets/jwt-signing-key.pem");
+        variables.put("IAM_PLATFORM_ROOT_USERNAME", "platform-root");
+        for (String profile : PROFILES) {
+            Binder binder = Binder.get(environment(variables, profile));
 
-        assertDoesNotThrow(() -> run(local));
-        assertEquals("jdbc:mysql://localhost:3366/iam_system_db", local.getProperty("spring.datasource.url"));
-        assertEquals("http://localhost:8080", local.getProperty("iam.jwt.issuer"));
-        assertTrue(Binder.get(local).bindOrCreate("iam.cors", CorsProperties.class).allowedOrigins().isEmpty());
+            JwtProperties jwt = binder.bindOrCreate("iam.jwt", JwtProperties.class);
+            assertEquals("key-1", jwt.keys().getFirst().kid(), profile);
+            assertEquals("file:/run/secrets/jwt-signing-key.pem", jwt.keys().getFirst().privateKeyLocation(), profile);
+            assertFalse(jwt.allowTemporaryKey(), profile);
+            PlatformProperties platform = binder.bindOrCreate("iam.platform", PlatformProperties.class);
+            assertEquals("platform-root", platform.root().username(), profile);
+            assertFalse(platform.allowMissingRoot(), profile);
+            assertEquals(List.of("https://console.example.com"),
+                    binder.bindOrCreate("iam.cors", CorsProperties.class).allowedOrigins(), profile);
+        }
     }
 
     @Test

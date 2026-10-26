@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.DefaultResourceLoader;
 
 import java.time.Instant;
 import java.util.List;
@@ -37,8 +38,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TokenIntrospectionServiceTest {
 
-    private final JwtProperties properties = new JwtProperties("https://iam.test", List.of());
-    private final SigningKeys signingKeys = new SigningKeys(properties);
+    private final JwtProperties properties = new JwtProperties("https://iam.test", List.of(), true);
+    private final SigningKeys signingKeys = new SigningKeys(properties, new DefaultResourceLoader());
     private final TokenIssuer tokenIssuer = new TokenIssuer(signingKeys, properties);
 
     @Mock

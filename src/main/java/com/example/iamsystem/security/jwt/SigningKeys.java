@@ -3,8 +3,11 @@ package com.example.iamsystem.security.jwt;
 import com.example.iamsystem.security.config.JwtProperties;
 import com.example.iamsystem.security.config.JwtProperties.SigningKeyProperties;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
@@ -15,8 +18,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * The platform's token signing keys: the configured ones, or a temporary key generated at startup when none is configured.
- * The first key signs; every key verifies, which lets a new key take over while tokens of the old one are still alive.
+ * The platform's token signing keys: the configured ones (the PEM inline or read from its location), or, only where
+ * {@link JwtProperties#allowTemporaryKey()} allows it (the local profile), a temporary key generated at startup. Without
+ * a key anywhere else the startup stops. The first key signs; every key verifies, which lets a new key take over while
+ * tokens of the old one are still alive.
  */
 @Component
 @Slf4j
@@ -24,8 +29,12 @@ public class SigningKeys {
 
     private final List<SigningKey> keys;
 
-    public SigningKeys(JwtProperties properties) {
-        this.keys = properties.keys().isEmpty() ? List.of(temporaryKey()) : configuredKeys(properties.keys());
+    public SigningKeys(JwtProperties properties, ResourceLoader resourceLoader) {
+        if (properties.keys().isEmpty()) {
+            this.keys = List.of(temporaryKey(properties.allowTemporaryKey()));
+        } else {
+            this.keys = configuredKeys(properties.keys(), resourceLoader);
+        }
     }
 
     /**
@@ -46,9 +55,9 @@ public class SigningKeys {
         return keys.stream().filter(key -> key.kid().equals(kid)).findFirst().map(SigningKey::publicKey);
     }
 
-    private static List<SigningKey> configuredKeys(List<SigningKeyProperties> configured) {
+    private static List<SigningKey> configuredKeys(List<SigningKeyProperties> configured, ResourceLoader resourceLoader) {
         List<SigningKey> parsed = configured.stream()
-                .map(key -> RsaKeyParser.parse(key.kid(), key.privateKey()))
+                .map(key -> RsaKeyParser.parse(key.kid(), pemOf(key, resourceLoader)))
                 .toList();
         if (parsed.stream().map(SigningKey::kid).distinct().count() < parsed.size()) {
             throw new IllegalStateException("JWT signing key ids must be unique");
@@ -57,7 +66,23 @@ public class SigningKeys {
         return parsed;
     }
 
-    private static SigningKey temporaryKey() {
+    private static String pemOf(SigningKeyProperties key, ResourceLoader resourceLoader) {
+        if (key.isInline()) {
+            return key.privateKey();
+        }
+        try {
+            return resourceLoader.getResource(key.privateKeyLocation()).getContentAsString(StandardCharsets.US_ASCII);
+        } catch (IOException e) {
+            throw new IllegalStateException("Can't read JWT signing key '" + key.kid() + "' from " + key.privateKeyLocation(), e);
+        }
+    }
+
+    private static SigningKey temporaryKey(boolean allowed) {
+        if (!allowed) {
+            throw new IllegalStateException("No JWT signing key configured: set IAM_JWT_KEYS_0_KID and either "
+                    + "IAM_JWT_KEYS_0_PRIVATEKEY or IAM_JWT_KEYS_0_PRIVATEKEYLOCATION (a temporary key is generated only "
+                    + "in the local profile)");
+        }
         try {
             KeyPairGenerator generator = KeyPairGenerator.getInstance(RsaKeyParser.RSA);
             generator.initialize(RsaKeyParser.MIN_KEY_BITS);

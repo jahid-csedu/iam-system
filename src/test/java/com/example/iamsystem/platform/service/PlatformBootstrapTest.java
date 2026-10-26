@@ -32,6 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -90,12 +91,30 @@ class PlatformBootstrapTest {
     }
 
     @Test
-    @DisplayName("Without a configured root, or with an incomplete one, the platform has no root user")
-    void withoutConfiguration_noPlatformRoot() {
+    @DisplayName("Where a missing root is allowed (local), no or an incomplete configuration leaves the platform without a root")
+    void withoutConfiguration_whereAllowed_noPlatformRoot() {
         run(null);
-        run(new RootUser("platform-root", null, "root@platform.test", null));
+        run(new RootUser("platform-root", null, "root@platform.test", ""));
 
         assertFalse(userRepository.existsByTenantIdAndIsRootUserTrue(platformTenant().getId()));
+    }
+
+    @Test
+    @DisplayName("Elsewhere, no or an incomplete configuration stops the startup while the platform has no root")
+    void withoutConfiguration_elsewhere_stopsTheStartup() {
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> run(null, false));
+        assertThrows(IllegalStateException.class, () -> run(new RootUser("platform-root", "", "root@platform.test", null), false));
+
+        assertTrue(error.getMessage().startsWith("The platform has no root user"), error.getMessage());
+        assertTrue(tenantRepository.findByType(TenantType.PLATFORM).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Once the platform has its root, the root configuration may be removed")
+    void existingRoot_needsNoConfiguration() {
+        run(CONFIGURED_ROOT, false);
+
+        assertDoesNotThrow(() -> run(null, false));
     }
 
     @Test
@@ -133,11 +152,18 @@ class PlatformBootstrapTest {
     }
 
     /**
-     * Runs a bootstrap with the given root configuration in a transaction, as Spring runs the real one at startup.
+     * Runs a bootstrap with the given root configuration where a missing root is allowed, like the local profile.
      */
     private void run(RootUser root) {
+        run(root, true);
+    }
+
+    /**
+     * Runs a bootstrap with the given root configuration in a transaction, as Spring runs the real one at startup.
+     */
+    private void run(RootUser root, boolean allowMissingRoot) {
         PlatformBootstrap bootstrap = new PlatformBootstrap(tenantRepository, predefinedRoleService, clientService,
-                userRepository, userFactory, new PlatformProperties(root));
+                userRepository, userFactory, new PlatformProperties(root, allowMissingRoot));
         transactionTemplate.executeWithoutResult(status -> bootstrap.run(null));
     }
 

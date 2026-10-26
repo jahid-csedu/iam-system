@@ -78,7 +78,8 @@ This file lets any new session pick up the work without the conversation that pr
 | Reasons | The 401 for a blocked account's token says why (locked until, deactivated, tenant or client suspended); 401 bodies are the usual error JSON | `d7cf5db` |
 | Expiry | Login and refresh answer with `token_type` and `expires_in` (`TokenIssuer` returns `IssuedAccessToken`, the one source of the lifetime); `Cache-Control: no-store` kept by a test | `175eaf6` |
 | Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is plan step 16 | `8a1947e` |
-| Profiles 1 | `local` / `dev` / `stage` / `prod` profile files; `EnvironmentProfileCheck` (exactly one profile; required settings outside `local`) | profiles commit |
+| Profiles 1 | `local` / `dev` / `stage` / `prod` profile files; `EnvironmentProfileCheck` (exactly one profile; required settings outside `local`) | `ba2e721` |
+| Profiles 2 | Every profile, `local` included, requires every setting: JWT key (PEM inline or `private-key-location`; a temporary key only in the test suite), platform root until it exists, DB, issuer, mail, CORS | profiles 2 commit |
 
 ---
 
@@ -214,7 +215,8 @@ by the bearer access token; introspection is public until clients get secrets; t
 - RS256 with configured RSA private keys (`iam.jwt.keys[n].kid` + `private-key` PEM); the first key signs, every key's
   public half is published at `GET /.well-known/jwks.json`. Only the private key can sign; the public key verifies only,
   and the verifier accepts RS256 signatures by known `kid`s only (no `none`, no HMAC with the public key).
-- No configured key: a temporary key is generated at startup with a WARN (tokens don't survive a restart).
+- No configured key: a temporary key is generated at startup with a WARN (tokens don't survive a restart). Since the
+  profiles (2026-10-26) only in the test suite; elsewhere the startup stops.
 - Access token: header `typ: at+jwt` + `kid`; claims `iss` = `<iam.jwt.issuer>/tenants/{tenantId}`, `sub`, `aud` and
   `client_id` = the client, `jti`, `iat`, `exp`, the client's claims (`version` stays until 9b).
 - Hard-coded HMAC secrets and `JwtConstant` removed; `JwtTokenUtil` split into `TokenIssuer` and `TokenVerifier`.
@@ -272,7 +274,7 @@ refresh, and its sessions are refused by the filter and introspection.
 | JWT filter errors → 500 instead of 401 | Done in step 6b |
 | `/token/validate` ignores revocation | Done in step 9c (replaced by introspection) |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
-| `mail.debug=true` (done: security fix 1, `MailConfig` removed); DB credentials in `application.properties`; no JWT key configured only warns | Config step: profiles (done: commit 1; DB credentials are `local` defaults only); JWT key and platform root required outside `local` (commit 2) |
+| `mail.debug=true` (done: security fix 1, `MailConfig` removed); DB credentials in `application.properties`; no JWT key configured only warns | Done: profiles (no credentials in `application.properties`); every setting, JWT key and platform root included, required in every profile |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |

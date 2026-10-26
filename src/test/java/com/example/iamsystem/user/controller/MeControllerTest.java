@@ -150,7 +150,7 @@ class MeControllerTest {
     @DisplayName("With X-Tenant-Id the platform root sees the Platform as home, that tenant as working tenant, and every key")
     void platformRoot_insideATenant_seesThatTenant() throws Exception {
         PlatformBootstrap bootstrap = new PlatformBootstrap(tenantRepository, predefinedRoleService, clientService,
-                userRepository, userFactory, new PlatformProperties(new RootUser("platform-root", PASSWORD, "root@platform.test", null)));
+                userRepository, userFactory, new PlatformProperties(new RootUser("platform-root", PASSWORD, "root@platform.test", null), false));
         transactionTemplate.executeWithoutResult(status -> bootstrap.run(null));
         long platformId = tenantRepository.findByType(TenantType.PLATFORM).orElseThrow().getId();
         String platformRoot = login(clientRepository.findAllByTenantIdOrderByName(platformId).getFirst().getClientId(), "platform-root");

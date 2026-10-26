@@ -32,6 +32,6 @@ final class TestKeys {
     }
 
     static SigningKeyProperties configuredKey(String kid) {
-        return new SigningKeyProperties(kid, pem(rsaKeyPair(2048)));
+        return new SigningKeyProperties(kid, pem(rsaKeyPair(2048)), null);
     }
 }

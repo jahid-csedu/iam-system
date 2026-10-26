@@ -86,53 +86,64 @@ them, delete them, or create more. Later changes to the predefined set never aff
 **Environment profiles.** Every run has exactly one: `local`, `dev`, `stage` or `prod` (`SPRING_PROFILES_ACTIVE`);
 without one, or with two, the app doesn't start. `./gradlew bootRun` uses `local` unless `.env` sets another;
 `docker compose` runs `dev`. Each profile has its file, `application-<profile>.properties`, listing its settings and
-the environment variables they come from:
+the environment variables they come from. Every profile needs every setting, `local` included, so everything can be
+tried on your machine exactly as it runs when deployed (copy `example.env` to `.env` and fill it in):
 
-| Setting | Variable | `local` | `dev`, `stage`, `prod` |
-|---|---|---|---|
-| Database | `SPRING_DATASOURCE_URL`, `_USERNAME`, `_PASSWORD` | Defaults to `localhost:3366`, `root` / `password` | Required (compose sets them for its MySQL) |
-| Public base URL (tokens' `iss`) | `IAM_JWT_ISSUER` | Defaults to `http://localhost:8080` | Required (compose: `http://localhost:8080`) |
-| Mail account | `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | Optional (no emails without it) | Required |
-| Browser origins (CORS) | `IAM_CORS_ALLOWEDORIGINS` | Optional (none) | Required |
+| Setting | Variable | Notes |
+|---|---|---|
+| Database | `SPRING_DATASOURCE_URL`, `_USERNAME`, `_PASSWORD` | compose sets its own for its MySQL |
+| Public base URL (tokens' `iss`) | `IAM_JWT_ISSUER` | compose: `http://localhost:8080` |
+| Mail account | `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | |
+| Browser origins (CORS) | `IAM_CORS_ALLOWEDORIGINS` | |
+| Token signing key | `IAM_JWT_KEYS_0_KID` + `IAM_JWT_KEYS_0_PRIVATEKEYLOCATION` or `IAM_JWT_KEYS_0_PRIVATEKEY` | compose: the PEM file `IAM_JWT_KEY_FILE` |
+| First super user | `IAM_PLATFORM_ROOT_USERNAME`, `_PASSWORD`, `_EMAIL`, `_FULL_NAME` (optional) | Only until the platform has its root |
 
-Outside `local`, a missing or empty required setting stops the startup with a message naming all of them, e.g. "The
-'dev' profile needs these settings: spring.mail.username (SPRING_MAIL_USERNAME), ...". With `docker compose`, put them
-in `.env`.
+A missing or empty setting stops the startup with a message naming all of them, e.g. "The 'local' profile needs these
+settings: spring.mail.username (SPRING_MAIL_USERNAME), ...". Only the automated tests run without them.
+IntelliJ's run button reads the same `.env` when the run configuration lists it (Environment variables → .env file),
+but unlike `bootRun` it doesn't skip `#` lines: a setting kept commented out as `# NAME=value` still reaches the app
+(Spring drops the `# `). Delete unused settings instead of commenting them out.
 
 The database schema and the permission catalog are created automatically (Flyway) on first start, and so is the
 **Platform** tenant of the super users (its name is therefore taken).
 
 **First super user.** Set `IAM_PLATFORM_ROOT_USERNAME`, `IAM_PLATFORM_ROOT_PASSWORD` (password policy applies) and
 `IAM_PLATFORM_ROOT_EMAIL` (optionally `IAM_PLATFORM_ROOT_FULL_NAME`) in `.env`; `docker compose` passes them to the app.
-At startup, while the platform has no root user, this user becomes its root (a WARN is logged when they're missing). It
+At startup, while the platform has no root user, this user becomes its root (when they're missing, the app doesn't
+start). It
 logs in like any root, through the Platform tenant's management console: its `client_id` is logged once, when the
 Platform tenant is created ("Created the platform tenant ... (client_id ...)").
-The variables are read only then: changing them later changes nothing.
+The variables are read only then: changing them later changes nothing, and once the root exists they can be removed
+(the password shouldn't stay in the environment).
 
 Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs are only ever
-sent by email, and no password is ever emailed (required outside `local`). Each development step starts from a fresh database: `docker compose down -v` removes the old one.
+sent by email, and no password is ever emailed. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 
-**Token signing key.** Tokens are signed with an RSA private key that only the IAM holds. Configure one with
-`IAM_JWT_KEYS_0_KID` (any id, e.g. `key-2026-10`) and `IAM_JWT_KEYS_0_PRIVATEKEY` (a PKCS#8 RSA key of at least 2048 bits,
-base64 on one line; PEM header lines are optional). Write `PRIVATEKEY` as one word: Spring reads every `_` in a variable
-name as a `.`, so `PRIVATE_KEY` would not reach the `private-key` property:
+**Token signing key.** Tokens are signed with an RSA private key that only the IAM holds (a PKCS#8 RSA key of at least
+2048 bits). Create one and keep it out of the repository (`*.pem` is git-ignored):
 
 ```bash
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out jwt-key.pem
-grep -v -- ----- jwt-key.pem | tr -d '\n'     # the value for IAM_JWT_KEYS_0_PRIVATEKEY
 ```
 
-Put both in `.env` for `./gradlew bootRun`, or pass them to the `app` container (`-e` / `environment:`). Without a key the
-app generates a temporary one at startup (a WARN in the log) and every token becomes invalid when it restarts.
+Configure `IAM_JWT_KEYS_0_KID` (any id, e.g. `key-2026-10`) and **one** of:
+- `IAM_JWT_KEYS_0_PRIVATEKEYLOCATION`: where to read the PEM file, with a `file:` prefix
+  (`file:C:/Users/me/keys/jwt-key.pem`, `file:/run/secrets/jwt-signing-key.pem`); preferred, the key never sits in a
+  variable.
+- `IAM_JWT_KEYS_0_PRIVATEKEY`: the key itself, base64 on one line (PEM header lines optional):
+  `grep -v -- ----- jwt-key.pem | tr -d '\n'`. For platforms that hand secrets over only as variables.
+
+Both, or a kid without either, stops the startup. Write `PRIVATEKEY` and `PRIVATEKEYLOCATION` as one word: Spring reads
+every `_` in a variable name as a `.`, so `PRIVATE_KEY` would not reach the `private-key` property. `docker compose`
+mounts the PEM file named by `IAM_JWT_KEY_FILE` in `.env` (default `./jwt-key.pem`) read-only at
+`/run/secrets/jwt-signing-key.pem` and points the app there. Without a key the app doesn't start.
 **Rotating:** add the new key as `IAM_JWT_KEYS_0_*` and move the old one to `IAM_JWT_KEYS_1_*`; the first key signs, both
 are published, so tokens signed by the old key keep working. Remove the old key once the access tokens it signed have expired (refresh tokens aren't signed).
-`IAM_JWT_ISSUER` (`local` default `http://localhost:8080`, required elsewhere) is the public base URL put into every
-token's `iss`.
+`IAM_JWT_ISSUER` is the public base URL put into every token's `iss` (locally `http://localhost:<SERVER_PORT>`).
 
 **Browser apps (CORS).** A web app served from another origin (for example the management console on
 `http://localhost:5173`) may call the API only when its origin is listed in `IAM_CORS_ALLOWEDORIGINS`, comma-separated:
-`IAM_CORS_ALLOWEDORIGINS=http://localhost:5173,https://console.example.com` (in `.env`; `docker compose` passes it on;
-required outside `local`).
+`IAM_CORS_ALLOWEDORIGINS=http://localhost:5173,https://console.example.com` (in `.env`; `docker compose` passes it on).
 Each entry is an exact origin (scheme, host, optional port; no path, trailing slash or `*`); anything else stops the app
 at startup. Allowed: `GET`, `POST`, `PUT`, `PATCH`, `DELETE` with the headers `Authorization`, `Content-Type` and
 `X-Tenant-Id`; no cookies. Requests from an origin that isn't listed get `403` ("Invalid CORS request"); without the

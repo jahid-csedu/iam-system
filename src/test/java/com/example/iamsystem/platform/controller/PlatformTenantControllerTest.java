@@ -75,7 +75,7 @@ class PlatformTenantControllerTest {
     void setUp() throws Exception {
         PlatformBootstrap bootstrap = new PlatformBootstrap(tenantRepository, predefinedRoleService, clientService,
                 userRepository, userFactory,
-                new PlatformProperties(new RootUser("platform-root", "Password1!", "root@platform.test", null)));
+                new PlatformProperties(new RootUser("platform-root", "Password1!", "root@platform.test", null), false));
         transactionTemplate.executeWithoutResult(status -> bootstrap.run(null));
         platformRoot = findByUsername(userRepository, "platform-root").orElseThrow();
 

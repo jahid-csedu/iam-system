@@ -97,7 +97,7 @@ class PlatformGrantControllerTest {
     @BeforeEach
     void setUp() throws Exception {
         PlatformBootstrap bootstrap = new PlatformBootstrap(tenantRepository, predefinedRoleService, clientService,
-                userRepository, userFactory, new PlatformProperties(new RootUser("platform-root", PASSWORD, "root@platform.test", null)));
+                userRepository, userFactory, new PlatformProperties(new RootUser("platform-root", PASSWORD, "root@platform.test", null), false));
         transactionTemplate.executeWithoutResult(status -> bootstrap.run(null));
         platformId = tenantRepository.findByType(TenantType.PLATFORM).orElseThrow().getId();
         platformRoot = findByUsername(userRepository, "platform-root").orElseThrow();
