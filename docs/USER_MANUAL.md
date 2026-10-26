@@ -256,7 +256,7 @@ and gets `403` on every management endpoint.
 | List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `users:read` |
 | Direct permissions | `PUT` / `DELETE /api/users/permissions` `{ "username", "permissionIds" }` (management users only, never yourself) | `users:update` |
 | Find a user | `GET /api/users/{id}`, `/api/users/by-username?username=`, `/api/users/by-email?email=` | `users:read` |
-| Delete a user | `DELETE /api/users/{id}` (users they created stay, without a creator) | `users:delete` (never a root user, not even by itself: `403`) |
+| Delete a user | `DELETE /api/users/{id}` (users they created stay, without a creator) | `users:delete` (never a root user, not even by itself, and never your own account: `403`) |
 | Roles | `GET /api/roles`, `GET /api/roles/{id}`, `GET /api/roles/name/{name}` | `roles:read` |
 | Change roles | `POST /api/roles`, `PUT /api/roles/{id}` `{ "name", "description" }`, `DELETE /api/roles/{id}` (also removes it from its users) | `roles:create` / `roles:update` / `roles:delete`, never on a role you hold |
 | Role permissions | `PUT /api/roles/permissions` / `DELETE /api/roles/permissions` `{ "roleId", "permissionIds" }` | `roles:update`, never on a role you hold |

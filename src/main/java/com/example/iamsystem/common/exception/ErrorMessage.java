@@ -59,6 +59,7 @@ public class ErrorMessage {
     public static final String TOKEN_REQUIRED = "Token cannot be null or blank";
     public static final String NO_PERMISSION = "Do not have permission to perform this operation";
     public static final String ROOT_USER_NOT_DELETABLE = "The root user can't be deleted";
+    public static final String OWN_ACCOUNT_NOT_DELETABLE = "You can't delete your own account";
     public static final String PASSWORD_POLICY_VIOLATION = "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
     public static final String ACCOUNT_DISABLED = "Account is disabled";
     public static final String ACCOUNT_LOCKED_UNTIL = "Your account is locked until %s";

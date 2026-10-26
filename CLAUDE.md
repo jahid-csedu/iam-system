@@ -270,7 +270,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
-- Nobody deletes a root user, not even the root itself (403), so every tenant keeps its root.
+- Nobody deletes a root user, not even the root itself (403), so every tenant keeps its root. Nobody deletes their own
+  account either (403 "You can't delete your own account"); self-service deletion is plan step 16.
 - Lockout: `FailedPasswordCounter` counts every wrong password (login, old password of a password change, current
   password of an email change) in one atomic update in its own transaction; 5 lock the account for 15 minutes (the filter
   then refuses its tokens); a correct one clears the count. A missing password is no guess.
@@ -551,3 +552,6 @@ Design debt
   returns `IssuedAccessToken` (token + lifetime), so `exp` and `expires_in` share one number. `JwtResponse` is a record
   with masked tokens in `toString`. `Cache-Control: no-store` was already sent (Spring Security defaults); a test keeps it.
   Decision: no `refresh_expires_in` (not standard).
+- 2026-10-26: Own account deletion. `UserAccessPolicy.checkCanDelete` refuses deleting yourself (403), like every other
+  self-modification. Decisions (option A): another user deletes you; a deliberate self-service deletion with the current
+  password is plan step 16 (option B, with self-registration).

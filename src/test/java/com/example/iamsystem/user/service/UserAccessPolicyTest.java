@@ -105,6 +105,14 @@ class UserAccessPolicyTest {
     }
 
     @Test
+    @DisplayName("Nobody deletes their own account; another user with the permission has to")
+    void checkCanDelete_ownAccount_isRefused() {
+        NoAccessException refused = assertThrows(NoAccessException.class, () -> policy.checkCanDelete(actor(manager), manager));
+
+        assertEquals("You can't delete your own account", refused.getMessage());
+    }
+
+    @Test
     @DisplayName("A non-root user may be deleted")
     void checkCanDelete_nonRootUser_isAllowed() {
         assertDoesNotThrow(() -> policy.checkCanDelete(actor(manager), member));

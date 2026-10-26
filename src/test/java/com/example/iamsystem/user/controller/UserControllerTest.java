@@ -413,6 +413,22 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("A user allowed to delete users can't delete their own account")
+    @Sql("/sql/insert_user_role.sql")
+    void deleteUser_ownAccount_isForbidden() throws Exception {
+        User root = findByUsername(userRepository, "root").orElseThrow();
+        Map<String, Object> usersDelete = Map.of("username", "user", "permissionIds", Set.of(catalogEntry("users:delete").getId()));
+        attach(put("/api/users/permissions"), root, usersDelete).andExpect(status().isNoContent());
+        User member = findByUsername(userRepository, "user").orElseThrow();
+
+        mockMvc.perform(delete("/api/users/{id}", member.getId())
+                        .with(actingAs(member)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You can't delete your own account"));
+        assertTrue(userRepository.existsById(member.getId()));
+    }
+
+    @Test
     @DisplayName("Another user cannot delete the root user")
     @Sql("/sql/insert_user_role.sql")
     void deleteUser_rootByAnotherUser_isForbidden() throws Exception {

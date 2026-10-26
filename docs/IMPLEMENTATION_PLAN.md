@@ -76,7 +76,8 @@ This file lets any new session pick up the work without the conversation that pr
 | Profile 2 | `PATCH /api/me`: your own full name and email (management users; a new email needs the current password; a root's email unique across all tenants) | `b7a1332` |
 | Guesses | Wrong old/current passwords count like failed logins (`FailedPasswordCounter`, atomic, own transaction) | `1867199` |
 | Reasons | The 401 for a blocked account's token says why (locked until, deactivated, tenant or client suspended); 401 bodies are the usual error JSON | `d7cf5db` |
-| Expiry | Login and refresh answer with `token_type` and `expires_in` (`TokenIssuer` returns `IssuedAccessToken`, the one source of the lifetime); `Cache-Control: no-store` kept by a test | expiry commit |
+| Expiry | Login and refresh answer with `token_type` and `expires_in` (`TokenIssuer` returns `IssuedAccessToken`, the one source of the lifetime); `Cache-Control: no-store` kept by a test | `175eaf6` |
+| Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is plan step 16 | own-delete commit |
 
 ---
 
@@ -339,6 +340,15 @@ Origins", each client gets its own list, managed by the tenant:
   auth endpoints (cached) or moving `client_id` into the path or a header.
 - Cache the origin lookup (every preflight would otherwise hit the database).
 - Frontend: an "Allowed web origins" field on the application detail page.
+
+### Step 16: Self-service account deletion (planned, owner asked 2026-10-26; with roadmap item 12)
+`DELETE /api/users/{id}` refuses your own account, so nobody deletes themselves by mistake. A deliberate "delete my
+account" (what self-registered regular users of an application expect, and what data-protection requests need) becomes
+its own endpoint when self-registration (roadmap item 12) gives regular users self-service:
+- `DELETE /api/me` (or a client-facing equivalent for regular users) with the current password in the body, counted by
+  `FailedPasswordCounter` like the email change; never the root (403); audited.
+- Decide then: delete at once or deactivate first with a grace period; whether management users may use it.
+- Frontend: a "Delete my account" danger zone on the account page, behind the password.
 
 ## 5. After the target design: the feature roadmap (`IAM_ROADMAP.md`)
 
