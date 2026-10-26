@@ -70,6 +70,7 @@ This file lets any new session pick up the work without the conversation that pr
 | 10l | Permission grants; grants given and removed in bulk (`roleIds` / `permissionIds`, `DELETE` with the same body) | `f03eff7` |
 | 10m | `is_super_user` dropped (`V13`); step 10 complete | `ca015ec` |
 | 11 | Client status (`V14`): suspend / activate clients; suspended clients refuse logins and tokens | step 11 commit |
+| CORS | Allowed browser origins from `iam.cors.allowed-origins` (`CorsProperties`, `CorsConfig`); none by default | CORS commit |
 
 ---
 
@@ -316,6 +317,20 @@ To decide when the frontend exists:
   the link instead of the six-digit OTP (no typing; never put the short OTP itself in a URL, where browser history,
   proxies and logs keep it).
 - A separate email template for this purpose (step 13).
+
+### Step 15: Allowed web origins per client (planned, owner asked 2026-10-26)
+Today the browser origins allowed to call the API are one platform-wide list (`iam.cors.allowed-origins`), set by whoever
+runs the IAM. That covers our own console and hosted pages, but a tenant's own single-page app on its own domain (calling
+login, refresh or forgot-password directly) needs the platform operator to add its origin. Like Auth0's "Allowed Web
+Origins", each client gets its own list, managed by the tenant:
+- `clients.allowed_web_origins` (or a `client_allowed_origins` table), edited with the client (`clients:update`), exact
+  origins only, validated like `CorsProperties`.
+- A `CorsConfigurationSource` that allows the configured platform origins everywhere, plus a client's origins on the
+  public endpoints that carry its `client_id` (and for tokens of that client). To decide then: a preflight carries no
+  body, so the `client_id` can't be read from it; options are allowing the union of all clients' origins on the public
+  auth endpoints (cached) or moving `client_id` into the path or a header.
+- Cache the origin lookup (every preflight would otherwise hit the database).
+- Frontend: an "Allowed web origins" field on the application detail page.
 
 ## 5. After the target design: the feature roadmap (`IAM_ROADMAP.md`)
 

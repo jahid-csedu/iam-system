@@ -13,6 +13,7 @@ services:
       IAM_PLATFORM_ROOT_PASSWORD: ${IAM_PLATFORM_ROOT_PASSWORD:-}
       IAM_PLATFORM_ROOT_EMAIL: ${IAM_PLATFORM_ROOT_EMAIL:-}
       IAM_PLATFORM_ROOT_FULL_NAME: ${IAM_PLATFORM_ROOT_FULL_NAME:-}
+      IAM_CORS_ALLOWEDORIGINS: ${IAM_CORS_ALLOWEDORIGINS:-}
     volumes:
       - ./logs:/app/logs # Shared with logstash
     depends_on:

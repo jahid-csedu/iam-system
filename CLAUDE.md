@@ -216,7 +216,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `auth/`: thin `AuthController` (`/api/auth/*`) + `AuthenticationService` (login, refresh, logout),
   `TokenIntrospectionService` (`/api/auth/introspect`) and DTOs;
   `JwksController` (`/.well-known/jwks.json`)
-- `security/`: Spring Security wiring: `config/` (incl. `JwtProperties`), `filter/` (JWT filter), `jwt/` (`SigningKeys` = the
+- `security/`: Spring Security wiring: `config/` (incl. `JwtProperties`; `CorsConfig` + `CorsProperties` = allowed browser
+  origins), `filter/` (JWT filter), `jwt/` (`SigningKeys` = the
   RSA key set, `TokenIssuer`, `TokenVerifier`: access tokens only),
   `userdetails/` (`AuthenticatedActor` = the request principal; `CurrentUserProvider`, the single owner of "who is logged in"
   and of the current tenant id; `ActingTenantResolver` = which tenant a request works in (`X-Tenant-Id`);
@@ -245,6 +246,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - Token settings live on the client (`access_token_ttl_seconds`, `refresh_token_enabled`, `refresh_token_ttl_seconds`,
   `client_token_claims`). `SessionService.start` and `TokenIssuer.issueAccessToken(session)` read them; defaults are
   `ClientService.DEFAULT_TOKEN_SETTINGS` (5 min, refresh on for 24 h, `USERNAME`).
+- CORS: only the origins in `iam.cors.allowed-origins` (`IAM_CORS_ALLOWEDORIGINS`, exact origins, validated at startup)
+  may call the API from a browser on another origin; none by default. Methods GET/POST/PUT/PATCH/DELETE, headers
+  `Authorization`, `Content-Type`, `X-Tenant-Id`, no credentials (tokens never travel in cookies). Other origins get 403.
+  Per-client origins are plan step 15.
 - Tokens are RS256-signed by the first key of `iam.jwt.keys` (kid + PKCS#8 PEM private key, public key derived); every
   configured key is published at `GET /.well-known/jwks.json` (public) and accepted by `TokenVerifier`, which only takes
   RS256 by a known `kid` and `typ: at+jwt`. No key configured → a temporary key with a WARN.
@@ -492,3 +497,7 @@ Design debt
 - 2026-10-26: Fix: the password policy's special characters were `[@#!$%^&-+=()]`, where `&-+` is a range, so `-` was
   refused and `'` `*` accepted. The hyphen is escaped; the set is exactly `@#!$%^&-+=()` as documented. Also fixed stale
   docs (forgot-password 404, 401 vs 403 at login, 429/503 rows, admin reset OTP summary).
+- 2026-10-26: CORS. `CorsProperties` (`iam.cors.allowed-origins`, exact origins, invalid ones stop startup) and `CorsConfig`
+  (every path; GET/POST/PUT/PATCH/DELETE; `Authorization`, `Content-Type`, `X-Tenant-Id`; no credentials; preflight cached
+  1 h); `AuthorizationConfig` turns CORS on. Decisions: one platform-wide list now (option A); per-client allowed web
+  origins later (plan step 15, option B).
