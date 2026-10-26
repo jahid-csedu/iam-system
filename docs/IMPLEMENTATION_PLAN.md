@@ -72,7 +72,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 11 | Client status (`V14`): suspend / activate clients; suspended clients refuse logins and tokens | step 11 commit |
 | CORS | Allowed browser origins from `iam.cors.allowed-origins` (`CorsProperties`, `CorsConfig`); none by default | CORS commit |
 | Me | `GET /api/me` for management users: profile, home and working tenant, permission keys (`AuthorizationService.permissionsOf`) | `04a77e4`, `816961f` |
-| Profile 1 | `PATCH /api/users/{id}`: another user's full name and email (`users:update`, a new email also `users:reset-password`; never yourself or the root; pending reset OTP deleted) | profile commit 1 |
+| Profile 1 | `PATCH /api/users/{id}`: another user's full name and email (`users:update`, a new email also `users:reset-password`; never yourself or the root; pending reset OTP deleted) | `43148ba` |
+| Profile 2 | `PATCH /api/me`: your own full name and email (management users; a new email needs the current password; a root's email unique across all tenants) | profile commit 2 |
 
 ---
 

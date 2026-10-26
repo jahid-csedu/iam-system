@@ -2,7 +2,6 @@ package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.DataNotFoundException;
-import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.permission.PermissionKey;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
@@ -11,7 +10,6 @@ import com.example.iamsystem.tenant.mapper.TenantMapper;
 import com.example.iamsystem.tenant.repository.TenantRepository;
 import com.example.iamsystem.user.dto.MeDto;
 import com.example.iamsystem.user.entity.User;
-import com.example.iamsystem.user.entity.UserType;
 import com.example.iamsystem.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-import static com.example.iamsystem.common.exception.ErrorMessage.MANAGEMENT_USERS_ONLY;
 import static com.example.iamsystem.common.exception.ErrorMessage.TENANT_NOT_FOUND;
 
 /**
@@ -35,14 +32,13 @@ public class MeService {
     private final TenantRepository tenantRepository;
     private final AuthorizationService authorizationService;
     private final TenantMapper tenantMapper;
+    private final UserAccessPolicy accessPolicy;
 
     @Transactional(readOnly = true)
     public MeDto currentUser() {
         AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User user = userRepository.getRequiredByIdAndTenantId(actor.userId(), actor.homeTenantId());
-        if (user.getUserType() != UserType.MANAGEMENT) {
-            throw new NoAccessException(MANAGEMENT_USERS_ONLY);
-        }
+        accessPolicy.checkIsManagementUser(user);
         TenantDto homeTenant = tenantMapper.toDto(user.getTenant());
         TenantDto workingTenant = actor.isActingInOtherTenant()
                 ? tenantMapper.toDto(tenantRepository.findById(actor.tenantId())

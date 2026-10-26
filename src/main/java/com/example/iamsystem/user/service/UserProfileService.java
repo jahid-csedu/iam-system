@@ -3,26 +3,31 @@ package com.example.iamsystem.user.service;
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.authorization.AuthorizationService;
+import com.example.iamsystem.common.exception.InvalidPasswordException;
 import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
+import com.example.iamsystem.user.dto.OwnProfileUpdateDto;
 import com.example.iamsystem.user.dto.UserDto;
 import com.example.iamsystem.user.dto.UserUpdateDto;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.mapper.UserMapper;
 import com.example.iamsystem.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.example.iamsystem.common.exception.ErrorMessage.INVALID_CURRENT_PASSWORD;
 import static com.example.iamsystem.permission.PermissionKey.USERS_RESET_PASSWORD;
 
 /**
- * Changes another user's profile (full name, email) inside the current tenant; your own goes through {@code /api/me}.
+ * Changes a user's profile (full name, email): another user's inside the current tenant, or a management user's own.
  * <p>
- * Whoever controls a user's email controls their password resets, so a new email address also needs
- * {@code users:reset-password} on top of the endpoint's {@code users:update}, and any pending reset OTP (sent to the old
- * address) is deleted.
+ * Whoever controls a user's email controls their password resets. So a new email address needs
+ * {@code users:reset-password} on top of {@code users:update} for another user, and your current password for yourself;
+ * and any pending reset OTP (sent to the old address) is deleted. A root's email must be unused by every user of every
+ * tenant, anyone else's by the users of their tenant and by every root.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,6 +39,7 @@ public class UserProfileService {
     private final AuthorizationService authorizationService;
     private final ResetOtpIssuer resetOtpIssuer;
     private final CurrentUserProvider currentUserProvider;
+    private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
 
     @Auditable(
@@ -46,18 +52,55 @@ public class UserProfileService {
         AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User user = userRepository.getRequiredByIdAndTenantId(id, actor.tenantId());
         accessPolicy.checkCanUpdateProfile(actor, user);
-
-        if (request.email() != null && !request.email().equalsIgnoreCase(user.getEmail())) {
+        if (isNewEmail(user, request.email())) {
             authorizationService.checkPermission(actor, USERS_RESET_PASSWORD);
             userValidator.validateEmailAvailable(request.email(), actor.tenantId());
+        }
+        return userMapper.toDto(apply(user, request));
+    }
+
+    /**
+     * Your own profile, as a management user (the root's only way to change theirs), always in your home tenant.
+     */
+    @Auditable(
+            value = AuditEventType.USER_UPDATE,
+            detailsExpression = "T(java.util.Map).of('fields', #request.changes().fields(), 'own_profile', true)"
+    )
+    @Transactional
+    public void updateOwnProfile(OwnProfileUpdateDto request) {
+        AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
+        User user = userRepository.getRequiredByIdAndTenantId(actor.userId(), actor.homeTenantId());
+        accessPolicy.checkIsManagementUser(user);
+        if (isNewEmail(user, request.email())) {
+            if (request.currentPassword() == null || !passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+                throw new InvalidPasswordException(INVALID_CURRENT_PASSWORD);
+            }
+            if (user.isRootUser()) {
+                userValidator.validateEmailAvailableForRoot(request.email());
+            } else {
+                userValidator.validateEmailAvailable(request.email(), actor.homeTenantId());
+            }
+        }
+        apply(user, request.changes());
+    }
+
+    /**
+     * A different address, not just the same one in other letter case.
+     */
+    private static boolean isNewEmail(User user, String email) {
+        return email != null && !email.equalsIgnoreCase(user.getEmail());
+    }
+
+    private User apply(User user, UserUpdateDto changes) {
+        if (isNewEmail(user, changes.email())) {
             resetOtpIssuer.discardPending(user);
         }
-        if (request.email() != null) {
-            user.setEmail(request.email());
+        if (changes.email() != null) {
+            user.setEmail(changes.email());
         }
-        if (request.fullName() != null) {
-            user.setFullName(request.fullName().isBlank() ? null : request.fullName());
+        if (changes.fullName() != null) {
+            user.setFullName(changes.fullName().isBlank() ? null : changes.fullName());
         }
-        return userMapper.toDto(userRepository.save(user));
+        return userRepository.save(user);
     }
 }

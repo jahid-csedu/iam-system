@@ -12,6 +12,7 @@ import com.example.iamsystem.role.service.PredefinedRoleService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.tenant.entity.TenantType;
 import com.example.iamsystem.tenant.repository.TenantRepository;
+import com.example.iamsystem.user.dto.OwnProfileUpdateDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
 import com.example.iamsystem.user.entity.UserType;
@@ -42,13 +43,14 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * {@code GET /api/me} with real logins, tokens and filter against MySQL.
+ * {@code GET} and {@code PATCH /api/me} with real logins, tokens and filter against MySQL.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -160,6 +162,58 @@ class MeControllerTest {
                 .andExpect(jsonPath("$.workingTenant.id").value(acmeId))
                 .andExpect(jsonPath("$.workingTenant.name").value("Acme"))
                 .andExpect(jsonPath("$.permissions", hasSize(PermissionKey.values().length)));
+    }
+
+    @Test
+    @DisplayName("You change your own name freely, and your email only with your current password")
+    void ownProfile_emailNeedsTheCurrentPassword() throws Exception {
+        send(patch("/api/me"), acmeRoot, new OwnProfileUpdateDto("Acme Boss", null, null))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Acme Boss"))
+                .andExpect(jsonPath("$.permissions").isNotEmpty());
+
+        send(patch("/api/me"), acmeRoot, new OwnProfileUpdateDto(null, "boss@acme.com", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Changing your email needs your current password, and it was missing or wrong"));
+        send(patch("/api/me"), acmeRoot, new OwnProfileUpdateDto(null, "boss@acme.com", "Wrong-password-1"))
+                .andExpect(status().isBadRequest());
+        send(patch("/api/me"), acmeRoot, new OwnProfileUpdateDto(null, "boss@acme.com", PASSWORD))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("boss@acme.com"));
+    }
+
+    @Test
+    @DisplayName("A root's own new email must be unused in every tenant; a management user's only in theirs and by every root")
+    void ownEmail_followsTheUniquenessRules() throws Exception {
+        JsonNode globex = body(send(post("/api/tenants/signup"), null,
+                new TenantSignupDto("Globex", new UserCreationDto("globex-root", PASSWORD, null, "root@globex.com", null))));
+        String globexRoot = login(globex.get("managementConsole").get("client_id").asString(), "globex-root");
+        send(post("/api/users"), globexRoot, new UserCreationDto("dave", PASSWORD, null, "dave@globex.com", null))
+                .andExpect(status().isCreated());
+        send(post("/api/users"), acmeRoot, new UserCreationDto("alice", PASSWORD, null, "alice@acme.com", UserType.MANAGEMENT))
+                .andExpect(status().isCreated());
+        String alice = login(acmeConsole, "alice");
+
+        send(patch("/api/me"), acmeRoot, new OwnProfileUpdateDto(null, "dave@globex.com", PASSWORD))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Email not available"));
+        send(patch("/api/me"), alice, new OwnProfileUpdateDto(null, "root@globex.com", PASSWORD))
+                .andExpect(status().isBadRequest());
+        send(patch("/api/me"), alice, new OwnProfileUpdateDto(null, "dave@globex.com", PASSWORD))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("dave@globex.com"));
+    }
+
+    @Test
+    @DisplayName("A regular user can't change their profile here")
+    void ownProfile_regularUser_isRefused() throws Exception {
+        String shop = body(send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop"))).get("client_id").asString();
+        send(post("/api/users"), acmeRoot, new UserCreationDto("bob", PASSWORD, null, "bob@acme.com", null))
+                .andExpect(status().isCreated());
+
+        send(patch("/api/me"), login(shop, "bob"), new OwnProfileUpdateDto("Bob", null, null))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Only management users can use this endpoint"));
     }
 
     private String login(String clientId, String username) throws Exception {

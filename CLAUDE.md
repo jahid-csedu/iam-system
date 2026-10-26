@@ -197,8 +197,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `PlatformTenantService` (`/api/platform/tenants`, PLATFORM keys only)
 - `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
-  (direct permissions), `UserService` (paged list, find, delete), `UserProfileService` (another user's name and email),
-  `MeService` (`GET /api/me`, `MeController`);
+  (direct permissions), `UserService` (paged list, find, delete), `UserProfileService` (name and email: another user's,
+  or your own through `PATCH /api/me`), `MeService` (`GET /api/me`, `MeController`);
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
   `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles/permissions, only
   management users receive access, password-reset rules).
@@ -270,6 +270,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   the name, an email can't be removed). A new email also needs `users:reset-password` (it receives the password resets),
   must be free in the tenant and not any root's (`UserValidator.validateEmailAvailable`; a root's email must be unused
   everywhere, `validateEmailAvailableForRoot`), and deletes the user's pending reset OTP. Never yourself, never the root.
+  Your own profile: `PATCH /api/me` (management users; a new email needs `currentPassword`; the root's only way).
 - `PATCH /api/users/password` changes only your own password (old password required). `POST /api/users/{id}/password-reset`
   (`users:reset-password`) emails another user a reset OTP, then disables their current password and ends their sessions
   (nothing changes when the OTP can't be sent: 400 no email, 429 limit, 503 mail failure); never your own, never root's.
@@ -292,6 +293,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
+- Wrong old or current passwords (`PATCH /api/users/password`, `PATCH /api/me` email change) aren't counted, so a stolen
+  access token allows unlimited password guesses there (login has the lockout); count them like failed logins.
 - The reset request answers a known user more slowly than an unknown one (the email is sent during the request), so
   timing still tells them apart; fixed by asynchronous email (plan step 13).
 
@@ -522,3 +525,7 @@ Design debt
   accepted); creation keeps requiring an email (`@NotNull`). Decisions: a new email needs `users:reset-password`; only the
   root changes the root's details; your own email change will need your password (commit 2, `PATCH /api/me`); pending
   reset OTPs are deleted on an email change; email verification later (plan step 13).
+- 2026-10-26: Profile update, commit 2 of 2. `PATCH /api/me` (`UserProfileService.updateOwnProfile`, `OwnProfileUpdateDto`
+  with a masked `currentPassword`): management users only (`UserAccessPolicy.checkIsManagementUser`, now also used by
+  `MeService`), a new email needs the current password (400 otherwise), a root's email is checked across all tenants;
+  answers like `GET /api/me`. Known issue added: wrong current/old passwords aren't counted.

@@ -8,6 +8,7 @@ import com.example.iamsystem.user.entity.UserType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import static com.example.iamsystem.common.exception.ErrorMessage.MANAGEMENT_USERS_ONLY;
 import static com.example.iamsystem.common.exception.ErrorMessage.NO_PERMISSION;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_PASSWORD_RESET;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ACCESS_CHANGE;
@@ -40,6 +41,15 @@ public class UserAccessPolicy {
     public void checkCanReceiveAccess(User target) {
         if (target.getUserType() != UserType.MANAGEMENT) {
             throw new UserInputNotValidException(REGULAR_USER_ACCESS);
+        }
+    }
+
+    /**
+     * The self-service of {@code /api/me} is for management users: regular users never use the management console.
+     */
+    public void checkIsManagementUser(User user) {
+        if (user.getUserType() != UserType.MANAGEMENT) {
+            throw new NoAccessException(MANAGEMENT_USERS_ONLY);
         }
     }
 

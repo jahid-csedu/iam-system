@@ -59,7 +59,7 @@ class MeServiceTest {
     @BeforeEach
     void setUp() {
         service = new MeService(currentUserProvider, userRepository, tenantRepository, authorizationService,
-                Mappers.getMapper(TenantMapper.class));
+                Mappers.getMapper(TenantMapper.class), new UserAccessPolicy());
         alice = user(2, "alice");
         alice.setFullName("Alice Admin");
         alice.setUserType(UserType.MANAGEMENT);

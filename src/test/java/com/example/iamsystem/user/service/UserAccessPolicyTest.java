@@ -72,6 +72,16 @@ class UserAccessPolicyTest {
     }
 
     @Test
+    @DisplayName("Only management users use the self-service of /api/me")
+    void checkIsManagementUser_refusesRegularUsers() {
+        manager.setUserType(UserType.MANAGEMENT);
+
+        assertDoesNotThrow(() -> policy.checkIsManagementUser(manager));
+        NoAccessException exception = assertThrows(NoAccessException.class, () -> policy.checkIsManagementUser(member));
+        assertEquals("Only management users can use this endpoint", exception.getMessage());
+    }
+
+    @Test
     @DisplayName("Another non-root user's profile may be changed")
     void checkCanUpdateProfile_ofAnotherUser_isAllowed() {
         assertDoesNotThrow(() -> policy.checkCanUpdateProfile(actor(manager), member));

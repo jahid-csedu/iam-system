@@ -6,6 +6,7 @@ import com.example.iamsystem.passwordreset.dto.PasswordResetDto;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.platform.config.PlatformProperties.RootUser;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
+import com.example.iamsystem.user.dto.OwnProfileUpdateDto;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserLoginDto;
@@ -30,6 +31,7 @@ class SecretMaskTest {
                 new UserCreationDto("alice", SECRET, "Alice", "alice@acme.com", null),
                 new TenantSignupDto("Acme", new UserCreationDto("alice", SECRET, "Alice", "alice@acme.com", null)),
                 new PasswordChangeDto(SECRET, SECRET),
+                new OwnProfileUpdateDto("Alice", "alice@acme.com", SECRET),
                 new PasswordResetDto("client-1", "alice", SECRET, SECRET),
                 new JwtRefreshTokenDto("client-1", SECRET),
                 new IntrospectionRequest(SECRET),

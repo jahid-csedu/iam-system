@@ -63,6 +63,7 @@ public class ErrorMessage {
     public static final String ACCOUNT_DISABLED = "Account is disabled";
     public static final String ACCOUNT_LOCKED = "Account is locked. Please try again later.";
     public static final String INVALID_OLD_PASSWORD = "Invalid old password";
+    public static final String INVALID_CURRENT_PASSWORD = "Changing your email needs your current password, and it was missing or wrong";
     public static final String OLD_PASSWORD_REQUIRED = "Old password is required";
     public static final String NEW_PASSWORD_REQUIRED = "New password is required";
     public static final String OWN_PASSWORD_RESET = "Users cannot reset their own password; change it instead";
