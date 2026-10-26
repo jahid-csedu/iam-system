@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of step 11 (client status).** This manual is updated in every step that changes how the system is
+> **Matches the code as of the environment profiles (2026-10-26).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---

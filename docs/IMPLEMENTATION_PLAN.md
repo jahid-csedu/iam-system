@@ -79,7 +79,7 @@ This file lets any new session pick up the work without the conversation that pr
 | Expiry | Login and refresh answer with `token_type` and `expires_in` (`TokenIssuer` returns `IssuedAccessToken`, the one source of the lifetime); `Cache-Control: no-store` kept by a test | `175eaf6` |
 | Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is plan step 16 | `8a1947e` |
 | Profiles 1 | `local` / `dev` / `stage` / `prod` profile files; `EnvironmentProfileCheck` (exactly one profile; required settings outside `local`) | `ba2e721` |
-| Profiles 2 | Every profile, `local` included, requires every setting: JWT key (PEM inline or `private-key-location`; a temporary key only in the test suite), platform root until it exists, DB, issuer, mail, CORS | profiles 2 commit |
+| Profiles 2 | Every profile, `local` included, requires every setting: JWT key (PEM inline or `private-key-location`; a temporary key only in the test suite), platform root until it exists, DB, issuer, mail, CORS | `85a3a38` |
 
 ---
 
