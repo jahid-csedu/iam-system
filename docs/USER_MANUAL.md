@@ -79,9 +79,25 @@ them, delete them, or create more. Later changes to the predefined set never aff
 
 | How | Command | URL |
 |---|---|---|
+| Local JVM (needs MySQL on `localhost:3366`, e.g. `docker compose up db`) | `./gradlew bootRun` | `http://localhost:8080` (override with `SERVER_PORT=8081` in `.env`) |
 | Docker (app + MySQL) | `docker compose up --build app db` | `http://localhost:8080` |
 | Docker (with ELK logging) | `docker compose up --build` | app `:8080`, Kibana `:5601` |
-| Local JVM (needs MySQL on `localhost:3366`, e.g. `docker compose up db`) | `./gradlew bootRun` | `http://localhost:8080` (override with `SERVER_PORT=8081` in `.env`) |
+
+**Environment profiles.** Every run has exactly one: `local`, `dev`, `stage` or `prod` (`SPRING_PROFILES_ACTIVE`);
+without one, or with two, the app doesn't start. `./gradlew bootRun` uses `local` unless `.env` sets another;
+`docker compose` runs `dev`. Each profile has its file, `application-<profile>.properties`, listing its settings and
+the environment variables they come from:
+
+| Setting | Variable | `local` | `dev`, `stage`, `prod` |
+|---|---|---|---|
+| Database | `SPRING_DATASOURCE_URL`, `_USERNAME`, `_PASSWORD` | Defaults to `localhost:3366`, `root` / `password` | Required (compose sets them for its MySQL) |
+| Public base URL (tokens' `iss`) | `IAM_JWT_ISSUER` | Defaults to `http://localhost:8080` | Required (compose: `http://localhost:8080`) |
+| Mail account | `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | Optional (no emails without it) | Required |
+| Browser origins (CORS) | `IAM_CORS_ALLOWEDORIGINS` | Optional (none) | Required |
+
+Outside `local`, a missing or empty required setting stops the startup with a message naming all of them, e.g. "The
+'dev' profile needs these settings: spring.mail.username (SPRING_MAIL_USERNAME), ...". With `docker compose`, put them
+in `.env`.
 
 The database schema and the permission catalog are created automatically (Flyway) on first start, and so is the
 **Platform** tenant of the super users (its name is therefore taken).
@@ -94,7 +110,7 @@ Platform tenant is created ("Created the platform tenant ... (client_id ...)").
 The variables are read only then: changing them later changes nothing.
 
 Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs are only ever
-sent by email, and no password is ever emailed. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
+sent by email, and no password is ever emailed (required outside `local`). Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 
 **Token signing key.** Tokens are signed with an RSA private key that only the IAM holds. Configure one with
 `IAM_JWT_KEYS_0_KID` (any id, e.g. `key-2026-10`) and `IAM_JWT_KEYS_0_PRIVATEKEY` (a PKCS#8 RSA key of at least 2048 bits,
@@ -110,11 +126,13 @@ Put both in `.env` for `./gradlew bootRun`, or pass them to the `app` container 
 app generates a temporary one at startup (a WARN in the log) and every token becomes invalid when it restarts.
 **Rotating:** add the new key as `IAM_JWT_KEYS_0_*` and move the old one to `IAM_JWT_KEYS_1_*`; the first key signs, both
 are published, so tokens signed by the old key keep working. Remove the old key once the access tokens it signed have expired (refresh tokens aren't signed).
-`IAM_JWT_ISSUER` (default `http://localhost:8080`) is the public base URL put into every token's `iss`.
+`IAM_JWT_ISSUER` (`local` default `http://localhost:8080`, required elsewhere) is the public base URL put into every
+token's `iss`.
 
 **Browser apps (CORS).** A web app served from another origin (for example the management console on
 `http://localhost:5173`) may call the API only when its origin is listed in `IAM_CORS_ALLOWEDORIGINS`, comma-separated:
-`IAM_CORS_ALLOWEDORIGINS=http://localhost:5173,https://console.example.com` (in `.env`; `docker compose` passes it on).
+`IAM_CORS_ALLOWEDORIGINS=http://localhost:5173,https://console.example.com` (in `.env`; `docker compose` passes it on;
+required outside `local`).
 Each entry is an exact origin (scheme, host, optional port; no path, trailing slash or `*`); anything else stops the app
 at startup. Allowed: `GET`, `POST`, `PUT`, `PATCH`, `DELETE` with the headers `Authorization`, `Content-Type` and
 `X-Tenant-Id`; no cookies. Requests from an origin that isn't listed get `403` ("Invalid CORS request"); without the

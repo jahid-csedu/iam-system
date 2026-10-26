@@ -163,10 +163,17 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 
 ## Commands
 - Run tests: `./gradlew clean test` (**Docker must be running**: Testcontainers starts MySQL 8.0; jacoco report in `build/reports/jacoco`)
-- Run app: `./gradlew bootRun` (loads `.env`; expects MySQL on `localhost:3366`)
+- Run app: `./gradlew bootRun` (loads `.env`; profile `local` unless `.env` sets `SPRING_PROFILES_ACTIVE`; expects MySQL on
+  `localhost:3366`)
 - Run everything in Docker: `docker compose up --build` (app on :8080, MySQL on :3366, plus ELK)
   - App + DB only: `docker compose up --build app db`
-  - The app container reads `SPRING_MAIL_USERNAME/PASSWORD` from `.env` (optional). DB settings are set in `docker-compose.yml`.
+  - The app container runs the `dev` profile, so it needs the mail and CORS settings from `.env` (a missing one stops
+    it). DB settings and the issuer are set in `docker-compose.yml`.
+- Profiles: exactly one of `local`, `dev`, `stage`, `prod` (`test` for the suite), checked at startup by
+  `EnvironmentProfileCheck`. `application.properties` holds what every environment shares and `iam.required-settings`;
+  `application-<profile>.properties` lists the environment's settings as `${ENV_VAR:default}`. Outside `local` every
+  required setting needs a value. A new environment-dependent setting goes into every profile file (and into
+  `iam.required-settings` when it's required outside `local`), `example.env` and the manual's profile table.
 - Swagger UI: http://localhost:8080/swagger-ui.html
 
 ## Database schema rules
@@ -228,7 +235,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `session/`: login sessions. `UserSession` + `RefreshToken` (hash only), `SessionService` (start, refresh-token checks and
   rotation with reuse detection, revoke one / all / all but one), `RefreshTokenGenerator` (random token + SHA-256 hash)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
-- `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (OpenAPI; mail is Spring Boot's auto-configured sender from `spring.mail.*`), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
+- `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (OpenAPI; `EnvironmentProfileCheck`,
+  registered in `META-INF/spring.factories`; mail is Spring Boot's auto-configured sender from `spring.mail.*`), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
 ## Current behaviours to remember
@@ -555,3 +563,11 @@ Design debt
 - 2026-10-26: Own account deletion. `UserAccessPolicy.checkCanDelete` refuses deleting yourself (403), like every other
   self-modification. Decisions (option A): another user deletes you; a deliberate self-service deletion with the current
   password is plan step 16 (option B, with self-registration).
+- 2026-10-26: Profiles, commit 1 of 2. `local`, `dev`, `stage`, `prod` (owner's rule: optional in `local`, required
+  everywhere else, `dev` included); `EnvironmentProfileCheck` (an `EnvironmentPostProcessor`) refuses a run without
+  exactly one of them and names every missing required setting (`iam.required-settings`). DB, issuer, mail and CORS
+  moved into the profile files; `bootRun` defaults to `local` (and skips commented `.env` lines); compose runs `dev`
+  and passes mail and CORS from `.env` without empty defaults. Decisions: an explicit check instead of placeholders
+  without defaults (one message lists every missing setting, and an empty value counts as missing); commit 2 adds the JWT key (also from a PEM
+  file, temporary key only in `local`) and the platform root (required outside `local` only while the platform has no
+  root).

@@ -3,17 +3,21 @@ services:
     build: .
     ports:
       - "8080:8080"
+    # The dev profile needs every setting; the ones without a value here come from .env, and a missing one stops the
+    # app's startup with its name.
     environment:
+      SPRING_PROFILES_ACTIVE: dev
       SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/iam_system_db
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: password
-      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
-      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      IAM_JWT_ISSUER: http://localhost:8080
+      SPRING_MAIL_USERNAME:
+      SPRING_MAIL_PASSWORD:
       IAM_PLATFORM_ROOT_USERNAME: ${IAM_PLATFORM_ROOT_USERNAME:-}
       IAM_PLATFORM_ROOT_PASSWORD: ${IAM_PLATFORM_ROOT_PASSWORD:-}
       IAM_PLATFORM_ROOT_EMAIL: ${IAM_PLATFORM_ROOT_EMAIL:-}
       IAM_PLATFORM_ROOT_FULL_NAME: ${IAM_PLATFORM_ROOT_FULL_NAME:-}
-      IAM_CORS_ALLOWEDORIGINS: ${IAM_CORS_ALLOWEDORIGINS:-}
+      IAM_CORS_ALLOWEDORIGINS:
     volumes:
       - ./logs:/app/logs # Shared with logstash
     depends_on:

@@ -77,7 +77,8 @@ This file lets any new session pick up the work without the conversation that pr
 | Guesses | Wrong old/current passwords count like failed logins (`FailedPasswordCounter`, atomic, own transaction) | `1867199` |
 | Reasons | The 401 for a blocked account's token says why (locked until, deactivated, tenant or client suspended); 401 bodies are the usual error JSON | `d7cf5db` |
 | Expiry | Login and refresh answer with `token_type` and `expires_in` (`TokenIssuer` returns `IssuedAccessToken`, the one source of the lifetime); `Cache-Control: no-store` kept by a test | `175eaf6` |
-| Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is plan step 16 | own-delete commit |
+| Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is plan step 16 | `8a1947e` |
+| Profiles 1 | `local` / `dev` / `stage` / `prod` profile files; `EnvironmentProfileCheck` (exactly one profile; required settings outside `local`) | profiles commit |
 
 ---
 
@@ -271,7 +272,7 @@ refresh, and its sessions are refused by the filter and introspection.
 | JWT filter errors → 500 instead of 401 | Done in step 6b |
 | `/token/validate` ignores revocation | Done in step 9c (replaced by introspection) |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
-| `mail.debug=true` (done: security fix 1, `MailConfig` removed); DB credentials in `application.properties`; no JWT key configured only warns | Small config step (profiles + env); outside dev/test, fail at startup without a configured JWT key |
+| `mail.debug=true` (done: security fix 1, `MailConfig` removed); DB credentials in `application.properties`; no JWT key configured only warns | Config step: profiles (done: commit 1; DB credentials are `local` defaults only); JWT key and platform root required outside `local` (commit 2) |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |

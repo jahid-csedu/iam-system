@@ -78,8 +78,9 @@ jacocoTestReport {
     }
 }
 
+// bootRun is local development: the local profile unless the shell or .env sets SPRING_PROFILES_ACTIVE.
 bootRun {
-    environment loadEnvVariables()
+    environment([SPRING_PROFILES_ACTIVE: System.getenv('SPRING_PROFILES_ACTIVE') ?: 'local'] + loadEnvVariables())
 }
 
 def loadEnvVariables() {
@@ -87,7 +88,7 @@ def loadEnvVariables() {
     File envFile = project.file('.env')
     if (envFile.exists()) {
         envFile.eachLine { line ->
-            if (line.contains('=')) {
+            if (line.contains('=') && !line.trim().startsWith('#')) {
                 def parts = line.split('=', 2)
                 def key = parts[0].trim()
                 def value = parts[1].trim()
