@@ -71,6 +71,7 @@ This file lets any new session pick up the work without the conversation that pr
 | 10m | `is_super_user` dropped (`V13`); step 10 complete | `ca015ec` |
 | 11 | Client status (`V14`): suspend / activate clients; suspended clients refuse logins and tokens | step 11 commit |
 | CORS | Allowed browser origins from `iam.cors.allowed-origins` (`CorsProperties`, `CorsConfig`); none by default | CORS commit |
+| Me | `GET /api/me` for management users: profile, home and working tenant, permission keys (`AuthorizationService.permissionsOf`) | `04a77e4`, me commit |
 
 ---
 

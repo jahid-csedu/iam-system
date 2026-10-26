@@ -197,7 +197,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `PlatformTenantService` (`/api/platform/tenants`, PLATFORM keys only)
 - `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
-  (direct permissions), `UserService` (paged list, find, delete);
+  (direct permissions), `UserService` (paged list, find, delete), `MeService` (`GET /api/me`, `MeController`);
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
   `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles/permissions, only
   management users receive access, password-reset rules).
@@ -282,7 +282,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   Introspection uses the same query, so the API and other applications agree on what "active" means. `User.@Version` is
   optimistic locking only. Permissions are read from the database on
   every check (`PermissionRepository.isGrantedToUser`); `AuthorizationService.permissionsOf` lists all of an actor's keys
-  with the same rules (a test keeps the two in agreement).
+  with the same rules (a test keeps the two in agreement). `GET /api/me` (`MeService`) returns the logged-in management
+  user's profile, home and working tenant and those keys; no permission needed; regular users 403.
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
@@ -506,3 +507,7 @@ Design debt
   the working tenant with the same rules as `hasPermission`, in at most two queries (`PermissionRepository.
   findNamesGrantedToUser` / `findNamesGrantedToPlatformUserInTenant`); `PermissionsOfTest` compares both against MySQL
   for every kind of actor. Decision: `/api/me` is for management users only (regular users 403).
+- 2026-10-26: `GET /api/me`, commit 2 of 2. `MeController` + `MeService` + `MeDto`: profile, `homeTenant` and
+  `workingTenant` (`TenantDto`; the working tenant follows `X-Tenant-Id`), `permissions` = `permissionsOf` keys, sorted.
+  No `@RequirePermission`; regular users 403 "Only management users can use this endpoint". Platform grant scopes per
+  tenant (`tenants:*` on which tenants) are not included (frontend gap G-16).

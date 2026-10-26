@@ -35,6 +35,7 @@ public class ErrorMessage {
     public static final String TOKEN_CLAIMS_REQUIRED = "Token claims are required (an empty list for none)";
     public static final String CONSOLE_CLIENT_NOT_DELETABLE = "The management console client can't be deleted";
     public static final String CONSOLE_CLIENT_MANAGEMENT_ONLY = "Only management users can log in through the management console";
+    public static final String MANAGEMENT_USERS_ONLY = "Only management users can use this endpoint";
     public static final String ROLES_NOT_FOUND = "Some roles not found";
     public static final String ROLE_EXISTS = "Role name already exists";
     public static final String ROLE_ID_REQUIRED = "Role id is required";
