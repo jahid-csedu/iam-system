@@ -86,4 +86,15 @@ class UserValidatorTest {
         assertThrows(UserInputNotValidException.class, () -> validator.validatePasswordPolicy("password"));
         assertThrows(UserInputNotValidException.class, () -> validator.validatePasswordPolicy("Pass1!"));
     }
+
+    @Test
+    @DisplayName("Every listed special character counts, the hyphen included, and no other character does")
+    void validatePasswordPolicy_acceptsExactlyTheListedSpecialCharacters() {
+        for (char special : "@#!$%^&-+=()".toCharArray()) {
+            assertDoesNotThrow(() -> validator.validatePasswordPolicy("Password1" + special));
+        }
+        for (char other : "'*,._?".toCharArray()) {
+            assertThrows(UserInputNotValidException.class, () -> validator.validatePasswordPolicy("Password1" + other));
+        }
+    }
 }

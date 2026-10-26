@@ -16,6 +16,8 @@
   When a step finishes, also update `docs/IMPLEMENTATION_PLAN.md` (move it to "Done", adjust later steps if needed).
 - **Keep `docs/USER_MANUAL.md` in sync:** every step that changes endpoints, request bodies, permissions or the setup flow
   updates the manual in the same commit, with the flows verified against the running app.
+- **Keep the frontend plan in sync:** the same steps also update `../IAM System UX/README.md` (the frontend team's plan:
+  steps, mockups, API coverage matrix, backend gaps, changelog), following its section 9 "How this document evolves".
 
 ## Code standards
 What "clean" means for every class a step touches:
@@ -485,3 +487,8 @@ Design debt
   new `TooManyRequestsException`, `EmailNotSentException`). `NewPasswordIssuer` removed: no password is ever emailed.
   Decisions: the old password stops working at once; admin OTPs count towards the limit; same 5-minute lifetime.
   Security fixes done; remaining: fail startup without a JWT key outside dev/test (config step).
+- 2026-10-26: Frontend plan written in the sister folder `IAM System UX/README.md` (product-manager view: steps, mockups,
+  every endpoint). New working rule: every backend change that affects the API updates that doc too.
+- 2026-10-26: Fix: the password policy's special characters were `[@#!$%^&-+=()]`, where `&-+` is a range, so `-` was
+  refused and `'` `*` accepted. The hyphen is escaped; the set is exactly `@#!$%^&-+=()` as documented. Also fixed stale
+  docs (forgot-password 404, 401 vs 403 at login, 429/503 rows, admin reset OTP summary).

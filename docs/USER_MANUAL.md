@@ -366,8 +366,10 @@ The IAM manages only its own permissions; other applications decide their own au
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
 | `400` | Already exists (tenant, user, role or client name in your tenant), deleting or suspending the management console, suspending the platform tenant, a regular user or an application client in the platform tenant, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
-| `401` | Not logged in: missing, malformed, expired or revoked access token, a locked or deactivated account, a suspended tenant, wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
+| `401` | Not logged in: missing, malformed, expired or revoked access token, an access token of a locked or deactivated account or of a suspended tenant or client (at login these are `403`), wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
 | `403` | Logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; login, refresh or forgot-password for a suspended tenant ("Tenant is suspended") or through a suspended client ("Client is suspended"); or account locked, deactivated or expired |
-| `404` | Not found, including an unknown tenant in `X-Tenant-Id`, users and roles of other tenants, unknown permissions, and an unknown username/email on forgot-password |
+| `404` | Not found, including an unknown tenant in `X-Tenant-Id`, users and roles of other tenants, and unknown permissions (forgot-password answers `200` for an unknown username/email too) |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
 | `422` | Request body failed validation (the `errors` list shows which field), including token lifetimes out of range |
+| `429` | Resetting another user's password when that user already got 3 reset OTPs in the last hour |
+| `503` | Resetting another user's password when the OTP email can't be sent (nothing changed; try again later) |

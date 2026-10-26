@@ -25,8 +25,9 @@ import static com.example.iamsystem.common.exception.ErrorMessage.USERNAME_NOT_A
 @Slf4j
 public class UserValidator {
 
+    /** The special characters are exactly {@code @#!$%^&-+=()}; the hyphen is escaped so it isn't read as a range. */
     private static final Pattern PASSWORD_POLICY =
-            Pattern.compile("^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#!$%^&-+=()])(?=\\S+$).{8,}$");
+            Pattern.compile("^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#!$%^&\\-+=()])(?=\\S+$).{8,}$");
 
     private final UserRepository userRepository;
 

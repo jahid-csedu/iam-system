@@ -65,7 +65,7 @@ public class UserController {
 
     @PostMapping("/{id}/password-reset")
     @RequirePermission(USERS_RESET_PASSWORD)
-    @Operation(summary = "Reset another user's password; the new password is emailed to that user (Requires: users:reset-password)")
+    @Operation(summary = "Reset another user's password: emails them a reset OTP and disables their current password (Requires: users:reset-password)")
     public ResponseEntity<Void> resetPassword(@PathVariable Long id) {
         userPasswordService.resetPassword(id);
         return ResponseEntity.noContent().build();
