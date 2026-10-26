@@ -55,6 +55,21 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
     boolean isGrantedToUser(@Param("userId") Long userId, @Param("name") String name);
 
     /**
+     * The names of every permission the user holds through a role or directly, of any scope.
+     */
+    @Query(nativeQuery = true, value = """
+            SELECT p.name FROM user_roles ur
+            JOIN role_permissions rp ON rp.role_id = ur.role_id
+            JOIN permissions p ON p.id = rp.permission_id
+            WHERE ur.user_id = :userId
+            UNION
+            SELECT p.name FROM user_permissions up
+            JOIN permissions p ON p.id = up.permission_id
+            WHERE up.user_id = :userId
+            """)
+    Set<String> findNamesGrantedToUser(@Param("userId") Long userId);
+
+    /**
      * Whether a platform user holds a permission inside a tenant through a grant on that tenant or on all tenants: a
      * granted role that contains it, or the permission granted directly.
      */
@@ -78,4 +93,20 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
             WHERE g.user_id = :userId AND p.name = :name
             """)
     List<Long> findGrantedTenantIds(@Param("userId") Long userId, @Param("name") String name);
+
+    /**
+     * The names of every permission a platform user's grants give on this tenant, through grants on that tenant or on
+     * all tenants: the permissions of a granted role, or a permission granted directly. Of any scope.
+     */
+    @Query(nativeQuery = true, value = """
+            SELECT p.name FROM platform_role_grants g
+            JOIN role_permissions rp ON rp.role_id = g.role_id
+            JOIN permissions p ON p.id = rp.permission_id
+            WHERE g.user_id = :userId AND (g.tenant_id IS NULL OR g.tenant_id = :tenantId)
+            UNION
+            SELECT p.name FROM platform_permission_grants g
+            JOIN permissions p ON p.id = g.permission_id
+            WHERE g.user_id = :userId AND (g.tenant_id IS NULL OR g.tenant_id = :tenantId)
+            """)
+    Set<String> findNamesGrantedToPlatformUserInTenant(@Param("userId") Long userId, @Param("tenantId") Long tenantId);
 }

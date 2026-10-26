@@ -1,6 +1,7 @@
 package com.example.iamsystem.authorization;
 
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.permission.PermissionKey;
 import com.example.iamsystem.permission.repository.PermissionRepository;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.tenant.entity.TenantType;
@@ -13,14 +14,17 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
+import static com.example.iamsystem.permission.PermissionKey.CLIENTS_READ;
 import static com.example.iamsystem.permission.PermissionKey.TENANTS_CREATE;
 import static com.example.iamsystem.permission.PermissionKey.TENANTS_READ;
 import static com.example.iamsystem.permission.PermissionKey.TENANTS_SUSPEND;
 import static com.example.iamsystem.permission.PermissionKey.USERS_CREATE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_READ;
+import static com.example.iamsystem.permission.entity.PermissionScope.TENANT;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -126,6 +130,47 @@ class AuthorizationServiceTest {
     void hasPermission_platformPermissionThroughNormalRole_isNotHeld() {
         assertFalse(authorizationService.hasPermission(ALICE, TENANTS_READ));
         verifyNoInteractions(permissionRepository);
+    }
+
+    @Test
+    @DisplayName("A tenant's root holds every TENANT permission and no PLATFORM one, without a permission query")
+    void permissionsOf_tenantRoot_isEveryTenantKey() {
+        when(tenantRepository.existsByIdAndType(100L, TenantType.PLATFORM)).thenReturn(false);
+
+        Set<PermissionKey> permissions = authorizationService.permissionsOf(ROOT);
+
+        assertEquals(EnumSet.allOf(PermissionKey.class).stream().filter(key -> key.scope() == TENANT).toList(),
+                List.copyOf(permissions));
+        verifyNoInteractions(permissionRepository);
+    }
+
+    @Test
+    @DisplayName("The platform root holds every permission, at home and inside another tenant")
+    void permissionsOf_platformRoot_isEveryKey() {
+        AuthenticatedActor acting = new AuthenticatedActor(2L, "platform-root", 100L, true, 20L).actingIn(7L);
+        when(tenantRepository.existsByIdAndType(100L, TenantType.PLATFORM)).thenReturn(true);
+
+        assertEquals(EnumSet.allOf(PermissionKey.class), authorizationService.permissionsOf(ROOT));
+        assertEquals(EnumSet.allOf(PermissionKey.class), authorizationService.permissionsOf(acting));
+        verifyNoInteractions(permissionRepository);
+    }
+
+    @Test
+    @DisplayName("Other users hold the TENANT keys of their roles and direct permissions; PLATFORM keys there count for nothing")
+    void permissionsOf_user_isTheTenantKeysOfRolesAndDirectPermissions() {
+        when(permissionRepository.findNamesGrantedToUser(1L)).thenReturn(Set.of("users:read", "clients:read", "tenants:read"));
+
+        assertEquals(EnumSet.of(USERS_READ, CLIENTS_READ), authorizationService.permissionsOf(ALICE));
+    }
+
+    @Test
+    @DisplayName("Inside another tenant other platform users hold the TENANT keys their grants give on it")
+    void permissionsOf_platformUserInAnotherTenant_isTheTenantKeysOfTheGrants() {
+        AuthenticatedActor acting = new AuthenticatedActor(3L, "support", 1L, false, 30L).actingIn(100L);
+        when(permissionRepository.findNamesGrantedToPlatformUserInTenant(3L, 100L)).thenReturn(Set.of("users:read", "tenants:read"));
+
+        assertEquals(EnumSet.of(USERS_READ), authorizationService.permissionsOf(acting));
+        verify(permissionRepository, never()).findNamesGrantedToUser(any());
     }
 
     @Test

@@ -281,7 +281,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   unauthenticated (401).
   Introspection uses the same query, so the API and other applications agree on what "active" means. `User.@Version` is
   optimistic locking only. Permissions are read from the database on
-  every check (`PermissionRepository.isGrantedToUser`).
+  every check (`PermissionRepository.isGrantedToUser`); `AuthorizationService.permissionsOf` lists all of an actor's keys
+  with the same rules (a test keeps the two in agreement).
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
@@ -501,3 +502,7 @@ Design debt
   (every path; GET/POST/PUT/PATCH/DELETE; `Authorization`, `Content-Type`, `X-Tenant-Id`; no credentials; preflight cached
   1 h); `AuthorizationConfig` turns CORS on. Decisions: one platform-wide list now (option A); per-client allowed web
   origins later (plan step 15, option B).
+- 2026-10-26: `GET /api/me`, commit 1 of 2. `AuthorizationService.permissionsOf(actor)` lists every key the actor holds in
+  the working tenant with the same rules as `hasPermission`, in at most two queries (`PermissionRepository.
+  findNamesGrantedToUser` / `findNamesGrantedToPlatformUserInTenant`); `PermissionsOfTest` compares both against MySQL
+  for every kind of actor. Decision: `/api/me` is for management users only (regular users 403).

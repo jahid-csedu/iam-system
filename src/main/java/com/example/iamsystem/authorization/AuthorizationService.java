@@ -10,8 +10,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.NO_PERMISSION;
@@ -45,6 +49,35 @@ public class AuthorizationService {
             return permission.scope() == TENANT || isPlatformRoot(actor);
         }
         return permission.scope() == TENANT && permissionRepository.isGrantedToUser(actor.userId(), permission.key());
+    }
+
+    /**
+     * Every permission the actor holds in the tenant the request works in: exactly the keys {@link #hasPermission}
+     * answers yes for, with at most two queries instead of one per key.
+     */
+    public Set<PermissionKey> permissionsOf(AuthenticatedActor actor) {
+        if (actor.isActingInOtherTenant()) {
+            return isPlatformRoot(actor)
+                    ? EnumSet.allOf(PermissionKey.class)
+                    : tenantKeysAmong(permissionRepository.findNamesGrantedToPlatformUserInTenant(actor.userId(), actor.tenantId()));
+        }
+        if (actor.rootUser()) {
+            return isPlatformRoot(actor) ? EnumSet.allOf(PermissionKey.class) : tenantKeys(permission -> true);
+        }
+        return tenantKeysAmong(permissionRepository.findNamesGrantedToUser(actor.userId()));
+    }
+
+    /**
+     * The TENANT keys among these permission names: PLATFORM keys never count through roles, direct permissions or grants.
+     */
+    private static Set<PermissionKey> tenantKeysAmong(Set<String> names) {
+        return tenantKeys(permission -> names.contains(permission.key()));
+    }
+
+    private static Set<PermissionKey> tenantKeys(Predicate<PermissionKey> filter) {
+        return Arrays.stream(PermissionKey.values())
+                .filter(permission -> permission.scope() == TENANT && filter.test(permission))
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(PermissionKey.class)));
     }
 
     /**
