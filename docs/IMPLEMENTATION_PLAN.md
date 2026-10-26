@@ -71,7 +71,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 10m | `is_super_user` dropped (`V13`); step 10 complete | `ca015ec` |
 | 11 | Client status (`V14`): suspend / activate clients; suspended clients refuse logins and tokens | step 11 commit |
 | CORS | Allowed browser origins from `iam.cors.allowed-origins` (`CorsProperties`, `CorsConfig`); none by default | CORS commit |
-| Me | `GET /api/me` for management users: profile, home and working tenant, permission keys (`AuthorizationService.permissionsOf`) | `04a77e4`, me commit |
+| Me | `GET /api/me` for management users: profile, home and working tenant, permission keys (`AuthorizationService.permissionsOf`) | `04a77e4`, `816961f` |
+| Profile 1 | `PATCH /api/users/{id}`: another user's full name and email (`users:update`, a new email also `users:reset-password`; never yourself or the root; pending reset OTP deleted) | profile commit 1 |
 
 ---
 
@@ -302,6 +303,8 @@ invitations, MFA codes, notifications), so:
   decide then whether an outbox table is needed for guaranteed delivery.
 - The reset request's `MAIL_FAILED` outcome can't be known during the request any more; decide then how to audit it.
 - Removes the reset-request timing difference (Known issues in `CLAUDE.md`).
+- Email verification (owner agreed 2026-10-26): a new or changed email address is confirmed through a link or code sent
+  to it before it receives password resets; today a changed email is used at once.
 
 ### Step 14: Reset link in admin-initiated reset emails (planned with the frontend, owner asked 2026-10-26)
 The two resets reach the user differently:

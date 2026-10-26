@@ -102,6 +102,14 @@ class ResetOtpIssuerTest {
     }
 
     @Test
+    @DisplayName("Discarding deletes the user's pending OTP")
+    void discardPending_deletesTheUsersOtp() {
+        issuer.discardPending(user);
+
+        verify(otpRepository).deleteByUser(user);
+    }
+
+    @Test
     @DisplayName("A new OTP replaces the user's existing one")
     void issue_replacesTheExistingOtp() {
         PasswordResetOTP existing = new PasswordResetOTP();

@@ -35,6 +35,13 @@ public class UserValidator {
         if (userRepository.existsByUsernameAndTenantId(username, tenantId) || userRepository.existsByUsernameAndIsRootUserTrue(username)) {
             reject(USERNAME_NOT_AVAILABLE, username);
         }
+        validateEmailAvailable(email, tenantId);
+    }
+
+    /**
+     * For a user who isn't a root: no other user of the tenant and no root of any tenant has this email.
+     */
+    public void validateEmailAvailable(String email, Long tenantId) {
         if (email != null
                 && (userRepository.existsByEmailAndTenantId(email, tenantId) || userRepository.existsByEmailAndIsRootUserTrue(email))) {
             reject(EMAIL_NOT_AVAILABLE, email);
@@ -45,6 +52,13 @@ public class UserValidator {
         if (userRepository.existsByUsername(username)) {
             reject(USERNAME_NOT_AVAILABLE, username);
         }
+        validateEmailAvailableForRoot(email);
+    }
+
+    /**
+     * For a root user: no other user of any tenant has this email.
+     */
+    public void validateEmailAvailableForRoot(String email) {
         if (email != null && userRepository.existsByEmail(email)) {
             reject(EMAIL_NOT_AVAILABLE, email);
         }

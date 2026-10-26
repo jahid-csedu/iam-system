@@ -72,6 +72,22 @@ class UserAccessPolicyTest {
     }
 
     @Test
+    @DisplayName("Another non-root user's profile may be changed")
+    void checkCanUpdateProfile_ofAnotherUser_isAllowed() {
+        assertDoesNotThrow(() -> policy.checkCanUpdateProfile(actor(manager), member));
+        assertDoesNotThrow(() -> policy.checkCanUpdateProfile(actor(root), manager));
+    }
+
+    @Test
+    @DisplayName("Your own profile is changed through /api/me, and only the root changes the root's")
+    void checkCanUpdateProfile_ofSelfOrRoot_isDenied() {
+        NoAccessException own = assertThrows(NoAccessException.class, () -> policy.checkCanUpdateProfile(actor(manager), manager));
+        assertEquals("Change your own profile through /api/me", own.getMessage());
+        NoAccessException ofRoot = assertThrows(NoAccessException.class, () -> policy.checkCanUpdateProfile(actor(manager), root));
+        assertEquals("Only the root user can change their own profile", ofRoot.getMessage());
+    }
+
+    @Test
     @DisplayName("Nobody deletes the root user, not even the root itself")
     void checkCanDelete_rootUser_isRefused() {
         assertThrows(NoAccessException.class, () -> policy.checkCanDelete(actor(root), root));

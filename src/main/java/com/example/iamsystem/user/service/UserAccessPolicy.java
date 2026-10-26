@@ -11,7 +11,9 @@ import org.springframework.stereotype.Component;
 import static com.example.iamsystem.common.exception.ErrorMessage.NO_PERMISSION;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_PASSWORD_RESET;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ACCESS_CHANGE;
+import static com.example.iamsystem.common.exception.ErrorMessage.OWN_PROFILE_UPDATE;
 import static com.example.iamsystem.common.exception.ErrorMessage.REGULAR_USER_ACCESS;
+import static com.example.iamsystem.common.exception.ErrorMessage.ROOT_PROFILE_UPDATE;
 import static com.example.iamsystem.common.exception.ErrorMessage.ROOT_USER_NOT_DELETABLE;
 
 /**
@@ -52,6 +54,20 @@ public class UserAccessPolicy {
         }
         if (target.isRootUser()) {
             deny(actor, "reset the password of", target);
+        }
+    }
+
+    /**
+     * Another user's profile only: your own goes through {@code /api/me} (which asks for your password before an email
+     * change), and the root user's only through the root itself, since its email receives its password resets.
+     */
+    public void checkCanUpdateProfile(AuthenticatedActor actor, User target) {
+        if (actor.isUser(target.getId())) {
+            throw new NoAccessException(OWN_PROFILE_UPDATE);
+        }
+        if (target.isRootUser()) {
+            log.warn("User '{}' tried to change the profile of the root user '{}'", actor.username(), target.getUsername());
+            throw new NoAccessException(ROOT_PROFILE_UPDATE);
         }
     }
 

@@ -4,6 +4,7 @@ import com.example.iamsystem.common.exception.ErrorMessage;
 import com.example.iamsystem.common.validation.ValidEmail;
 import com.example.iamsystem.user.entity.UserType;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 import static com.example.iamsystem.common.util.SecretMask.MASK;
 
@@ -21,6 +22,7 @@ public record UserCreationDto(
 
         String fullName,
 
+        @NotNull(message = ErrorMessage.INVALID_EMAIL)
         @ValidEmail(message = ErrorMessage.INVALID_EMAIL)
         String email,
 

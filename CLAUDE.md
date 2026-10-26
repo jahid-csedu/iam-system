@@ -197,7 +197,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `PlatformTenantService` (`/api/platform/tenants`, PLATFORM keys only)
 - `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
-  (direct permissions), `UserService` (paged list, find, delete), `MeService` (`GET /api/me`, `MeController`);
+  (direct permissions), `UserService` (paged list, find, delete), `UserProfileService` (another user's name and email),
+  `MeService` (`GET /api/me`, `MeController`);
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
   `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles/permissions, only
   management users receive access, password-reset rules).
@@ -265,6 +266,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
 - Nobody deletes a root user, not even the root itself (403), so every tenant keeps its root.
+- `PATCH /api/users/{id}` (`users:update`) changes another user's `fullName` and `email` (left out = unchanged, `""` removes
+  the name, an email can't be removed). A new email also needs `users:reset-password` (it receives the password resets),
+  must be free in the tenant and not any root's (`UserValidator.validateEmailAvailable`; a root's email must be unused
+  everywhere, `validateEmailAvailableForRoot`), and deletes the user's pending reset OTP. Never yourself, never the root.
 - `PATCH /api/users/password` changes only your own password (old password required). `POST /api/users/{id}/password-reset`
   (`users:reset-password`) emails another user a reset OTP, then disables their current password and ends their sessions
   (nothing changes when the OTP can't be sent: 400 no email, 429 limit, 503 mail failure); never your own, never root's.
@@ -511,3 +516,9 @@ Design debt
   `workingTenant` (`TenantDto`; the working tenant follows `X-Tenant-Id`), `permissions` = `permissionsOf` keys, sorted.
   No `@RequirePermission`; regular users 403 "Only management users can use this endpoint". Platform grant scopes per
   tenant (`tenants:*` on which tenants) are not included (frontend gap G-16).
+- 2026-10-26: Profile update, commit 1 of 2. `PATCH /api/users/{id}` (`UserProfileService`, `UserUpdateDto`, audit
+  `USER_UPDATE` with the field names only); `UserAccessPolicy.checkCanUpdateProfile` (not yourself, not the root);
+  `ResetOtpIssuer.discardPending`. `EmailValidator` cleaned (null is valid, compiled pattern, dots escaped: `a@bcom` was
+  accepted); creation keeps requiring an email (`@NotNull`). Decisions: a new email needs `users:reset-password`; only the
+  root changes the root's details; your own email change will need your password (commit 2, `PATCH /api/me`); pending
+  reset OTPs are deleted on an email change; email verification later (plan step 13).

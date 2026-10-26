@@ -69,6 +69,26 @@ class UserValidatorTest {
     }
 
     @Test
+    @DisplayName("A non-root user's new email must be free in their tenant and not belong to any tenant's root")
+    void validateEmailAvailable_checksTheTenantAndAllRoots() {
+        when(userRepository.existsByEmailAndTenantId("bob@example.com", TENANT_ID)).thenReturn(true);
+        when(userRepository.existsByEmailAndIsRootUserTrue("root@globex.com")).thenReturn(true);
+
+        assertThrows(UserAlreadyExistsException.class, () -> validator.validateEmailAvailable("bob@example.com", TENANT_ID));
+        assertThrows(UserAlreadyExistsException.class, () -> validator.validateEmailAvailable("root@globex.com", TENANT_ID));
+        assertDoesNotThrow(() -> validator.validateEmailAvailable("new@example.com", TENANT_ID));
+    }
+
+    @Test
+    @DisplayName("A root user's new email must be unused by every user of every tenant")
+    void validateEmailAvailableForRoot_checksAllTenants() {
+        when(userRepository.existsByEmail("bob@globex.com")).thenReturn(true);
+
+        assertThrows(UserAlreadyExistsException.class, () -> validator.validateEmailAvailableForRoot("bob@globex.com"));
+        assertDoesNotThrow(() -> validator.validateEmailAvailableForRoot("new@example.com"));
+    }
+
+    @Test
     @DisplayName("A new root user needs a username and email unused by any user of any tenant")
     void validateAvailableForRoot_checksAllTenants() {
         when(userRepository.existsByUsername("bob")).thenReturn(true);

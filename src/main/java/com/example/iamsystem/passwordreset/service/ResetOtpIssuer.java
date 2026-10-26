@@ -22,7 +22,7 @@ import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWOR
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_SUBJECT;
 
 /**
- * The one place that makes password-reset OTPs, for the user's own forgot-password request and for a reset by another
+ * The one place that makes (and discards) password-reset OTPs, for the user's own forgot-password request and for a reset by another
  * user: a random six-digit OTP, stored only as a bcrypt hash (six digits are too few for a fast hash), replacing any
  * earlier one, and emailed to the user. Every OTP counts towards the user's hourly limit ({@link ResetRequestLimiter}).
  * <p>
@@ -81,5 +81,13 @@ public class ResetOtpIssuer {
             log.error("Could not email the password-reset OTP to user {}", user.getId(), e);
             return OtpRequestOutcome.MAIL_FAILED;
         }
+    }
+
+    /**
+     * Deletes the user's pending OTP, if any; for when it went to an email address the user no longer has.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void discardPending(User user) {
+        otpRepository.deleteByUser(user);
     }
 }

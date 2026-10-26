@@ -6,9 +6,11 @@ import com.example.iamsystem.user.dto.UserCreationDto;
 import com.example.iamsystem.user.dto.UserDto;
 import com.example.iamsystem.user.dto.UserPermissionAttachmentDto;
 import com.example.iamsystem.user.dto.UserRoleAttachmentDto;
+import com.example.iamsystem.user.dto.UserUpdateDto;
 import com.example.iamsystem.user.service.UserCreationService;
 import com.example.iamsystem.user.service.UserPasswordService;
 import com.example.iamsystem.user.service.UserPermissionService;
+import com.example.iamsystem.user.service.UserProfileService;
 import com.example.iamsystem.user.service.UserRoleService;
 import com.example.iamsystem.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,6 +50,7 @@ public class UserController {
     private final UserRoleService userRoleService;
     private final UserPermissionService userPermissionService;
     private final UserService userService;
+    private final UserProfileService userProfileService;
 
     @PostMapping
     @RequirePermission(USERS_CREATE)
@@ -130,6 +133,13 @@ public class UserController {
     @Operation(summary = "Get a user by email (Requires: users:read)")
     public ResponseEntity<UserDto> getUserByEmail(@RequestParam String email) {
         return ResponseEntity.ok(userService.findUserByEmail(email));
+    }
+
+    @PatchMapping("/{id}")
+    @RequirePermission(USERS_UPDATE)
+    @Operation(summary = "Change another user's full name and/or email; fields left out stay unchanged. A new email also needs users:reset-password. Never yourself (use /api/me), never the root user (Requires: users:update)")
+    public ResponseEntity<UserDto> updateUser(@PathVariable Long id, @RequestBody @Valid UserUpdateDto request) {
+        return ResponseEntity.ok(userProfileService.updateUser(id, request));
     }
 
     @DeleteMapping("/{id}")
