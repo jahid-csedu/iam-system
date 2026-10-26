@@ -174,7 +174,9 @@ or email that any user of any tenant already uses.
 ```json
 { "client_id": "pipHcOj4eVaEOqgMCeTJygKC", "username": "globex-root", "password": "Root1234!" }
 ```
-→ `200` with `access_token` (valid 5 minutes) and `refresh_token` (valid 24 hours, single use). Use the access token as `Bearer` from now on.
+→ `200` with `access_token`, `token_type` (`Bearer`), `expires_in` (the access token's lifetime in seconds: 300 by
+default) and `refresh_token` (valid 24 hours, single use), plus `username`. Use the access token as `Bearer` from now on.
+Token responses (login and refresh) are sent with `Cache-Control: no-store`, so no browser or proxy keeps them.
 An unknown `client_id`, or a username that doesn't exist in the client's tenant, gives `401`.
 
 ### Step 3: Look at your roles (root)

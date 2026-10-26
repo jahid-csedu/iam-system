@@ -72,7 +72,7 @@ class TokenIntrospectionServiceTest {
         when(sessionRepository.findActor(eq(42L), eq(7L), any(Instant.class)))
                 .thenReturn(Optional.of(new AuthenticatedActor(7L, "alice", 100L, false, 42L)));
 
-        IntrospectionResponse response = service.introspect(new IntrospectionRequest(tokenIssuer.issueAccessToken(session)));
+        IntrospectionResponse response = service.introspect(new IntrospectionRequest(tokenIssuer.issueAccessToken(session).token()));
 
         assertTrue(response.isActive());
         assertEquals("7", response.getClaims().get("sub"));
@@ -90,7 +90,7 @@ class TokenIntrospectionServiceTest {
     void tokenWithoutLiveSession_isInactive() {
         when(sessionRepository.findActor(eq(42L), eq(7L), any(Instant.class))).thenReturn(Optional.empty());
 
-        IntrospectionResponse response = service.introspect(new IntrospectionRequest(tokenIssuer.issueAccessToken(session)));
+        IntrospectionResponse response = service.introspect(new IntrospectionRequest(tokenIssuer.issueAccessToken(session).token()));
 
         assertFalse(response.isActive());
         assertTrue(response.getClaims().isEmpty());

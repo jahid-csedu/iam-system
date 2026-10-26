@@ -9,6 +9,7 @@ import com.example.iamsystem.common.exception.InvalidClientException;
 import com.example.iamsystem.common.exception.InvalidTokenException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
+import com.example.iamsystem.security.jwt.IssuedAccessToken;
 import com.example.iamsystem.security.jwt.TokenIssuer;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
@@ -53,6 +54,7 @@ class AuthenticationServiceTest {
 
     private static final String CONSOLE_ID = "console-client-id-000001";
     private static final String APP_ID = "app-client-id-0000000001";
+    private static final IssuedAccessToken ACCESS_TOKEN = new IssuedAccessToken("access-token", 300);
 
     @Mock
     private AuthenticationManager authenticationManager;
@@ -151,8 +153,8 @@ class AuthenticationServiceTest {
 
         JwtResponse response = service.login(new UserLoginDto(APP_ID, "carol", "Password1!"));
 
-        assertEquals("access-token", response.getAccessToken());
-        assertNull(response.getRefreshToken());
+        assertEquals("access-token", response.accessToken());
+        assertNull(response.refreshToken());
     }
 
     @Test
@@ -162,7 +164,7 @@ class AuthenticationServiceTest {
         RefreshToken refreshToken = refreshTokenOf(session(manager, app));
         when(sessionService.requireRefreshableToken(app, "old-refresh")).thenReturn(refreshToken);
         when(sessionService.rotate(refreshToken)).thenReturn(new IssuedSession(refreshToken.getSession(), "new-refresh"));
-        when(tokenIssuer.issueAccessToken(refreshToken.getSession())).thenReturn("access-token");
+        when(tokenIssuer.issueAccessToken(refreshToken.getSession())).thenReturn(ACCESS_TOKEN);
 
         JwtResponse response = service.refresh(new JwtRefreshTokenDto(APP_ID, "old-refresh"));
 
@@ -222,13 +224,15 @@ class AuthenticationServiceTest {
     private void givenSessionStarted(User user, Client client, String refreshToken) {
         UserSession session = session(user, client);
         when(sessionService.start(user, client)).thenReturn(new IssuedSession(session, refreshToken));
-        when(tokenIssuer.issueAccessToken(session)).thenReturn("access-token");
+        when(tokenIssuer.issueAccessToken(session)).thenReturn(ACCESS_TOKEN);
     }
 
     private static void assertTokens(JwtResponse response, String username, String refreshToken) {
-        assertEquals(username, response.getUsername());
-        assertEquals("access-token", response.getAccessToken());
-        assertEquals(refreshToken, response.getRefreshToken());
+        assertEquals(username, response.username());
+        assertEquals("access-token", response.accessToken());
+        assertEquals("Bearer", response.tokenType());
+        assertEquals(300, response.expiresIn());
+        assertEquals(refreshToken, response.refreshToken());
     }
 
     private static UserSession session(User user, Client client) {

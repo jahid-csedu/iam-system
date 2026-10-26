@@ -52,7 +52,7 @@ class TokenVerifierTest {
     @Test
     @DisplayName("A token we issued is accepted")
     void issuedToken_isAccepted() {
-        assertDoesNotThrow(() -> verifier.parseAccessToken(issuer.issueAccessToken(session)));
+        assertDoesNotThrow(() -> verifier.parseAccessToken(issuer.issueAccessToken(session).token()));
     }
 
     @Test
@@ -90,7 +90,7 @@ class TokenVerifierTest {
     void tokenOfAnOlderConfiguredKey_staysValid() {
         SigningKeyProperties old = configuredKey("old");
         JwtProperties oldConfig = new JwtProperties("https://iam.test", List.of(old));
-        String token = new TokenIssuer(new SigningKeys(oldConfig), oldConfig).issueAccessToken(session);
+        String token = new TokenIssuer(new SigningKeys(oldConfig), oldConfig).issueAccessToken(session).token();
         SigningKeys rotated = new SigningKeys(new JwtProperties("https://iam.test", List.of(configuredKey("new"), old)));
 
         assertDoesNotThrow(() -> new TokenVerifier(rotated).parseAccessToken(token));

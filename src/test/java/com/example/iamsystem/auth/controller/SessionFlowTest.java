@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.AFTER_TEST_METHOD;
@@ -28,6 +29,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -57,6 +60,22 @@ class SessionFlowTest {
                 new UserCreationDto("acme-root", PASSWORD, "Acme Root", "root@acme.com", null));
         consoleClientId = body(send(post("/api/tenants/signup"), null, signup).andExpect(status().isCreated()))
                 .get("managementConsole").get("client_id").asString();
+    }
+
+    @Test
+    @DisplayName("Login and refresh answer like an OAuth2 token response, never cached: Bearer type and the lifetime in seconds")
+    void tokenResponses_areBearerWithLifetimeAndNotCached() throws Exception {
+        ResultActions login = send(post("/api/auth/authenticate"), null, new UserLoginDto(consoleClientId, "acme-root", PASSWORD))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token_type").value("Bearer"))
+                .andExpect(jsonPath("$.expires_in").value(300))
+                .andExpect(header().string("Cache-Control", containsString("no-store")));
+
+        refresh(body(login).get("refresh_token").asString())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token_type").value("Bearer"))
+                .andExpect(jsonPath("$.expires_in").value(300))
+                .andExpect(header().string("Cache-Control", containsString("no-store")));
     }
 
     @Test

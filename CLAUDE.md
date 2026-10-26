@@ -245,6 +245,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - Login: `POST /api/auth/authenticate` `{ client_id, username, password }`. The client's tenant id travels as the
   authentication details to `TenantAuthenticationProvider`; the console client refuses regular users (403).
   Refresh: `{ client_id, refresh_token }`, only through the issuing client, and refused when the client has refresh tokens off.
+- Login and refresh answer like an OAuth2 token response: `access_token`, `token_type` (`Bearer`), `expires_in` (seconds,
+  from the same number as the token's `exp`: `TokenIssuer` returns `IssuedAccessToken`), `refresh_token` (left out when the
+  client has them off) and `username`. Spring Security's default headers send `Cache-Control: no-store` on them (RFC 6749
+  §5.1 requires it; `SessionFlowTest` checks it).
 - Token settings live on the client (`access_token_ttl_seconds`, `refresh_token_enabled`, `refresh_token_ttl_seconds`,
   `client_token_claims`). `SessionService.start` and `TokenIssuer.issueAccessToken(session)` read them; defaults are
   `ClientService.DEFAULT_TOKEN_SETTINGS` (5 min, refresh on for 24 h, `USERNAME`).
@@ -543,3 +547,7 @@ Design debt
   asked: a locked user should be told so); `JwtAuthenticationEntryPoint` writes the usual error JSON (`ExceptionResponse`)
   instead of `sendError`. Decisions: 401, not login's 403 (the token can't be used; 403 means "stay logged in" to the
   frontend); reasons only for live sessions (their holder owns the account), never for unknown or ended tokens.
+- 2026-10-26: `expires_in`. Login and refresh add `token_type: Bearer` and `expires_in`; `TokenIssuer.issueAccessToken`
+  returns `IssuedAccessToken` (token + lifetime), so `exp` and `expires_in` share one number. `JwtResponse` is a record
+  with masked tokens in `toString`. `Cache-Control: no-store` was already sent (Spring Security defaults); a test keeps it.
+  Decision: no `refresh_expires_in` (not standard).

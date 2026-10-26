@@ -93,7 +93,7 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A valid access token of a live session authenticates the request as that actor")
     void validToken_authenticatesTheActor() throws Exception {
-        bearer(tokenIssuer.issueAccessToken(session));
+        bearer(tokenIssuer.issueAccessToken(session).token());
         when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.of(actor));
         when(actingTenantResolver.resolve(actor, null)).thenReturn(actor);
 
@@ -106,7 +106,7 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A platform user's X-Tenant-Id makes the request work in that tenant")
     void tenantHeader_setsTheActingTenant() throws Exception {
-        bearer(tokenIssuer.issueAccessToken(session));
+        bearer(tokenIssuer.issueAccessToken(session).token());
         request.addHeader("X-Tenant-Id", "200");
         AuthenticatedActor acting = actor.actingIn(200L);
         when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.of(actor));
@@ -120,7 +120,7 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("An unknown or malformed X-Tenant-Id is answered as an error and stops the request")
     void badTenantHeader_isAnsweredAndStopsTheRequest() throws Exception {
-        bearer(tokenIssuer.issueAccessToken(session));
+        bearer(tokenIssuer.issueAccessToken(session).token());
         request.addHeader("X-Tenant-Id", "999");
         DataNotFoundException notFound = new DataNotFoundException("Tenant not found");
         when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.of(actor));
@@ -136,7 +136,7 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A token of an ended session leaves the request unauthenticated, without a reason")
     void tokenWithoutLiveSession_leavesRequestUnauthenticated() throws Exception {
-        bearer(tokenIssuer.issueAccessToken(session));
+        bearer(tokenIssuer.issueAccessToken(session).token());
         when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.empty());
         when(sessionRepository.findAccountState(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.empty());
 
@@ -150,7 +150,7 @@ class JwtRequestFilterTest {
     @Test
     @DisplayName("A live session of a blocked account leaves the request unauthenticated and keeps the reason for the 401")
     void tokenOfABlockedAccount_keepsTheReason() throws Exception {
-        bearer(tokenIssuer.issueAccessToken(session));
+        bearer(tokenIssuer.issueAccessToken(session).token());
         when(sessionRepository.findActor(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.empty());
         when(sessionRepository.findAccountState(eq(10L), eq(1L), any(Instant.class))).thenReturn(Optional.of(
                 new SessionAccountState(false, false, null, TenantStatus.ACTIVE, ClientStatus.ACTIVE)));

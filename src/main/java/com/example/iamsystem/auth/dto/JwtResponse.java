@@ -1,20 +1,29 @@
 package com.example.iamsystem.auth.dto;
 
+import com.example.iamsystem.common.util.SecretMask;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 /**
- * The tokens of a login or refresh. {@code refresh_token} is left out when the client doesn't issue refresh tokens.
+ * The tokens of a login or refresh, shaped like an OAuth2 token response. {@code expires_in} is the access token's
+ * lifetime in seconds; {@code refresh_token} is left out when the client doesn't issue refresh tokens.
  */
-@Getter
-@RequiredArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class JwtResponse {
-    private final String username;
-    @JsonProperty("refresh_token")
-    private final String refreshToken;
-    @JsonProperty("access_token")
-    private final String accessToken;
+public record JwtResponse(@JsonProperty("access_token") String accessToken,
+                          @JsonProperty("token_type") String tokenType,
+                          @JsonProperty("expires_in") long expiresIn,
+                          @JsonProperty("refresh_token") String refreshToken,
+                          String username) {
+
+    public static final String BEARER = "Bearer";
+
+    public JwtResponse(String accessToken, long expiresIn, String refreshToken, String username) {
+        this(accessToken, BEARER, expiresIn, refreshToken, username);
+    }
+
+    @Override
+    public String toString() {
+        return "JwtResponse[accessToken=" + SecretMask.MASK + ", tokenType=" + tokenType + ", expiresIn=" + expiresIn
+                + ", refreshToken=" + (refreshToken == null ? null : SecretMask.MASK) + ", username=" + username + "]";
+    }
 }

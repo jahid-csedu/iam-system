@@ -58,7 +58,7 @@ class TokenIssuerTest {
     @DisplayName("An access token is RS256-signed and names the signing key and the access-token type in its header")
     void accessToken_headerNamesKeyAndType() {
         Jws<Claims> jws = Jwts.parser().verifyWith(signingKeys.current().publicKey()).build()
-                .parseSignedClaims(issuer.issueAccessToken(session));
+                .parseSignedClaims(issuer.issueAccessToken(session).token());
 
         assertEquals("RS256", jws.getHeader().getAlgorithm());
         assertEquals(signingKeys.current().kid(), jws.getHeader().getKeyId());
@@ -68,7 +68,7 @@ class TokenIssuerTest {
     @Test
     @DisplayName("An access token names the tenant as issuer, the user as subject, the client as audience and its session")
     void accessToken_carriesIssuerSubjectAudienceAndSession() {
-        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session));
+        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session).token());
 
         assertEquals("https://iam.test/tenants/100", claims.getIssuer());
         assertEquals(7L, verifier.userIdOf(claims));
@@ -81,17 +81,19 @@ class TokenIssuerTest {
     @Test
     @DisplayName("Every token gets its own id")
     void tokens_haveUniqueIds() {
-        Claims first = verifier.parseAccessToken(issuer.issueAccessToken(session));
-        Claims second = verifier.parseAccessToken(issuer.issueAccessToken(session));
+        Claims first = verifier.parseAccessToken(issuer.issueAccessToken(session).token());
+        Claims second = verifier.parseAccessToken(issuer.issueAccessToken(session).token());
 
         assertNotEquals(first.getId(), second.getId());
     }
 
     @Test
-    @DisplayName("An access token lives as long as the client's settings say")
+    @DisplayName("An access token lives as long as the client's settings say, and its expires_in says the same")
     void accessToken_livesAsLongAsTheClientSays() {
-        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session));
+        IssuedAccessToken issued = issuer.issueAccessToken(session);
+        Claims claims = verifier.parseAccessToken(issued.token());
 
+        assertEquals(300, issued.expiresIn());
         assertEquals(Duration.ofSeconds(300),
                 Duration.between(claims.getIssuedAt().toInstant(), claims.getExpiration().toInstant()));
     }
@@ -101,7 +103,7 @@ class TokenIssuerTest {
     void accessToken_carriesTheSelectedClaims() {
         client.getTokenClaims().addAll(Set.of(TokenClaim.FULL_NAME, TokenClaim.USER_TYPE, TokenClaim.TENANT_ID));
 
-        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session));
+        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session).token());
 
         assertEquals("alice", claims.get("username"));
         assertEquals("Alice Example", claims.get("full_name"));
@@ -115,7 +117,7 @@ class TokenIssuerTest {
     void accessToken_leavesOutEmptyClaims() {
         client.getTokenClaims().add(TokenClaim.EMAIL);
 
-        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session));
+        Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session).token());
 
         assertFalse(claims.containsKey("email"));
     }

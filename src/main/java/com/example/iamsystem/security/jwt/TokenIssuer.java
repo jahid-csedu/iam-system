@@ -32,11 +32,12 @@ public class TokenIssuer {
     private final SigningKeys signingKeys;
     private final JwtProperties properties;
 
-    public String issueAccessToken(UserSession session) {
+    public IssuedAccessToken issueAccessToken(UserSession session) {
         User user = session.getUser();
         Client client = session.getClient();
         SigningKey key = signingKeys.current();
         Instant now = Instant.now();
+        long expiresIn = client.getAccessTokenTtlSeconds();
         JwtBuilder token = Jwts.builder()
                 .header().keyId(key.kid()).type(ACCESS_TOKEN_TYPE).and()
                 .issuer(properties.issuer() + TENANT_ISSUER_PATH + user.getTenant().getId())
@@ -46,14 +47,14 @@ public class TokenIssuer {
                 .claim(CLIENT_ID, client.getClientId())
                 .claim(SESSION_ID, session.getId())
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(client.getAccessTokenTtlSeconds())));
+                .expiration(Date.from(now.plusSeconds(expiresIn)));
         client.getTokenClaims().forEach(claim -> {
             Object value = claimValue(claim, user);
             if (value != null) {
                 token.claim(claim.claimName(), value);
             }
         });
-        return token.signWith(key.privateKey(), Jwts.SIG.RS256).compact();
+        return new IssuedAccessToken(token.signWith(key.privateKey(), Jwts.SIG.RS256).compact(), expiresIn);
     }
 
     private static Object claimValue(TokenClaim claim, User user) {

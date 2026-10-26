@@ -9,6 +9,7 @@ import com.example.iamsystem.client.service.ClientResolver;
 import com.example.iamsystem.common.exception.InvalidTokenException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
+import com.example.iamsystem.security.jwt.IssuedAccessToken;
 import com.example.iamsystem.security.jwt.TokenIssuer;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.security.userdetails.DefaultUserDetails;
@@ -101,7 +102,8 @@ public class AuthenticationService {
     }
 
     private JwtResponse toResponse(IssuedSession issued) {
-        return new JwtResponse(issued.session().getUser().getUsername(), issued.refreshToken(),
-                tokenIssuer.issueAccessToken(issued.session()));
+        IssuedAccessToken accessToken = tokenIssuer.issueAccessToken(issued.session());
+        return new JwtResponse(accessToken.token(), accessToken.expiresIn(), issued.refreshToken(),
+                issued.session().getUser().getUsername());
     }
 }
