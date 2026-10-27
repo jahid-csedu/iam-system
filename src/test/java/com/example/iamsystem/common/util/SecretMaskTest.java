@@ -3,6 +3,8 @@ package com.example.iamsystem.common.util;
 import com.example.iamsystem.auth.dto.IntrospectionRequest;
 import com.example.iamsystem.auth.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.auth.dto.JwtResponse;
+import com.example.iamsystem.email.dto.EmailPurpose;
+import com.example.iamsystem.email.dto.OutgoingEmail;
 import com.example.iamsystem.passwordreset.dto.PasswordResetDto;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.platform.config.PlatformProperties.RootUser;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -42,6 +45,7 @@ class SecretMaskTest {
                 new IssuedAccessToken(SECRET, 300),
                 new SigningKeyProperties("key-1", SECRET, null),
                 new RootUser("alice", SECRET, "alice@acme.com", null),
+                new OutgoingEmail(EmailPurpose.PASSWORD_RESET_OTP, "alice@acme.com", Map.of("otp", SECRET)),
                 pendingOtp());
 
         assertAll(requests.stream().map(request -> () -> {

@@ -1,5 +1,6 @@
 package com.example.iamsystem.auth.controller;
 
+import com.example.iamsystem.email.service.EmailService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
 import com.example.iamsystem.user.dto.UserCreationDto;
@@ -12,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -50,7 +50,7 @@ class SessionFlowTest {
     @Autowired
     private JsonMapper jsonMapper;
     @MockitoBean
-    private JavaMailSender mailSender;
+    private EmailService emailService;
 
     private String consoleClientId;
 

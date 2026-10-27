@@ -1,6 +1,7 @@
 package com.example.iamsystem.user.controller;
 
 import com.example.iamsystem.client.dto.ClientRequestDto;
+import com.example.iamsystem.email.service.EmailService;
 import com.example.iamsystem.passwordreset.dto.PasswordResetRequestDto;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
 import com.example.iamsystem.role.repository.RoleRepository;
@@ -16,7 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -57,7 +57,7 @@ class UserProfileUpdateTest {
     @Autowired
     private PasswordResetOTPRepository otpRepository;
     @MockitoBean
-    private JavaMailSender mailSender;
+    private EmailService emailService;
 
     private long acmeId;
     private String acmeConsole;

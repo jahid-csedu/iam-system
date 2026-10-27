@@ -1,6 +1,7 @@
 package com.example.iamsystem.security.filter;
 
 import com.example.iamsystem.client.dto.ClientRequestDto;
+import com.example.iamsystem.email.service.EmailService;
 import com.example.iamsystem.passwordreset.dto.PasswordResetRequestDto;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.user.dto.PasswordChangeDto;
@@ -15,7 +16,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -52,7 +52,7 @@ class TokenRefusalReasonTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
     @MockitoBean
-    private JavaMailSender mailSender;
+    private EmailService emailService;
 
     private long acmeId;
     private String console;

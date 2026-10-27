@@ -37,6 +37,7 @@ class EnvironmentProfileCheckTest {
             "IAM_JWT_KEYS_0_KID", "key-1",
             "SPRING_MAIL_USERNAME", "iam@example.com",
             "SPRING_MAIL_PASSWORD", "mail-password",
+            "IAM_MAIL_FROM", "IAM <no-reply@example.com>",
             "IAM_CORS_ALLOWEDORIGINS", "https://console.example.com");
 
     private static final String[] PROFILES = {"local", "dev", "stage", "prod"};
@@ -62,9 +63,8 @@ class EnvironmentProfileCheckTest {
             assertEquals("The '" + profile + "' profile needs these settings: spring.datasource.url (SPRING_DATASOURCE_URL), "
                     + "spring.datasource.username (SPRING_DATASOURCE_USERNAME), spring.datasource.password "
                     + "(SPRING_DATASOURCE_PASSWORD), iam.jwt.issuer (IAM_JWT_ISSUER), iam.jwt.keys[0].kid (IAM_JWT_KEYS_0_KID), "
-                    + "spring.mail.username "
-                    + "(SPRING_MAIL_USERNAME), spring.mail.password (SPRING_MAIL_PASSWORD), iam.cors.allowed-origins "
-                    + "(IAM_CORS_ALLOWEDORIGINS)", refused.getMessage());
+                    + "spring.mail.username (SPRING_MAIL_USERNAME), spring.mail.password (SPRING_MAIL_PASSWORD), "
+                    + "iam.mail.from (IAM_MAIL_FROM), iam.cors.allowed-origins (IAM_CORS_ALLOWEDORIGINS)", refused.getMessage());
         }
     }
 

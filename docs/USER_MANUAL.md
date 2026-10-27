@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of user deactivation and unlock (2026-10-27).** This manual is updated in every step that changes how the system is
+> **Matches the code as of the email service (2026-10-27).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -99,6 +99,7 @@ tried on your machine exactly as it runs when deployed (copy `example.env` to `.
 | Database | `SPRING_DATASOURCE_URL`, `_USERNAME`, `_PASSWORD` | compose sets its own for its MySQL |
 | Public base URL (tokens' `iss`) | `IAM_JWT_ISSUER` | compose: `http://localhost:8080` |
 | Mail account | `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | |
+| Email sender | `IAM_MAIL_FROM` | An address, optionally with a name: `IAM System <no-reply@example.com>`; many mail servers (Gmail) accept only the account's own address or a verified alias |
 | Browser origins (CORS) | `IAM_CORS_ALLOWEDORIGINS` | |
 | Token signing key | `IAM_JWT_KEYS_0_KID` + `IAM_JWT_KEYS_0_PRIVATEKEYLOCATION` or `IAM_JWT_KEYS_0_PRIVATEKEY` | compose: the PEM file `IAM_JWT_KEY_FILE` |
 | First super user | `IAM_PLATFORM_ROOT_USERNAME`, `_PASSWORD`, `_EMAIL`, `_FULL_NAME` (optional) | Only until the platform has its root |
@@ -121,8 +122,9 @@ Platform tenant is created ("Created the platform tenant ... (client_id ...)").
 The variables are read only then: changing them later changes nothing, and once the root exists they can be removed
 (the password shouldn't stay in the environment).
 
-Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` in `.env`) are needed for password resets: OTPs are only ever
-sent by email, and no password is ever emailed. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
+Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `IAM_MAIL_FROM` in `.env`) are needed for password resets:
+OTPs are only ever sent by email, and no password is ever emailed. Emails have an HTML and a plain-text version, made
+from the templates in `src/main/resources/email/`. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 
 **Token signing key.** Tokens are signed with an RSA private key that only the IAM holds (a PKCS#8 RSA key of at least
 2048 bits). Create one and keep it out of the repository (`*.pem` is git-ignored):

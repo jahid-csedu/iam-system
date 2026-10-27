@@ -6,12 +6,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class PasswordResetConstants {
 
-    // Email Subjects
-    public static final String PASSWORD_RESET_REQUEST_SUBJECT = "Password Reset Request";
-
-    // Email Bodies
-    public static final String PASSWORD_RESET_REQUEST_BODY_PREFIX = "To reset your password, use the following OTP: ";
-
     // Error Messages
     public static final String INVALID_OTP = "Invalid or expired OTP";
 

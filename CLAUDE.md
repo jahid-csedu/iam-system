@@ -222,6 +222,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `passwordreset/`: self-service reset (OTP by email, user found by username or email in the client's tenant; the user then
   sets a password of their choice). `ResetOtpIssuer` is the one place that makes and emails OTPs (bcrypt hash only, used
   by both resets), `ResetRequestLimiter` caps them at 3 per user per hour; `config/OtpExpirationProperties`
+- `email/`: `EmailService` is the only user of `JavaMailSender`: features hand it an `OutgoingEmail` (`EmailPurpose` +
+  recipient + template values, masked in `toString`); it renders `resources/email/<template>.html` (sharing
+  `layout.html`) and `.txt` with Thymeleaf (`config/EmailTemplateConfig`, core engine only, no web views) and sends both
+  parts from `iam.mail.from` (`config/EmailProperties`). A new email = a new `EmailPurpose` + its two templates.
 - `role/`: tenant-owned roles. `RoleService` (CRUD), `RolePermissionService` (attach/detach permissions), `RoleAccessPolicy` (no changes to a role you hold),
   `PredefinedRoleService` (copies the `RoleTemplate`s into a new tenant during signup)
 - `permission/`: the read-only catalog. `PermissionKey` enum (key + scope) mirrors the `permissions` rows (a test keeps them in sync);
@@ -243,7 +247,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   rotation with reuse detection, revoke one / all / all but one), `RefreshTokenGenerator` (random token + SHA-256 hash)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
 - `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (OpenAPI; `EnvironmentProfileCheck`,
-  registered in `META-INF/spring.factories`; mail is Spring Boot's auto-configured sender from `spring.mail.*`), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
+  registered in `META-INF/spring.factories`; the mail sender is Spring Boot's, from `spring.mail.*`, used only by `email/`), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
 ## Current behaviours to remember
@@ -609,3 +613,10 @@ Design debt
   through `FailedPasswordCounter.unlock` (shares the clearing with `recordSuccess`); never yourself or the root (a locked
   root waits). `UserDto.lockedUntil` = end of a running lock, else left out. Step 12 complete.
   Next: step 13 (asynchronous templated email).
+- 2026-10-27: Step 13a (email service). `email/` feature: `EmailService` (the only `JavaMailSender` user), `OutgoingEmail`,
+  `EmailPurpose`, Thymeleaf templates (HTML with a shared layout + plain text) in `resources/email/`; new required
+  setting `iam.mail.from` (`IAM_MAIL_FROM`, validated). `ResetOtpIssuer` sends through it; the email constants left
+  `PasswordResetConstants`. Integration tests mock `EmailService` and read the OTP from the handed-over values.
+  Decisions (all recommended options): Thymeleaf HTML + text; admin reset stays synchronous (keeps its 503) while
+  forgot-password goes async in 13b; no outbox (it would store OTPs in plain text); no retries; 13b also evens out the
+  bcrypt work of unknown users; email verification is 13c. Next: step 13b (asynchronous sending after commit).

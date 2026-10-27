@@ -1,5 +1,7 @@
 package com.example.iamsystem.user.controller;
 
+import com.example.iamsystem.email.dto.OutgoingEmail;
+import com.example.iamsystem.email.service.EmailService;
 import com.example.iamsystem.passwordreset.dto.PasswordResetDto;
 import com.example.iamsystem.passwordreset.dto.PasswordResetRequestDto;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
@@ -25,8 +27,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
@@ -41,7 +41,6 @@ import java.util.Set;
 import static com.example.iamsystem.security.userdetails.TestActors.actingAs;
 import static com.example.iamsystem.user.repository.TestUserLookup.findByUsername;
 import static org.hamcrest.Matchers.contains;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,7 +89,7 @@ class UserControllerTest {
     private PasswordResetOTPRepository otpRepository;
 
     @MockitoBean
-    private JavaMailSender mailSender;
+    private EmailService emailService;
 
     @BeforeEach
     void setUp() {
@@ -495,11 +494,10 @@ class UserControllerTest {
                 .andExpect(status().isNoContent())
                 .andExpect(content().string(""));
 
-        ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
-        verify(mailSender).send(mail.capture());
-        assertArrayEquals(new String[]{"user@test.com"}, mail.getValue().getTo());
-        String text = mail.getValue().getText();
-        String otp = text.substring(text.lastIndexOf(' ') + 1);
+        ArgumentCaptor<OutgoingEmail> mail = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailService).send(mail.capture());
+        assertEquals("user@test.com", mail.getValue().to());
+        String otp = (String) mail.getValue().values().get("otp");
         login("user", "P@ssw0rd").andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/password/reset")
@@ -516,7 +514,7 @@ class UserControllerTest {
     void resetPassword_whenTheEmailFails_changesNothing() throws Exception {
         User root = findByUsername(userRepository, "root").orElseThrow();
         User member = findByUsername(userRepository, "user").orElseThrow();
-        doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
+        doThrow(new MailSendException("SMTP down")).when(emailService).send(any(OutgoingEmail.class));
 
         mockMvc.perform(post("/api/users/{id}/password-reset", member.getId()).with(actingAs(root)))
                 .andExpect(status().isServiceUnavailable());
@@ -572,7 +570,7 @@ class UserControllerTest {
 
         mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(member)))
                 .andExpect(status().isForbidden());
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 
     @Test
@@ -591,7 +589,7 @@ class UserControllerTest {
 
         mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(findByUsername(userRepository, "user").orElseThrow())))
                 .andExpect(status().isForbidden());
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 
     @Test
@@ -602,6 +600,6 @@ class UserControllerTest {
 
         mockMvc.perform(post("/api/users/{id}/password-reset", root.getId()).with(actingAs(root)))
                 .andExpect(status().isForbidden());
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 }

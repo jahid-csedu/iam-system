@@ -1,5 +1,6 @@
 package com.example.iamsystem.tenant;
 
+import com.example.iamsystem.email.service.EmailService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.tenant.entity.Tenant;
 import com.example.iamsystem.tenant.entity.TenantStatus;
@@ -13,7 +14,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -45,7 +45,7 @@ class TenantSuspensionTest {
     @Autowired
     private TenantRepository tenantRepository;
     @MockitoBean
-    private JavaMailSender mailSender;
+    private EmailService emailService;
 
     private String consoleClientId;
     private String refreshToken;
@@ -82,7 +82,7 @@ class TenantSuspensionTest {
     void passwordResetRequest_isForbidden() throws Exception {
         postJson("/api/password/reset-request", Map.of("client_id", consoleClientId, "identifier", "acme-root"))
                 .andExpect(status().isForbidden());
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 
     private ResultActions login() throws Exception {

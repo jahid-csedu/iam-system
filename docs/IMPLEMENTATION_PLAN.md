@@ -82,7 +82,8 @@ This file lets any new session pick up the work without the conversation that pr
 | Profiles 1 | `local` / `dev` / `stage` / `prod` profile files; `EnvironmentProfileCheck` (exactly one profile; required settings outside `local`) | `ba2e721` |
 | Profiles 2 | Every profile, `local` included, requires every setting: JWT key (PEM inline or `private-key-location`; a temporary key only in the test suite), platform root until it exists, DB, issuer, mail, CORS | `85a3a38` |
 | 12a | Deactivate / activate users (`V19`: `users:deactivate`, `users:activate` in ADMIN and USER_MANAGER; `UserStatusService`; never yourself or the root; sessions kept; `UserDto.active`) | `2fffe8b` |
-| 12b | Unlock users (`V20`: `users:unlock`; `FailedPasswordCounter.unlock`; `UserDto.lockedUntil`); step 12 complete | step 12b commit |
+| 12b | Unlock users (`V20`: `users:unlock`; `FailedPasswordCounter.unlock`; `UserDto.lockedUntil`); step 12 complete | `3b4e8c4` |
+| 13a | Email service: `EmailService` (only `JavaMailSender` user), `OutgoingEmail` + `EmailPurpose`, Thymeleaf HTML + text templates, `IAM_MAIL_FROM` | step 13a commit |
 
 ---
 
@@ -305,6 +306,13 @@ creation and no API changes it.
   changes: tenant-scoped (other tenants 404), never yourself, never the root user.
 
 ### Step 13: Email service: asynchronous sending with templates (planned, owner asked 2026-10-25)
+Decided 2026-10-27 (all recommended options): Thymeleaf, HTML + plain text with a shared layout; a required sender
+`IAM_MAIL_FROM`; forgot-password sends after commit and asynchronously, while the admin reset stays synchronous and keeps
+its `503` (it disables the password, so it must know the email went out); no outbox (it would hold OTPs in plain text),
+no retries; the unknown-user, no-email and over-limit paths do the same bcrypt work as a real request; the request
+audit says `QUEUED` instead of `SENT`, and a later failure is only logged by the sender. Commits: 13a email service and
+templates (done), 13b asynchronous sending, 13c email verification (designed when 13b is done).
+
 Today each feature builds a `SimpleMailMessage` and sends it inside the request and its transaction
 (`ResetOtpIssuer`). A slow SMTP server slows the response, holds database locks longer, and
 makes a known user's reset request measurably slower than an unknown one's. More emails will come (verification,

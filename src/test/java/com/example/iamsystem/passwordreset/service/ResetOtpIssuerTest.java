@@ -1,5 +1,8 @@
 package com.example.iamsystem.passwordreset.service;
 
+import com.example.iamsystem.email.dto.EmailPurpose;
+import com.example.iamsystem.email.dto.OutgoingEmail;
+import com.example.iamsystem.email.service.EmailService;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
@@ -12,8 +15,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -21,7 +22,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,7 +38,7 @@ class ResetOtpIssuerTest {
     @Mock
     private PasswordResetOTPRepository otpRepository;
     @Mock
-    private JavaMailSender mailSender;
+    private EmailService emailService;
     @Mock
     private ResetRequestLimiter requestLimiter;
 
@@ -48,7 +48,7 @@ class ResetOtpIssuerTest {
 
     @BeforeEach
     void setUp() {
-        issuer = new ResetOtpIssuer(otpRepository, mailSender, new OtpExpirationProperties(5), requestLimiter, passwordEncoder);
+        issuer = new ResetOtpIssuer(otpRepository, emailService, new OtpExpirationProperties(5), requestLimiter, passwordEncoder);
         lenient().when(requestLimiter.tryRecord(any(User.class))).thenReturn(true);
         user = new User();
         user.setId(1L);
@@ -66,10 +66,12 @@ class ResetOtpIssuerTest {
         String hash = saved.getValue().getOtpHash();
         assertTrue(saved.getValue().getExpiryDate().isBefore(Instant.now().plus(Duration.ofMinutes(6))));
 
-        ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
-        verify(mailSender).send(mail.capture());
-        assertArrayEquals(new String[]{"alice@example.com"}, mail.getValue().getTo());
-        String otp = mail.getValue().getText().substring(mail.getValue().getText().length() - 6);
+        ArgumentCaptor<OutgoingEmail> mail = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailService).send(mail.capture());
+        assertEquals(EmailPurpose.PASSWORD_RESET_OTP, mail.getValue().purpose());
+        assertEquals("alice@example.com", mail.getValue().to());
+        assertEquals(5, mail.getValue().values().get("validMinutes"));
+        String otp = (String) mail.getValue().values().get("otp");
         assertTrue(otp.matches("\\d{6}"));
         assertNotEquals(otp, hash);
         assertTrue(passwordEncoder.matches(otp, hash));
@@ -81,7 +83,7 @@ class ResetOtpIssuerTest {
         user.setEmail(null);
 
         assertEquals(OtpRequestOutcome.NO_EMAIL, issuer.issue(user));
-        verifyNoInteractions(otpRepository, mailSender, requestLimiter);
+        verifyNoInteractions(otpRepository, emailService, requestLimiter);
     }
 
     @Test
@@ -90,13 +92,13 @@ class ResetOtpIssuerTest {
         when(requestLimiter.tryRecord(user)).thenReturn(false);
 
         assertEquals(OtpRequestOutcome.TOO_MANY_REQUESTS, issuer.issue(user));
-        verifyNoInteractions(otpRepository, mailSender);
+        verifyNoInteractions(otpRepository, emailService);
     }
 
     @Test
     @DisplayName("A failed email is no error: the outcome says so")
     void issue_mailFailure_isReported() {
-        doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
+        doThrow(new MailSendException("SMTP down")).when(emailService).send(any(OutgoingEmail.class));
 
         assertEquals(OtpRequestOutcome.MAIL_FAILED, issuer.issue(user));
     }

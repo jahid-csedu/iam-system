@@ -1,5 +1,7 @@
 package com.example.iamsystem.passwordreset.controller;
 
+import com.example.iamsystem.email.dto.OutgoingEmail;
+import com.example.iamsystem.email.service.EmailService;
 import com.example.iamsystem.passwordreset.dto.PasswordResetDto;
 import com.example.iamsystem.passwordreset.dto.PasswordResetRequestDto;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
@@ -14,8 +16,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,7 +26,6 @@ import java.util.List;
 
 import static com.example.iamsystem.passwordreset.PasswordResetConstants.RESET_REQUEST_ACCEPTED;
 import static org.hamcrest.Matchers.containsString;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,7 +59,7 @@ class PasswordResetControllerTest {
     private JsonMapper jsonMapper;
 
     @MockitoBean
-    private JavaMailSender mailSender;
+    private EmailService emailService;
 
     private String clientId;
 
@@ -79,11 +78,11 @@ class PasswordResetControllerTest {
     void resetByUsername_setsTheChosenPassword() throws Exception {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
         String otp = lastEmailedOtp();
-        clearInvocations(mailSender);
+        clearInvocations(emailService);
 
         postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp, NEW_PASSWORD)).andExpect(status().isOk());
 
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
         postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", NEW_PASSWORD)).andExpect(status().isOk());
         postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", "Password1!")).andExpect(status().isUnauthorized());
     }
@@ -120,9 +119,9 @@ class PasswordResetControllerTest {
     void resetByEmail_emailsTheOtp() throws Exception {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "root@acme.com")).andExpect(status().isOk());
 
-        ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
-        verify(mailSender).send(mail.capture());
-        assertArrayEquals(new String[]{"root@acme.com"}, mail.getValue().getTo());
+        ArgumentCaptor<OutgoingEmail> mail = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailService).send(mail.capture());
+        assertEquals("root@acme.com", mail.getValue().to());
     }
 
     @Test
@@ -130,10 +129,10 @@ class PasswordResetControllerTest {
     void reset_withWrongIdentifier_isRejected() throws Exception {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
         String otp = lastEmailedOtp();
-        clearInvocations(mailSender);
+        clearInvocations(emailService);
 
         postJson("/api/password/reset", new PasswordResetDto(clientId, "someone-else", otp, NEW_PASSWORD)).andExpect(status().isBadRequest());
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 
     @Test
@@ -142,20 +141,20 @@ class PasswordResetControllerTest {
         String known = postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        clearInvocations(mailSender);
+        clearInvocations(emailService);
 
         String unknown = postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "ghost@acme.com"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
         assertEquals(known, unknown);
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 
     @Test
     @DisplayName("A failed email gets the same answer too")
     void resetRequest_mailFailure_looksTheSame() throws Exception {
-        doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
+        doThrow(new MailSendException("SMTP down")).when(emailService).send(any(OutgoingEmail.class));
 
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root"))
                 .andExpect(status().isOk())
@@ -168,7 +167,7 @@ class PasswordResetControllerTest {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
         String otp = lastEmailedOtp();
         String wrongOtp = otp.equals("000000") ? "111111" : "000000";
-        clearInvocations(mailSender);
+        clearInvocations(emailService);
 
         for (int attempt = 0; attempt < 5; attempt++) {
             postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", wrongOtp, NEW_PASSWORD))
@@ -178,7 +177,7 @@ class PasswordResetControllerTest {
         postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp, NEW_PASSWORD))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Invalid or expired OTP"));
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 
     @Test
@@ -200,27 +199,27 @@ class PasswordResetControllerTest {
         for (int request = 0; request < 3; request++) {
             postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
         }
-        verify(mailSender, times(3)).send(any(SimpleMailMessage.class));
-        clearInvocations(mailSender);
+        verify(emailService, times(3)).send(any(OutgoingEmail.class));
+        clearInvocations(emailService);
 
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "root@acme.com"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(RESET_REQUEST_ACCEPTED));
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 
     @Test
     @DisplayName("A request without a username or email fails validation and sends nothing")
     void resetRequest_withoutIdentifier_failsValidation() throws Exception {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, " ")).andExpect(status().isUnprocessableEntity());
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 
     @Test
     @DisplayName("A request without a JSON body is a bad request")
     void resetRequest_withoutBody_isBadRequest() throws Exception {
         mockMvc.perform(post("/api/password/reset-request")).andExpect(status().isBadRequest());
-        verifyNoInteractions(mailSender);
+        verifyNoInteractions(emailService);
     }
 
     @Test
@@ -244,13 +243,12 @@ class PasswordResetControllerTest {
     }
 
     /**
-     * The OTP at the end of the most recent email.
+     * The OTP of the most recent email.
      */
     private String lastEmailedOtp() {
-        ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
-        verify(mailSender, atLeastOnce()).send(mail.capture());
-        List<SimpleMailMessage> sent = mail.getAllValues();
-        String text = sent.getLast().getText();
-        return text.substring(text.lastIndexOf(' ') + 1);
+        ArgumentCaptor<OutgoingEmail> mail = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailService, atLeastOnce()).send(mail.capture());
+        List<OutgoingEmail> sent = mail.getAllValues();
+        return (String) sent.getLast().values().get("otp");
     }
 }

@@ -1,5 +1,8 @@
 package com.example.iamsystem.passwordreset.service;
 
+import com.example.iamsystem.email.dto.EmailPurpose;
+import com.example.iamsystem.email.dto.OutgoingEmail;
+import com.example.iamsystem.email.service.EmailService;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
@@ -7,8 +10,6 @@ import com.example.iamsystem.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -17,9 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_BODY_PREFIX;
-import static com.example.iamsystem.passwordreset.PasswordResetConstants.PASSWORD_RESET_REQUEST_SUBJECT;
+import java.util.Map;
 
 /**
  * The one place that makes (and discards) password-reset OTPs, for the user's own forgot-password request and for a reset by another
@@ -36,10 +35,12 @@ public class ResetOtpIssuer {
 
     private static final int OTP_BOUND = 1_000_000;
     private static final String OTP_FORMAT = "%06d";
+    private static final String OTP_VALUE = "otp";
+    private static final String VALID_MINUTES_VALUE = "validMinutes";
 
     private final SecureRandom random = new SecureRandom();
     private final PasswordResetOTPRepository otpRepository;
-    private final JavaMailSender mailSender;
+    private final EmailService emailService;
     private final OtpExpirationProperties otpExpiration;
     private final ResetRequestLimiter requestLimiter;
     private final PasswordEncoder passwordEncoder;
@@ -70,12 +71,9 @@ public class ResetOtpIssuer {
         resetOtp.setExpiryDate(Instant.now().plus(Duration.ofMinutes(otpExpiration.minutes())));
         otpRepository.save(resetOtp);
 
-        SimpleMailMessage email = new SimpleMailMessage();
-        email.setTo(user.getEmail());
-        email.setSubject(PASSWORD_RESET_REQUEST_SUBJECT);
-        email.setText(PASSWORD_RESET_REQUEST_BODY_PREFIX + otp);
         try {
-            mailSender.send(email);
+            emailService.send(new OutgoingEmail(EmailPurpose.PASSWORD_RESET_OTP, user.getEmail(),
+                    Map.of(OTP_VALUE, otp, VALID_MINUTES_VALUE, otpExpiration.minutes())));
             return OtpRequestOutcome.SENT;
         } catch (MailException e) {
             log.error("Could not email the password-reset OTP to user {}", user.getId(), e);
