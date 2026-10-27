@@ -37,7 +37,7 @@ Work volume: **S** = one step of a few commits · **M** = one larger step · **L
      registration endpoint with the tenant's `client_id`, which identifies the tenant (the same way login does). Each
      tenant decides whether self-registration is allowed (a tenant setting, switched by the root or a management user
      with permission; off means only management users create regular users, as today), with email verification of new
-     accounts. Together with item 7, users who register through a client can be attached to that client.
+     accounts. Together with item 8, users who register through a client can be attached to that client.
    * **Why it's important:** Consumer-facing tenants need end users to sign up on their own, while other tenants
      (internal tools, B2B) must be able to keep sign-up closed.
    * **Builds on:** the `client_id` login model and the email service with verification (plan step 13). Frontend gap G-21.
@@ -59,7 +59,24 @@ Work volume: **S** = one step of a few commits · **M** = one larger step · **L
    * **Why it's important:** Prevents unauthorized access even when a password is compromised.
    * **Builds on:** the login flow in `AuthenticationService` and the lockout counter. Frontend gap G-24.
 
-6. **OAuth2 / OpenID Connect provider** (L)
+6. **Allowed web origins per client** (M, before item 7)
+   * **Description:** Today the browser origins allowed to call the API are one platform-wide list
+     (`iam.cors.allowed-origins`), set by whoever runs the IAM. A tenant's own single-page app on its own domain (calling
+     login, refresh or forgot-password directly) needs the platform operator to add its origin. Like Auth0's "Allowed Web
+     Origins", each client gets its own list of exact origins, edited with the client (`clients:update`) and validated
+     like `CorsProperties`. A preflight carries no body and no header values, so it can't name the client (moving
+     `client_id` into a header doesn't help; only the path or query string would). Proposed: the preflight allows the
+     platform list plus the union of all active clients' lists (cached, refreshed when a list changes), and the actual
+     request is checked exactly: public auth endpoints in `ClientResolver` (the origin must be in that client's list or
+     the platform list, else 403), token calls in the JWT filter against the token's client; requests without `Origin`
+     are unaffected. To decide then: one list or Auth0's separate CORS and web-origin lists, whether the management
+     console stays platform-list only, and wildcard subdomains.
+   * **Why it's important:** Tenants can integrate their own browser apps without the platform operator, and one
+     tenant's page can't use another tenant's `client_id`.
+   * **Builds on:** the CORS allowlist (`CorsConfig`, `CorsProperties`) and `ClientResolver`. Frontend step 29, gap G-26.
+     Was plan step 15 (moved here 2026-10-27).
+
+7. **OAuth2 / OpenID Connect provider** (L)
    * **Description:** Make the IAM a standard authorization server: registered redirect URIs per client, the
      authorization code flow with PKCE for browser and mobile apps, client secrets for confidential clients (then
      introspection requires client authentication), OIDC discovery, ID tokens and a userinfo endpoint, and a hosted login
@@ -70,7 +87,7 @@ Work volume: **S** = one step of a few commits · **M** = one larger step · **L
 
 ## Priority 2: valuable next
 
-7. **Client-scoped regular users** (S)
+8. **Client-scoped regular users** (S)
    * **Description:** Regular users are tenant-scoped today: every application client of the tenant accepts them. Let a
      tenant admin optionally attach a regular user to one or more specific clients. A user without client attachments
      stays tenant-scoped (accepted by every application client, as now); a user attached to clients gets tokens only
@@ -80,27 +97,27 @@ Work volume: **S** = one step of a few commits · **M** = one larger step · **L
      keep their user bases apart without creating a tenant per application.
    * **Builds on:** `ClientResolver` and the login and refresh checks.
 
-8. **API key management** (M)
+9. **API key management** (M)
    * **Description:** Generate, revoke and rotate API keys for programmatic access (stored hashed, shown once), each with
      its own set of permissions and an optional expiry.
    * **Why it's important:** A secure and auditable way for scripts and services to call the management API without a
      user's password.
    * **Builds on:** a new authentication path that produces an `AuthenticatedActor`; the permission checks stay unchanged.
 
-9. **User groups** (M)
-   * **Description:** Organize users into groups; roles and permissions can be assigned to a group, and its members hold
-     them.
-   * **Why it's important:** Simplifies access management for tenants with many users.
-   * **Builds on:** the permission resolution in `AuthorizationService` (user ∪ roles ∪ group roles), kept in agreement
-     with `permissionsOf`.
+10. **User groups** (M)
+    * **Description:** Organize users into groups; roles and permissions can be assigned to a group, and its members hold
+      them.
+    * **Why it's important:** Simplifies access management for tenants with many users.
+    * **Builds on:** the permission resolution in `AuthorizationService` (user ∪ roles ∪ group roles), kept in agreement
+      with `permissionsOf`.
 
-10. **Maker-checker for role and permission changes** (M)
+11. **Maker-checker for role and permission changes** (M)
     * **Description:** An optional approval step, switched on per tenant by the root user: a change to a user's roles or
       permissions, or to a role's permissions, waits until a second user with the permission approves it.
     * **Why it's important:** The four-eyes principle that regulated organizations require for access changes.
     * **Builds on:** the access policies (`UserAccessPolicy`, `RoleAccessPolicy`) and the audit log.
 
-11. **Per-tenant signing keys** (L)
+12. **Per-tenant signing keys** (L)
     * **Description:** Give every tenant its own RSA key pair for signing tokens, instead of one platform key set.
       Private keys are stored encrypted (under a platform master key, or in a KMS/HSM), every tenant publishes its own
       JWKS (e.g. `/tenants/{id}/.well-known/jwks.json`), and root users can rotate their tenant's key. Tokens already
@@ -111,27 +128,27 @@ Work volume: **S** = one step of a few commits · **M** = one larger step · **L
 
 ## Priority 3: long-term / enterprise
 
-12. **Emergency (break-glass) access** (M)
+13. **Emergency (break-glass) access** (M)
     * **Description:** Temporary, highly privileged access for emergencies: time-limited, justified, and strictly audited,
       with notifications to the tenant's root.
     * **Why it's important:** Business continuity during incidents without permanent over-privileged accounts.
     * **Builds on:** the platform permissions and grants (plan step 10) and the audit log.
 
-13. **Login through external identity providers (SSO and federation)** (L)
+14. **Login through external identity providers (SSO and federation)** (L)
     * **Description:** Let a tenant's users log in with an external identity provider over OIDC or SAML 2.0: social
       logins, or a partner organization's own IdP (a trust relationship per tenant), with users created or linked on
       their first login.
     * **Why it's important:** One set of credentials across applications, and partner access for B2B tenants without
       separate accounts.
-    * **Builds on:** item 6 (OIDC on our side) and the client model.
+    * **Builds on:** item 7 (OIDC on our side) and the client model.
 
-14. **User provisioning (SCIM)** (L)
+15. **User provisioning (SCIM)** (L)
     * **Description:** Create, update and deactivate users and groups automatically from customers' HR or directory
       systems through the SCIM 2.0 protocol.
     * **Why it's important:** Keeps user data consistent across systems and automates onboarding and offboarding.
-    * **Builds on:** stable tenants, users and groups (item 9).
+    * **Builds on:** stable tenants, users and groups (item 10).
 
-15. **Attribute-based access control (ABAC)** (L)
+16. **Attribute-based access control (ABAC)** (L)
     * **Description:** Authorization decisions that also consider attributes of the user, the resource and the
       environment (time, network, data owner), beyond roles and permissions.
     * **Why it's important:** Context-aware policies for complex enterprise environments.

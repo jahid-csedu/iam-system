@@ -124,7 +124,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   Another user with the right permission can do it for them. Example: A (with permission) can change B's roles, but never A's own.
 - A user with the permission to grant permissions or roles can grant ones they don't hold themselves (but never to themselves).
 - Role and permission changes apply immediately (no approval step). Future option: maker-checker approval,
-  switched on per tenant by the root user (roadmap item 10).
+  switched on per tenant by the root user (roadmap item 11).
 - The root user has every tenant-management permission implicitly (not through a role), so root's access can't be edited by anyone.
 
 ### Tokens
@@ -134,7 +134,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   - which user claims go into the JWT body (user id, username, email, …).
 - First rollout: tokens carry only basic user information. The IAM doesn't manage other applications' roles or permissions.
 - Other applications verify tokens through IAM endpoints: asymmetric signing + JWKS endpoint for local verification
-  (done in step 9a: RS256, one platform key set; per-tenant keys are roadmap item 11), plus an introspection endpoint that
+  (done in step 9a: RS256, one platform key set; per-tenant keys are roadmap item 12), plus an introspection endpoint that
   reflects revocation and tenant suspension (done in step 9c: `POST /api/auth/introspect`, public until clients get secrets).
 - Logout and revocation: store refresh tokens (hashed) in the database. This replaces the `@Version`-based revocation.
   Done (step 9b): a session per login (`sid` in access tokens), single-use rotating opaque refresh tokens with reuse
@@ -154,7 +154,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   management console is never suspended.
 
 ### Future (not now)
-- OAuth2/OIDC compatibility (roadmap item 6). The `client_id` choice keeps this path open.
+- OAuth2/OIDC compatibility (roadmap item 7). The `client_id` choice keeps this path open.
 - First priority is organizing the code structure toward this design.
 
 ### Open questions
@@ -284,7 +284,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - CORS: only the origins in `iam.cors.allowed-origins` (`IAM_CORS_ALLOWEDORIGINS`, exact origins, validated at startup)
   may call the API from a browser on another origin; none by default. Methods GET/POST/PUT/PATCH/DELETE, headers
   `Authorization`, `Content-Type`, `X-Tenant-Id`, no credentials (tokens never travel in cookies). Other origins get 403.
-  Per-client origins are plan step 15.
+  Per-client origins are roadmap item 6.
 - Tokens are RS256-signed by the first key of `iam.jwt.keys` (kid + PKCS#8 PEM private key, public key derived); every
   configured key is published at `GET /.well-known/jwks.json` (public) and accepted by `TokenVerifier`, which only takes
   RS256 by a known `kid` and `typ: at+jwt`. Each key is a kid plus the PEM inline (`private-key`) or a location to read it
@@ -659,3 +659,5 @@ Design debt
 - 2026-10-27: Plan step 14 (links in reset and verification emails) moved to the roadmap as item 2 (owner), before
   self-registration, which needs it; roadmap items 2-14 became 3-15 (older progress-log entries keep their numbers).
   Next: step 15 (per-client web origins), the last plan step.
+- 2026-10-27: Plan step 15 (per-client web origins) moved to the roadmap as item 6 (owner), before OAuth2/OIDC; roadmap
+  items 6-15 became 7-16. The plan has no steps left.

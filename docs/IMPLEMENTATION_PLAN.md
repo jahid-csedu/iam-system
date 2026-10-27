@@ -214,7 +214,7 @@ What was built: `V8__client_token_settings.sql`; `TokenClaim`; `TokenSettingsDto
 
 **Goal:** other applications verify tokens safely; logout and revocation work.
 
-Decisions taken: one platform key set for now (per-tenant keys are roadmap item 11; `kid` + a tenant-specific `iss`
+Decisions taken: one platform key set for now (per-tenant keys are roadmap item 12; `kid` + a tenant-specific `iss`
 keep that path open); RS256; without configured keys the app generates a temporary key and warns; logout is authenticated
 by the bearer access token; introspection is public until clients get secrets; the default access-token lifetime stays the
 5 minutes of step 8b (configurable per client). Split into three commits:
@@ -340,20 +340,6 @@ invitations, MFA codes, notifications), so:
 - Removes the reset-request timing difference (Known issues in `CLAUDE.md`).
 - Email verification (owner agreed 2026-10-26): a new or changed email address is confirmed through a link or code sent
   to it before it receives password resets; today a changed email is used at once.
-
-### Step 15: Allowed web origins per client (planned, owner asked 2026-10-26)
-Today the browser origins allowed to call the API are one platform-wide list (`iam.cors.allowed-origins`), set by whoever
-runs the IAM. That covers our own console and hosted pages, but a tenant's own single-page app on its own domain (calling
-login, refresh or forgot-password directly) needs the platform operator to add its origin. Like Auth0's "Allowed Web
-Origins", each client gets its own list, managed by the tenant:
-- `clients.allowed_web_origins` (or a `client_allowed_origins` table), edited with the client (`clients:update`), exact
-  origins only, validated like `CorsProperties`.
-- A `CorsConfigurationSource` that allows the configured platform origins everywhere, plus a client's origins on the
-  public endpoints that carry its `client_id` (and for tokens of that client). To decide then: a preflight carries no
-  body, so the `client_id` can't be read from it; options are allowing the union of all clients' origins on the public
-  auth endpoints (cached) or moving `client_id` into the path or a header.
-- Cache the origin lookup (every preflight would otherwise hit the database).
-- Frontend: an "Allowed web origins" field on the application detail page.
 
 ## 5. After the plan: the feature roadmap
 
