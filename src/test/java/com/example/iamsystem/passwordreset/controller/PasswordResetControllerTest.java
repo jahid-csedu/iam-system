@@ -119,7 +119,7 @@ class PasswordResetControllerTest {
         }
         postJson("/api/auth/authenticate", new UserLoginDto(clientId, "acme-root", "Password1!"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value(containsString("locked")));
+                .andExpect(jsonPath("$.detail").value(containsString("locked")));
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
 
         postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", lastEmailedOtp(), NEW_PASSWORD))
@@ -187,11 +187,11 @@ class PasswordResetControllerTest {
         for (int attempt = 0; attempt < 5; attempt++) {
             postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", wrongOtp, NEW_PASSWORD))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.message").value("Invalid or expired OTP"));
+                    .andExpect(jsonPath("$.detail").value("Invalid or expired OTP"));
         }
         postJson("/api/password/reset", new PasswordResetDto(clientId, "acme-root", otp, NEW_PASSWORD))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Invalid or expired OTP"));
+                .andExpect(jsonPath("$.detail").value("Invalid or expired OTP"));
         verifyNoInteractions(emailService);
     }
 

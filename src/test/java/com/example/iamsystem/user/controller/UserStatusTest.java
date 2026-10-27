@@ -74,7 +74,7 @@ class UserStatusTest {
                 .andExpect(jsonPath("$.active").value(false));
         send(get("/api/users"), viewer)
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Your account is deactivated"));
+                .andExpect(jsonPath("$.detail").value("Your account is deactivated"));
         login(acmeConsole, "viewer").andExpect(status().isForbidden());
 
         send(put("/api/users/{id}/activate", viewerId), acmeRoot)
@@ -138,10 +138,10 @@ class UserStatusTest {
 
         send(put("/api/users/{id}/deactivate", userId("admin")), admin)
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("You can't deactivate, activate or unlock your own account"));
+                .andExpect(jsonPath("$.detail").value("You can't deactivate, activate or unlock your own account"));
         send(put("/api/users/{id}/deactivate", userId("acme-root")), admin)
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("The root user can't be deactivated, activated or unlocked"));
+                .andExpect(jsonPath("$.detail").value("The root user can't be deactivated, activated or unlocked"));
         send(put("/api/users/{id}/unlock", userId("admin")), admin).andExpect(status().isForbidden());
         send(put("/api/users/{id}/unlock", userId("acme-root")), admin).andExpect(status().isForbidden());
         send(put("/api/users/{id}/deactivate", globexRootId), acmeRoot).andExpect(status().isNotFound());

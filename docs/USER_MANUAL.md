@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of email verification and verified-only resets (2026-10-27).** This manual is updated in every step that changes how the system is
+> **Matches the code as of RFC 9457 error answers (2026-10-27).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -204,7 +204,7 @@ character** (`@#!$%^&-+=()`).
 { "tenant": { ... }, "rootUser": { ... },
   "managementConsole": { "id": 1, "client_id": "pipHcOj4eVaEOqgMCeTJygKC", "name": "Management Console", "type": "MANAGEMENT_CONSOLE" } }
 ```
-Keep the console's `client_id`: management users log in with it. A taken tenant name gives `400`, and so does a root username
+Keep the console's `client_id`: management users log in with it. A taken tenant name gives `409`, and so does a root username
 or email that any user of any tenant already uses.
 
 ### Step 2: Log in as root through the management console (public)
@@ -227,7 +227,7 @@ An unknown `client_id`, or a username that doesn't exist in the client's tenant,
 { "name": "AUDITOR", "description": "Views users" }
 ```
 → `201` with the role's `id`. The role belongs to your tenant; another tenant may use the same name. A name already used in your
-tenant gives `400`. Then attach permissions by id (from `GET /api/permissions`):
+tenant gives `409`. Then attach permissions by id (from `GET /api/permissions`):
 
 `PUT /api/roles/permissions`
 ```json
@@ -280,8 +280,8 @@ and gets `403` on every management endpoint.
 | What | Request | Who |
 |---|---|---|
 | Who am I | `GET /api/me` → your profile (`id`, `username`, `fullName`, `email`, `userType`, `rootUser`), `homeTenant` and `workingTenant` (`id`, `name`, `type`, `status`; the working tenant is the `X-Tenant-Id` tenant for a platform user working inside it, else your own) and `permissions`: every key you hold in the working tenant, sorted. Changes to your roles show at once. Regular users get `403` | Any logged-in management user; no permission needed |
-| Change your own profile | `PATCH /api/me` `{ "fullName": "...", "email": "...", "currentPassword": "..." }` → `200` and the same answer as `GET /api/me`. Same field rules as below; a new email needs `currentPassword` (`400` when missing or wrong), must be free in your tenant and not belong to any root user, or, for a root, must be unused by every user of every tenant (`400` "Email not available"); your pending reset OTP is deleted. The only way a root changes their own details. Regular users get `403` | Any logged-in management user; no permission needed |
-| Change another user's profile | `PATCH /api/users/{id}` `{ "fullName": "...", "email": "..." }` → `200` and the user. Fields left out stay unchanged; `"fullName": ""` removes the name; an email can be changed, not removed. A new email must be free in the tenant and not belong to any tenant's root user (`400` "Email not available"), and a pending reset OTP of the user is deleted (it went to the old address). Never your own profile (`403`; yours comes with `/api/me`), never the root user's (`403`) | `users:update`; a new email also needs `users:reset-password` (whoever controls the email controls password resets) |
+| Change your own profile | `PATCH /api/me` `{ "fullName": "...", "email": "...", "currentPassword": "..." }` → `200` and the same answer as `GET /api/me`. Same field rules as below; a new email needs `currentPassword` (`400` when missing or wrong), must be free in your tenant and not belong to any root user, or, for a root, must be unused by every user of every tenant (`409` "Email not available"); your pending reset OTP is deleted. The only way a root changes their own details. Regular users get `403` | Any logged-in management user; no permission needed |
+| Change another user's profile | `PATCH /api/users/{id}` `{ "fullName": "...", "email": "..." }` → `200` and the user. Fields left out stay unchanged; `"fullName": ""` removes the name; an email can be changed, not removed. A new email must be free in the tenant and not belong to any tenant's root user (`409` "Email not available"), and a pending reset OTP of the user is deleted (it went to the old address). Never your own profile (`403`; yours comes with `/api/me`), never the root user's (`403`) | `users:update`; a new email also needs `users:reset-password` (whoever controls the email controls password resets) |
 | Change own password | `PATCH /api/users/password` `{ "oldPassword": "...", "newPassword": "..." }` | Any logged-in user, for themselves only |
 | Verify your email address | `POST /api/users/email-verification` (no body) → `204`: a 6-digit code goes to your address right after the request (valid 30 minutes, replaces an earlier one; `400` when already verified, `429` after 3 codes in an hour). Then `POST /api/users/email-verification/confirm` `{ "code": "123456" }` → `204` and `emailVerified` becomes `true`; a missing, expired or wrong code is `400` "Invalid or expired code", and the fifth wrong guess deletes the code | Any logged-in user, for themselves only (also regular users, through their application) |
 | Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`: that user gets a reset OTP by email, their current password stops working at once and all their sessions end; they set a new password with the OTP (`POST /api/password/reset` through any client of the tenant). It reaches an unverified address too (you vouch for it), and the completed reset verifies the address. If the OTP can't be sent nothing changes: `400` (no email address), `429` (3 OTPs in the last hour), `503` (mail failure) | `users:reset-password`; never your own password, never the root user's |
@@ -426,14 +426,26 @@ The IAM manages only its own permissions; other applications decide their own au
 
 ## 9. Status codes
 
+Every error answers with an RFC 9457 problem (`Content-Type: application/problem+json`; only a refused CORS origin gets
+Spring's plain `403`):
+```json
+{ "title": "Conflict", "status": 409, "detail": "Role name already exists", "instance": "/api/roles" }
+```
+`detail` is the text to show; `title` is the status's standard name; `instance` is the request path; `type` is left out,
+which means `about:blank` (no problem types of our own yet). Invalid input adds `errors`, one `{ "field", "message" }`
+per field: a `422` for the body (`"detail": "Some fields are invalid"`, fields such as `rootUser.email`) and a `400` for
+request parameters (`"detail": "Some request parameters are invalid"`, fields such as `page`). An unexpected error is a
+`500` with `"detail": "Unknown error occurred"` and never shows internals.
+
 | Code | Meaning here |
 |---|---|
 | `200` / `201` / `204` | OK / created / done without a body |
-| `400` | Already exists (tenant, user, role or client name in your tenant, an email taken in your tenant or by any root user), deleting or suspending the management console, suspending the platform tenant, a regular user or an application client in the platform tenant, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, a missing or wrong current password when changing your own email, invalid or expired OTP or verification code, verifying an already verified address, negative page or page size below 1, missing or malformed request body |
+| `400` | Deleting or suspending the management console, suspending the platform tenant, a regular user or an application client in the platform tenant, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, a missing or wrong current password when changing your own email, invalid or expired OTP or verification code, verifying an already verified address, negative page or page size below 1 (with `errors`), missing or malformed request body |
 | `401` | Not logged in: missing, malformed, expired or revoked access token ("A valid access token is required"), an access token of a locked or deactivated account or of a suspended tenant or client (the message says which: "Your account is locked until <time>", "Your account is deactivated", "Tenant is suspended", "Client is suspended"; at login these are `403`), wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
 | `403` | A browser request from an origin not listed in `IAM_CORS_ALLOWEDORIGINS`; a regular user calling `GET` or `PATCH /api/me`; changing your own profile or the root user's with `PATCH /api/users/{id}`, or another user's email without `users:reset-password`; logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; deactivating, activating or unlocking yourself or the root user; resetting your own or the root user's password; a regular user logging in through the management console; login, refresh or forgot-password for a suspended tenant ("Tenant is suspended") or through a suspended client ("Client is suspended"); or account locked, deactivated or expired |
 | `404` | Not found, including an unknown tenant in `X-Tenant-Id`, users and roles of other tenants, and unknown permissions (forgot-password answers `200` for an unknown username/email too) |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
+| `409` | Already exists: a tenant, user, role or client name in your tenant, an email taken in your tenant or by any root user, a root username or email used by any user of any tenant |
 | `422` | Request body failed validation (the `errors` list shows which field), including token lifetimes out of range |
 | `429` | Resetting another user's password when that user already got 3 reset OTPs in the last hour; asking for a 4th email verification code within an hour |
 | `503` | Resetting another user's password when the OTP email can't be sent (nothing changed; try again later) |

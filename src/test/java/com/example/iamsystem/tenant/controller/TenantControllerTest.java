@@ -101,7 +101,7 @@ class TenantControllerTest {
         login(acmeConsole, "bob", "Acme1234!").andExpect(status().isOk());
         login(globexConsole, "bob", "Globex123!").andExpect(status().isOk());
         login(globexConsole, "bob", "Acme1234!").andExpect(status().isUnauthorized());
-        createManagementUser("acme-root", "bob", "Acme1234!", "bob2@example.com").andExpect(status().isBadRequest());
+        createManagementUser("acme-root", "bob", "Acme1234!", "bob2@example.com").andExpect(status().isConflict());
     }
 
     @Test
@@ -110,10 +110,10 @@ class TenantControllerTest {
         signup("Acme", "acme-root", "root@acme.com").andExpect(status().isCreated());
         signup("Globex", "globex-root", "root@globex.com").andExpect(status().isCreated());
 
-        createManagementUser("globex-root", "acme-root", "Globex123!", "other@globex.com").andExpect(status().isBadRequest());
-        createManagementUser("globex-root", "carol", "Globex123!", "root@acme.com").andExpect(status().isBadRequest());
+        createManagementUser("globex-root", "acme-root", "Globex123!", "other@globex.com").andExpect(status().isConflict());
+        createManagementUser("globex-root", "carol", "Globex123!", "root@acme.com").andExpect(status().isConflict());
         createManagementUser("globex-root", "dave", "Globex123!", "dave@globex.com").andExpect(status().isCreated());
-        signup("Initech", "dave", "root@initech.com").andExpect(status().isBadRequest());
+        signup("Initech", "dave", "root@initech.com").andExpect(status().isConflict());
     }
 
     @Test
@@ -143,7 +143,7 @@ class TenantControllerTest {
     void signup_withTakenTenantName_isRejected() throws Exception {
         signup("Acme", "acme-root", "root@acme.com").andExpect(status().isCreated());
 
-        signup("Acme", "other-root", "other@acme.com").andExpect(status().isBadRequest());
+        signup("Acme", "other-root", "other@acme.com").andExpect(status().isConflict());
     }
 
     @Test
@@ -151,7 +151,7 @@ class TenantControllerTest {
     void signup_whenRootUserIsInvalid_leavesNoTenantBehind() throws Exception {
         signup("Acme", "taken", "root@acme.com").andExpect(status().isCreated());
 
-        signup("Beta", "taken", "root@beta.com").andExpect(status().isBadRequest());
+        signup("Beta", "taken", "root@beta.com").andExpect(status().isConflict());
 
         assertFalse(tenantRepository.existsByName("Beta"));
         assertEquals(PREDEFINED_ROLES.size(), roleRepository.count());

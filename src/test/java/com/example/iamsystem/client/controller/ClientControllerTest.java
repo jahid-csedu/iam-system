@@ -80,10 +80,10 @@ class ClientControllerTest {
 
     @Test
     @DisplayName("Client names are unique per tenant")
-    void createClient_withNameTakenInTheTenant_isBadRequest() throws Exception {
+    void createClient_withNameTakenInTheTenant_isConflict() throws Exception {
         send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop")).andExpect(status().isCreated());
 
-        send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop")).andExpect(status().isBadRequest());
+        send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop")).andExpect(status().isConflict());
         send(post("/api/clients"), globexRoot, new ClientRequestDto("Shop")).andExpect(status().isCreated());
     }
 
@@ -224,7 +224,7 @@ class ClientControllerTest {
                 .andExpect(jsonPath("$.status").value("SUSPENDED"));
         login(shopClientId, "acme-root", "Password1!")
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Client is suspended"));
+                .andExpect(jsonPath("$.detail").value("Client is suspended"));
         refresh(shopClientId, tokens.get("refresh_token").asString()).andExpect(status().isForbidden());
         getClients(accessToken).andExpect(status().isUnauthorized());
         login(acmeConsole.get("client_id").asString(), "acme-root", "Password1!").andExpect(status().isOk());
@@ -241,7 +241,7 @@ class ClientControllerTest {
     void suspend_neverTheConsoleNorAnotherTenantsClient() throws Exception {
         send(put("/api/clients/{id}/suspend", acmeConsole.get("id").asLong()), acmeRoot, null)
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("The management console client can't be suspended"));
+                .andExpect(jsonPath("$.detail").value("The management console client can't be suspended"));
         long shopId = body(send(post("/api/clients"), acmeRoot, new ClientRequestDto("Shop"))).get("id").asLong();
         send(put("/api/clients/{id}/suspend", shopId), globexRoot, null).andExpect(status().isNotFound());
     }

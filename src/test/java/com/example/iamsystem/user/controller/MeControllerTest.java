@@ -142,7 +142,7 @@ class MeControllerTest {
 
         send(get("/api/me"), login(shop, "bob"), null)
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Only management users can use this endpoint"));
+                .andExpect(jsonPath("$.detail").value("Only management users can use this endpoint"));
         send(get("/api/me"), null, null).andExpect(status().isUnauthorized());
     }
 
@@ -174,7 +174,7 @@ class MeControllerTest {
 
         send(patch("/api/me"), acmeRoot, new OwnProfileUpdateDto(null, "boss@acme.com", null))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Changing your email needs your current password, and it was missing or wrong"));
+                .andExpect(jsonPath("$.detail").value("Changing your email needs your current password, and it was missing or wrong"));
         send(patch("/api/me"), acmeRoot, new OwnProfileUpdateDto(null, "boss@acme.com", "Wrong-password-1"))
                 .andExpect(status().isBadRequest());
         send(patch("/api/me"), acmeRoot, new OwnProfileUpdateDto(null, "boss@acme.com", PASSWORD))
@@ -195,10 +195,10 @@ class MeControllerTest {
         String alice = login(acmeConsole, "alice");
 
         send(patch("/api/me"), acmeRoot, new OwnProfileUpdateDto(null, "dave@globex.com", PASSWORD))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Email not available"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Email not available"));
         send(patch("/api/me"), alice, new OwnProfileUpdateDto(null, "root@globex.com", PASSWORD))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isConflict());
         send(patch("/api/me"), alice, new OwnProfileUpdateDto(null, "dave@globex.com", PASSWORD))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("dave@globex.com"));
@@ -213,7 +213,7 @@ class MeControllerTest {
 
         send(patch("/api/me"), login(shop, "bob"), new OwnProfileUpdateDto("Bob", null, null))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Only management users can use this endpoint"));
+                .andExpect(jsonPath("$.detail").value("Only management users can use this endpoint"));
     }
 
     private String login(String clientId, String username) throws Exception {

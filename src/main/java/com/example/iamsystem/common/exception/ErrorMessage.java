@@ -74,6 +74,9 @@ public class ErrorMessage {
     public static final String NEW_PASSWORD_REQUIRED = "New password is required";
     public static final String OWN_PASSWORD_RESET = "Users cannot reset their own password; change it instead";
     public static final String UNREADABLE_REQUEST_BODY = "Request body is missing or malformed";
+    public static final String VALIDATION_FAILED = "Some fields are invalid";
+    public static final String INVALID_PARAMETERS = "Some request parameters are invalid";
+    public static final String UNKNOWN_ERROR = "Unknown error occurred";
     public static final String IDENTIFIER_REQUIRED = "Username or email is required";
     public static final String OTP_REQUIRED = "OTP is required";
     public static final String USER_HAS_NO_EMAIL = "User has no email address to send a password reset OTP to";

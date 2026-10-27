@@ -133,7 +133,7 @@ class TenantIsolationTest {
     @DisplayName("Role names are unique per tenant only")
     void roleNames_areUniquePerTenantOnly() throws Exception {
         perform(post("/api/roles"), new RoleRequestDto("AUDITOR", null)).andExpect(status().isCreated());
-        perform(post("/api/roles"), new RoleRequestDto("AUDITOR", null)).andExpect(status().isBadRequest());
+        perform(post("/api/roles"), new RoleRequestDto("AUDITOR", null)).andExpect(status().isConflict());
         perform(get("/api/roles/name/{name}", "MANAGER"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(acmeRole.getId().intValue()));

@@ -78,7 +78,7 @@ This file lets any new session pick up the work without the conversation that pr
 | Guesses | Wrong old/current passwords count like failed logins (`FailedPasswordCounter`, atomic, own transaction) | `1867199` |
 | Reasons | The 401 for a blocked account's token says why (locked until, deactivated, tenant or client suspended); 401 bodies are the usual error JSON | `d7cf5db` |
 | Expiry | Login and refresh answer with `token_type` and `expires_in` (`TokenIssuer` returns `IssuedAccessToken`, the one source of the lifetime); `Cache-Control: no-store` kept by a test | `175eaf6` |
-| Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is roadmap item 4 | `8a1947e` |
+| Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is roadmap item 5 | `8a1947e` |
 | Profiles 1 | `local` / `dev` / `stage` / `prod` profile files; `EnvironmentProfileCheck` (exactly one profile; required settings outside `local`) | `ba2e721` |
 | Profiles 2 | Every profile, `local` included, requires every setting: JWT key (PEM inline or `private-key-location`; a temporary key only in the test suite), platform root until it exists, DB, issuer, mail, CORS | `85a3a38` |
 | 12a | Deactivate / activate users (`V19`: `users:deactivate`, `users:activate` in ADMIN and USER_MANAGER; `UserStatusService`; never yourself or the root; sessions kept; `UserDto.active`) | `2fffe8b` |
@@ -88,7 +88,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 13c-1a | Shared one-time codes (`V21`: `otp_requests` with a purpose; `otp/`: `OneTimeCodes`, `OtpRequestLimiter`, `InvalidOtpException`); no behaviour change | `6033025` |
 | 13c-1b | Email verification (`V22`: `users.email_verified`, `email_verification_codes`; `POST /api/users/email-verification` + `/confirm`; `emailVerified` in `UserDto` and `/api/me`) | `24cdd5c` |
 | 13c-2 | Forgot-password only to verified addresses; the admin reset also to unverified ones; a completed reset verifies; `email_verified` claim; step 13 complete | `b2ab63a` |
-| Errors a | `IamException` with a status per class and one handler; one `AlreadyExistsException`; no `IllegalArgumentException` → 400 catch-all (`@Min` paging checks instead) | errors-a commit |
+| Errors a | `IamException` with a status per class and one handler; one `AlreadyExistsException`; no `IllegalArgumentException` → 400 catch-all (`@Min` paging checks instead) | `1c46b27` |
+| Errors b | RFC 9457 `ProblemDetail` answers (`GlobalHandler` extends `ResponseEntityExceptionHandler`; `errors` for invalid fields and parameters; the 401 entry point through the handler); "already exists" 409; `ExceptionResponse` removed | errors-b commit |
 
 ---
 
@@ -215,7 +216,7 @@ What was built: `V8__client_token_settings.sql`; `TokenClaim`; `TokenSettingsDto
 
 **Goal:** other applications verify tokens safely; logout and revocation work.
 
-Decisions taken: one platform key set for now (per-tenant keys are roadmap item 12; `kid` + a tenant-specific `iss`
+Decisions taken: one platform key set for now (per-tenant keys are roadmap item 13; `kid` + a tenant-specific `iss`
 keep that path open); RS256; without configured keys the app generates a temporary key and warns; logout is authenticated
 by the bearer access token; introspection is public until clients get secrets; the default access-token lifetime stays the
 5 minutes of step 8b (configurable per client). Split into three commits:
@@ -284,7 +285,7 @@ refresh, and its sessions are refused by the filter and introspection.
 | `/token/validate` ignores revocation | Done in step 9c (replaced by introspection) |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
 | `mail.debug=true` (done: security fix 1, `MailConfig` removed); DB credentials in `application.properties`; no JWT key configured only warns | Done: profiles (no credentials in `application.properties`); every setting, JWT key and platform root included, required in every profile |
-| Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step (owner chose to do it now, 2026-10-27): commit a base `IamException` (done), commit b RFC 9457 `ProblemDetail` (`type` `about:blank`, "already exists" 409, no error `code` yet) |
+| Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Done (2026-10-27): commit a base `IamException`, commit b RFC 9457 `ProblemDetail` (`type` `about:blank`, "already exists" 409); stable error codes are roadmap item 2 |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |
 | Deleting a permission assigned to a role fails (FK) | Done in step 7a (permissions are read-only) |
@@ -321,7 +322,7 @@ templates (done), 13b asynchronous sending (done), 13c email verification.
 platform root from config (and rows existing before the migration); signup, `POST /api/users` and every email change
 make it unverified (and delete a pending verification code). A logged-in user asks for a code at their own address
 (`POST /api/users/email-verification`) and confirms it (`POST /api/users/email-verification/confirm`); codes like reset
-OTPs (bcrypt, 5 guesses, 3 per hour, 30 minutes). No automatic verification emails (no link to go to yet; roadmap item 2).
+OTPs (bcrypt, 5 guesses, 3 per hour, 30 minutes). No automatic verification emails (no link to go to yet; roadmap item 3).
 Login is never blocked. 13c-2: forgot-password only to a verified address; the admin reset also to an unverified one
 (the admin vouches); a completed reset verifies the address; `email_verified` claim with `EMAIL`. Commits: 13c-1a shared
 one-time codes, 13c-1b verification, 13c-2 the reset rules and claim.

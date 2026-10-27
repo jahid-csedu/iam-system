@@ -210,7 +210,7 @@ class PlatformGrantControllerTest {
                 .andExpect(status().isNoContent());
         grantRoles(support, platformRoot, acmeId, "VIEWER")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("The platform root already holds every permission on every tenant"));
+                .andExpect(jsonPath("$.detail").value("The platform root already holds every permission on every tenant"));
     }
 
     @Test

@@ -67,7 +67,7 @@ class TenantSuspensionTest {
     @DisplayName("Users of a suspended tenant can't log in")
     void login_isForbidden() throws Exception {
         login().andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Tenant is suspended"));
+                .andExpect(jsonPath("$.detail").value("Tenant is suspended"));
     }
 
     @Test

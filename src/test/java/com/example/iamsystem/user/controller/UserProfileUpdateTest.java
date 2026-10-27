@@ -128,10 +128,10 @@ class UserProfileUpdateTest {
                 .andExpect(status().isCreated());
 
         send(patch("/api/users/{id}", bobId), acmeRoot, new UserUpdateDto(null, "carol@acme.com"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Email not available"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Email not available"));
         send(patch("/api/users/{id}", bobId), acmeRoot, new UserUpdateDto(null, "root@globex.com"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isConflict());
         send(patch("/api/users/{id}", bobId), acmeRoot, new UserUpdateDto(null, "dave@globex.com"))
                 .andExpect(status().isOk());
         send(patch("/api/users/{id}", bobId), acmeRoot, new UserUpdateDto(null, "DAVE@globex.com"))
@@ -147,10 +147,10 @@ class UserProfileUpdateTest {
 
         send(patch("/api/users/{id}", userId("admin")), admin, new UserUpdateDto("Me", null))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Change your own profile through /api/me"));
+                .andExpect(jsonPath("$.detail").value("Change your own profile through /api/me"));
         send(patch("/api/users/{id}", rootId), admin, new UserUpdateDto("Root", null))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Only the root user can change their own profile"));
+                .andExpect(jsonPath("$.detail").value("Only the root user can change their own profile"));
         send(patch("/api/users/{id}", globexRootId), acmeRoot, new UserUpdateDto("X", null)).andExpect(status().isNotFound());
         send(patch("/api/users/{id}", bobId), acmeRoot, new UserUpdateDto(null, "not-an-email")).andExpect(status().isUnprocessableEntity());
     }

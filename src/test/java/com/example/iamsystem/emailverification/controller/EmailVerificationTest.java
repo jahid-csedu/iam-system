@@ -79,7 +79,7 @@ class EmailVerificationTest {
         send(get("/api/me"), acmeRoot, null).andExpect(jsonPath("$.emailVerified").value(true));
         send(post(VERIFICATION), acmeRoot, null)
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Your email address is already verified"));
+                .andExpect(jsonPath("$.detail").value("Your email address is already verified"));
     }
 
     @Test
@@ -106,7 +106,7 @@ class EmailVerificationTest {
         for (int guess = 0; guess < 5; guess++) {
             send(post(CONFIRM), acmeRoot, new EmailVerificationConfirmDto(wrong))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.message").value("Invalid or expired code"));
+                    .andExpect(jsonPath("$.detail").value("Invalid or expired code"));
         }
         send(post(CONFIRM), acmeRoot, new EmailVerificationConfirmDto(code)).andExpect(status().isBadRequest());
         send(get("/api/me"), acmeRoot, null).andExpect(jsonPath("$.emailVerified").value(false));

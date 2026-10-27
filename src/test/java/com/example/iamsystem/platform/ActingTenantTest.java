@@ -130,10 +130,10 @@ class ActingTenantTest {
     void badTenantHeader_isRejected() throws Exception {
         send(get("/api/users").header("X-Tenant-Id", "acme"), platformRootToken, null)
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("X-Tenant-Id must be a tenant id"));
+                .andExpect(jsonPath("$.detail").value("X-Tenant-Id must be a tenant id"));
         send(get("/api/users").header("X-Tenant-Id", 999_999L), platformRootToken, null)
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value("Tenant not found"));
+                .andExpect(jsonPath("$.detail").value("Tenant not found"));
     }
 
     @Test
@@ -221,10 +221,10 @@ class ActingTenantTest {
     void platformTenant_refusesRegularUsersAndApplicationClients() throws Exception {
         send(post("/api/users"), platformRootToken, new UserCreationDto("plain", PASSWORD, null, "plain@platform.test", null))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("The platform tenant has management users only"));
+                .andExpect(jsonPath("$.detail").value("The platform tenant has management users only"));
         send(post("/api/clients"), platformRootToken, Map.of("name", "Shop"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("The platform tenant has no application clients, only its management console"));
+                .andExpect(jsonPath("$.detail").value("The platform tenant has no application clients, only its management console"));
     }
 
     @Test

@@ -30,6 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -72,7 +73,7 @@ class TokenRefusalReasonTest {
     }
 
     @Test
-    @DisplayName("After five wrong passwords the token's 401 says the account is locked and until when")
+    @DisplayName("After five wrong passwords the token's 401 problem says the account is locked and until when")
     void lockedAccount_saysLockedUntil() throws Exception {
         for (int i = 0; i < 5; i++) {
             send(patch("/api/users/password"), alice, new PasswordChangeDto("Wrong-password-1", "NewPassword1!"))
@@ -81,8 +82,11 @@ class TokenRefusalReasonTest {
 
         send(patch("/api/users/password"), alice, new PasswordChangeDto(PASSWORD, "NewPassword1!"))
                 .andExpect(status().isUnauthorized())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
                 .andExpect(jsonPath("$.status").value(401))
-                .andExpect(jsonPath("$.message", startsWith("Your account is locked until ")));
+                .andExpect(jsonPath("$.detail", startsWith("Your account is locked until ")))
+                .andExpect(jsonPath("$.instance").value("/api/users/password"));
     }
 
     @Test
@@ -91,12 +95,12 @@ class TokenRefusalReasonTest {
         jdbcTemplate.update("UPDATE users SET active = false WHERE username = 'alice'");
         send(get("/api/me"), alice, null)
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Your account is deactivated"));
+                .andExpect(jsonPath("$.detail").value("Your account is deactivated"));
 
         jdbcTemplate.update("UPDATE tenants SET status = 'SUSPENDED' WHERE id = ?", acmeId);
         send(get("/api/me"), root, null)
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Tenant is suspended"));
+                .andExpect(jsonPath("$.detail").value("Tenant is suspended"));
     }
 
     @Test
@@ -110,7 +114,7 @@ class TokenRefusalReasonTest {
 
         send(patch("/api/users/password"), bob, new PasswordChangeDto(PASSWORD, "NewPassword1!"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Client is suspended"));
+                .andExpect(jsonPath("$.detail").value("Client is suspended"));
     }
 
     @Test
@@ -118,13 +122,13 @@ class TokenRefusalReasonTest {
     void otherRefusedTokens_giveNoReason() throws Exception {
         send(get("/api/me"), null, null)
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("A valid access token is required"));
+                .andExpect(jsonPath("$.detail").value("A valid access token is required"));
         send(get("/api/me"), "not-a-jwt", null)
-                .andExpect(jsonPath("$.message").value("A valid access token is required"));
+                .andExpect(jsonPath("$.detail").value("A valid access token is required"));
         send(post("/api/auth/logout"), alice, null).andExpect(status().isNoContent());
         send(get("/api/me"), alice, null)
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("A valid access token is required"));
+                .andExpect(jsonPath("$.detail").value("A valid access token is required"));
     }
 
     @Test

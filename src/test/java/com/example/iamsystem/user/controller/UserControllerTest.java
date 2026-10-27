@@ -295,7 +295,7 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("A negative page or a page size below 1 is a bad request")
+    @DisplayName("A negative page or a page size below 1 is a bad request that names the parameter")
     @Sql("/sql/insert_user_role.sql")
     void getAllUsers_withInvalidPaging_isBadRequest() throws Exception {
         User currentUser = findByUsername(userRepository, "root").orElseThrow();
@@ -303,11 +303,14 @@ class UserControllerTest {
         mockMvc.perform(get("/api/users")
                         .with(actingAs(currentUser))
                         .param("page", "-1"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Some request parameters are invalid"))
+                .andExpect(jsonPath("$.errors[0].field").value("page"));
         mockMvc.perform(get("/api/users")
                         .with(actingAs(currentUser))
                         .param("size", "0"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("size"));
     }
 
     @Test
@@ -411,7 +414,7 @@ class UserControllerTest {
         mockMvc.perform(delete("/api/users/{id}", root.getId())
                         .with(actingAs(root)))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("The root user can't be deleted"));
+                .andExpect(jsonPath("$.detail").value("The root user can't be deleted"));
         assertTrue(userRepository.existsById(root.getId()));
     }
 
@@ -427,7 +430,7 @@ class UserControllerTest {
         mockMvc.perform(delete("/api/users/{id}", member.getId())
                         .with(actingAs(member)))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("You can't delete your own account"));
+                .andExpect(jsonPath("$.detail").value("You can't delete your own account"));
         assertTrue(userRepository.existsById(member.getId()));
     }
 

@@ -169,7 +169,7 @@ class PlatformTenantControllerTest {
 
         mockMvc.perform(put("/api/platform/tenants/{id}/suspend", platformId).with(actingAs(platformRoot)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("The platform tenant can't be suspended"));
+                .andExpect(jsonPath("$.detail").value("The platform tenant can't be suspended"));
         mockMvc.perform(put("/api/platform/tenants/{id}/suspend", 999_999L).with(actingAs(platformRoot)))
                 .andExpect(status().isNotFound());
     }
@@ -200,8 +200,8 @@ class PlatformTenantControllerTest {
     @Test
     @DisplayName("Creating a tenant follows the signup rules: an existing name or a taken root username is refused")
     void createTenant_followsTheSignupRules() throws Exception {
-        createTenant("Acme", "other-root", "other@acme.com", platformRoot).andExpect(status().isBadRequest());
-        createTenant("Globex", "acme-root", "root@globex.com", platformRoot).andExpect(status().isBadRequest());
+        createTenant("Acme", "other-root", "other@acme.com", platformRoot).andExpect(status().isConflict());
+        createTenant("Globex", "acme-root", "root@globex.com", platformRoot).andExpect(status().isConflict());
     }
 
     @Test

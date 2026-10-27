@@ -38,6 +38,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -114,17 +115,21 @@ class RoleControllerTest {
     }
 
     @Test
-    @DisplayName("A role name already used in the tenant is a bad request")
-    void createRole_withNameTakenInTheTenant_isBadRequest() throws Exception {
+    @DisplayName("A role name already used in the tenant is a conflict")
+    void createRole_withNameTakenInTheTenant_isConflict() throws Exception {
         perform(post("/api/roles"), admin, new RoleRequestDto("READ_ONLY", null))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isConflict());
     }
 
     @Test
-    @DisplayName("A role without a name fails validation")
+    @DisplayName("A role without a name fails validation: a 422 problem that names the field")
     void createRole_withoutName_failsValidation() throws Exception {
         perform(post("/api/roles"), admin, new RoleRequestDto(" ", null))
-                .andExpect(status().isUnprocessableEntity());
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Some fields are invalid"))
+                .andExpect(jsonPath("$.errors[0].field").value("name"))
+                .andExpect(jsonPath("$.errors[0].message").value("Role name cannot be null or blank"));
     }
 
     @Test
@@ -174,10 +179,10 @@ class RoleControllerTest {
     }
 
     @Test
-    @DisplayName("Renaming a role to another role's name is a bad request")
-    void updateRole_toTheNameOfAnotherRole_isBadRequest() throws Exception {
+    @DisplayName("Renaming a role to another role's name is a conflict")
+    void updateRole_toTheNameOfAnotherRole_isConflict() throws Exception {
         perform(put("/api/roles/{id}", readOnlyRole.getId()), admin, new RoleRequestDto("ADMIN", null))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isConflict());
     }
 
     @Test

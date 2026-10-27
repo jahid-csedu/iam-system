@@ -124,7 +124,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   Another user with the right permission can do it for them. Example: A (with permission) can change B's roles, but never A's own.
 - A user with the permission to grant permissions or roles can grant ones they don't hold themselves (but never to themselves).
 - Role and permission changes apply immediately (no approval step). Future option: maker-checker approval,
-  switched on per tenant by the root user (roadmap item 11).
+  switched on per tenant by the root user (roadmap item 12).
 - The root user has every tenant-management permission implicitly (not through a role), so root's access can't be edited by anyone.
 
 ### Tokens
@@ -134,7 +134,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   - which user claims go into the JWT body (user id, username, email, …).
 - First rollout: tokens carry only basic user information. The IAM doesn't manage other applications' roles or permissions.
 - Other applications verify tokens through IAM endpoints: asymmetric signing + JWKS endpoint for local verification
-  (done in step 9a: RS256, one platform key set; per-tenant keys are roadmap item 12), plus an introspection endpoint that
+  (done in step 9a: RS256, one platform key set; per-tenant keys are roadmap item 13), plus an introspection endpoint that
   reflects revocation and tenant suspension (done in step 9c: `POST /api/auth/introspect`, public until clients get secrets).
 - Logout and revocation: store refresh tokens (hashed) in the database. This replaces the `@Version`-based revocation.
   Done (step 9b): a session per login (`sid` in access tokens), single-use rotating opaque refresh tokens with reuse
@@ -154,7 +154,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   management console is never suspended.
 
 ### Future (not now)
-- OAuth2/OIDC compatibility (roadmap item 7). The `client_id` choice keeps this path open.
+- OAuth2/OIDC compatibility (roadmap item 8). The `client_id` choice keeps this path open.
 - First priority is organizing the code structure toward this design.
 
 ### Open questions
@@ -257,8 +257,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   rotation with reuse detection, revoke one / all / all but one), `RefreshTokenGenerator` (random token + SHA-256 hash)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
 - `common/`: `exception/` (`IamException` = base of our own failures, each subclass with its HTTP status; `GlobalHandler`
-  answers them with one handler, plus Spring's validation, body and login failures; anything else is a logged 500 without
-  its message; `ErrorMessage`), `config/` (OpenAPI; `EnvironmentProfileCheck`,
+  (a `ResponseEntityExceptionHandler`) answers every error as an RFC 9457 `ProblemDetail`, also for the JWT filter and
+  `JwtAuthenticationEntryPoint` through the `HandlerExceptionResolver`; anything else is a logged 500 without its
+  message; `ErrorMessage`), `config/` (OpenAPI; `EnvironmentProfileCheck`,
   registered in `META-INF/spring.factories`; the mail sender is Spring Boot's, from `spring.mail.*`, used only by `email/`), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
@@ -286,7 +287,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - CORS: only the origins in `iam.cors.allowed-origins` (`IAM_CORS_ALLOWEDORIGINS`, exact origins, validated at startup)
   may call the API from a browser on another origin; none by default. Methods GET/POST/PUT/PATCH/DELETE, headers
   `Authorization`, `Content-Type`, `X-Tenant-Id`, no credentials (tokens never travel in cookies). Other origins get 403.
-  Per-client origins are roadmap item 6.
+  Per-client origins are roadmap item 7.
 - Tokens are RS256-signed by the first key of `iam.jwt.keys` (kid + PKCS#8 PEM private key, public key derived); every
   configured key is published at `GET /.well-known/jwks.json` (public) and accepted by `TokenVerifier`, which only takes
   RS256 by a known `kid` and `typ: at+jwt`. Each key is a kid plus the PEM inline (`private-key`) or a location to read it
@@ -307,10 +308,13 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   tenants; a copied role keeps no link to its template). The root holds every TENANT key at once.
 - `POST /api/tenants/signup` (public) creates a tenant + its root user + predefined roles + management console (its `client_id` is in the response). `POST /api/users` (`users:create`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
+- Errors are RFC 9457 problems (`application/problem+json`: `title`, `status`, `detail` = our message, `instance` = path;
+  `type` left out = `about:blank`). Invalid input adds `errors` (`field` + `message`): 422 for bodies, 400 for
+  parameters (`@Min` on `page`/`size`). "Already exists" is 409. Stable error codes are roadmap item 2.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
 - Nobody deletes a root user, not even the root itself (403), so every tenant keeps its root. Nobody deletes their own
-  account either (403 "You can't delete your own account"); self-service deletion is roadmap item 4.
+  account either (403 "You can't delete your own account"); self-service deletion is roadmap item 5.
 - Lockout: `FailedPasswordCounter` counts every wrong password (login, old password of a password change, current
   password of an email change) in one atomic update in its own transaction; 5 lock the account for 15 minutes (the filter
   then refuses its tokens); a correct one clears the count. A missing password is no guess. `PUT /api/users/{id}/unlock`
@@ -329,7 +333,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   unverified (`UserProfileService.apply` also deletes the pending code); the platform root from config starts verified.
   Verified only by the user typing a code (`POST /api/users/email-verification` + `/confirm`, any logged-in user, own
   account in the home tenant); codes like reset OTPs (`OneTimeCodes`, 5 guesses, `OtpPurpose.EMAIL_VERIFICATION` limit
-  3/hour, 30 minutes). No automatic emails (no page to link to yet, roadmap item 2); login never needs it. `UserDto` and
+  3/hour, 30 minutes). No automatic emails (no page to link to yet, roadmap item 3); login never needs it. `UserDto` and
   `MeDto` show `emailVerified`. Forgot-password sends only to a verified address (`ResetOtpIssuer.issueAfterCommit`,
   outcome `EMAIL_NOT_VERIFIED`, same 200); the admin reset (`issueNow`) also to an unverified one; a completed reset
   verifies the address. Tokens with the `EMAIL` claim also carry `email_verified`.
@@ -361,7 +365,6 @@ Broken / drift
 - Audit events for failures are logged at ERROR level.
 - Ended sessions and used/expired refresh tokens are never purged (needs a cleanup job; roadmap item 1, session management).
 - Sessions slide forever while refreshed: no absolute session lifetime yet (roadmap item 1).
-- Error answers are our own `{ status, message, errors }` body, not RFC 9457 `ProblemDetail` yet (error step, commit b).
 
 Design debt
 
@@ -669,3 +672,8 @@ Design debt
   with `@Min` on `page` and `size`. Decisions (all recommended): `ProblemDetail` with `type` `about:blank`, no stable
   error `code` yet, "already exists" becomes 409, no transitional `message` field. Next: commit b (the `ProblemDetail`
   format).
+- 2026-10-27: Error step, commit b. RFC 9457 `ProblemDetail` answers: `GlobalHandler` extends
+  `ResponseEntityExceptionHandler` (Spring MVC's own errors become problems too), `errors` lists invalid body fields (422)
+  and parameters (400); `JwtAuthenticationEntryPoint` answers through the handler (`AuthenticationRequiredException`), so
+  every 401 has the same shape; `ExceptionResponse` removed; "already exists" is 409. New roadmap item 2 (stable error
+  codes, frontend gap G-4); items 2-16 became 3-17. Error step complete.
