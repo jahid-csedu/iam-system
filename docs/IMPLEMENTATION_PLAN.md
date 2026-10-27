@@ -91,7 +91,7 @@ This file lets any new session pick up the work without the conversation that pr
 | 13c-2 | Forgot-password only to verified addresses; the admin reset also to unverified ones; a completed reset verifies; `email_verified` claim; step 13 complete | `b2ab63a` |
 | Errors a | `IamException` with a status per class and one handler; one `AlreadyExistsException`; no `IllegalArgumentException` → 400 catch-all (`@Min` paging checks instead) | `1c46b27` |
 | Errors b | RFC 9457 `ProblemDetail` answers (`GlobalHandler` extends `ResponseEntityExceptionHandler`; `errors` for invalid fields and parameters; the 401 entry point through the handler); "already exists" 409; `ExceptionResponse` removed | `5b428e2` |
-| Baseline | V1-V22 merged into one `V1__baseline.sql` (identical schema; two permission descriptions corrected); existing databases must be recreated; plan complete | baseline commit |
+| Baseline | V1-V22 merged into one `V1__baseline.sql` (identical schema; two permission descriptions corrected); existing databases must be recreated; plan complete | `a55f2b1` |
 
 ---
 
