@@ -13,6 +13,7 @@ import java.util.List;
  *                      platform user working inside another tenant
  * @param permissions   every permission key the user holds in the working tenant, sorted
  */
-public record MeDto(Long id, String username, String fullName, String email, UserType userType, boolean rootUser,
+public record MeDto(Long id, String username, String fullName, String email, boolean emailVerified, UserType userType,
+                    boolean rootUser,
                     TenantDto homeTenant, TenantDto workingTenant, List<String> permissions) {
 }

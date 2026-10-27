@@ -118,13 +118,14 @@ class PlatformBootstrapTest {
     }
 
     @Test
-    @DisplayName("A configured root becomes the platform root and logs in through the platform console")
+    @DisplayName("A configured root becomes the platform root, with a verified email, and logs in through the platform console")
     void configuredRoot_isCreatedAndCanLogIn() throws Exception {
         run(CONFIGURED_ROOT);
 
         Tenant platform = platformTenant();
         User root = userRepository.findByUsernameAndTenantId("platform-root", platform.getId()).orElseThrow();
         assertTrue(root.isRootUser());
+        assertTrue(root.isEmailVerified());
         assertEquals(UserType.MANAGEMENT, root.getUserType());
         String consoleClientId = clientRepository.findAllByTenantIdOrderByName(platform.getId()).getFirst().getClientId();
         mockMvc.perform(post("/api/auth/authenticate").contentType(MediaType.APPLICATION_JSON)

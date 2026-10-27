@@ -77,6 +77,10 @@ public class ErrorMessage {
     public static final String OTP_REQUIRED = "OTP is required";
     public static final String USER_HAS_NO_EMAIL = "User has no email address to send a password reset OTP to";
     public static final String TOO_MANY_RESET_OTPS = "Too many password reset OTPs for this user in the last hour; try again later";
+    public static final String NO_EMAIL_TO_VERIFY = "You have no email address to verify";
+    public static final String EMAIL_ALREADY_VERIFIED = "Your email address is already verified";
+    public static final String TOO_MANY_VERIFICATION_CODES = "Too many verification codes in the last hour; try again later";
+    public static final String INVALID_VERIFICATION_CODE = "Invalid or expired code";
     public static final String RESET_EMAIL_NOT_SENT = "The password reset email could not be sent; nothing was changed, try again later";
 }
 

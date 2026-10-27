@@ -52,6 +52,12 @@ public class User implements Serializable {
     private String email;
 
     /**
+     * The user typed a code sent to {@link #email}; every new address starts unverified.
+     */
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
+    /**
      * Set by {@code UserFactory} at creation and never updated.
      */
     @Enumerated(EnumType.STRING)

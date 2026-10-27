@@ -1,0 +1,10 @@
+Use this code to verify your email address:
+
+    [(${code})]
+
+It is valid for [(${validMinutes})] minutes and works once. Never share it: we will never ask you for it.
+
+If you didn't ask for it, ignore this email; nothing changes.
+
+--
+IAM System. This is an automatic message; replies are not read.

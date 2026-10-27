@@ -85,7 +85,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 12b | Unlock users (`V20`: `users:unlock`; `FailedPasswordCounter.unlock`; `UserDto.lockedUntil`); step 12 complete | `3b4e8c4` |
 | 13a | Email service: `EmailService` (only `JavaMailSender` user), `OutgoingEmail` + `EmailPurpose`, Thymeleaf HTML + text templates, `IAM_MAIL_FROM` | `4b596cf` |
 | 13b | Asynchronous email: `EmailService.sendAfterCommit` + `EmailQueue` (after commit, own pool); forgot-password queued (`QUEUED`), admin reset sent at once (503 kept); same bcrypt work for unknown users | `212dfc2` |
-| 13c-1a | Shared one-time codes (`V21`: `otp_requests` with a purpose; `otp/`: `OneTimeCodes`, `OtpRequestLimiter`, `InvalidOtpException`); no behaviour change | step 13c-1a commit |
+| 13c-1a | Shared one-time codes (`V21`: `otp_requests` with a purpose; `otp/`: `OneTimeCodes`, `OtpRequestLimiter`, `InvalidOtpException`); no behaviour change | `6033025` |
+| 13c-1b | Email verification (`V22`: `users.email_verified`, `email_verification_codes`; `POST /api/users/email-verification` + `/confirm`; `emailVerified` in `UserDto` and `/api/me`) | step 13c-1b commit |
 
 ---
 

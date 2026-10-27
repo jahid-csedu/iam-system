@@ -5,6 +5,8 @@ import com.example.iamsystem.auth.dto.JwtRefreshTokenDto;
 import com.example.iamsystem.auth.dto.JwtResponse;
 import com.example.iamsystem.email.dto.EmailPurpose;
 import com.example.iamsystem.email.dto.OutgoingEmail;
+import com.example.iamsystem.emailverification.dto.EmailVerificationConfirmDto;
+import com.example.iamsystem.emailverification.entity.EmailVerificationCode;
 import com.example.iamsystem.passwordreset.dto.PasswordResetDto;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.platform.config.PlatformProperties.RootUser;
@@ -46,6 +48,8 @@ class SecretMaskTest {
                 new SigningKeyProperties("key-1", SECRET, null),
                 new RootUser("alice", SECRET, "alice@acme.com", null),
                 new OutgoingEmail(EmailPurpose.PASSWORD_RESET_OTP, "alice@acme.com", Map.of("otp", SECRET)),
+                new EmailVerificationConfirmDto(SECRET),
+                pendingVerificationCode(),
                 pendingOtp());
 
         assertAll(requests.stream().map(request -> () -> {
@@ -54,6 +58,12 @@ class SecretMaskTest {
             assertTrue(text.contains(SecretMask.MASK), text);
         }));
         assertTrue(new UserLoginDto("client-1", "alice", SECRET).toString().contains("alice"));
+    }
+
+    private static EmailVerificationCode pendingVerificationCode() {
+        EmailVerificationCode code = new EmailVerificationCode();
+        code.setCodeHash(SECRET);
+        return code;
     }
 
     private static PasswordResetOTP pendingOtp() {

@@ -4,6 +4,7 @@ import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.InvalidPasswordException;
+import com.example.iamsystem.emailverification.service.EmailVerificationService;
 import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
 import com.example.iamsystem.security.service.FailedPasswordCounter;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
@@ -27,7 +28,8 @@ import static com.example.iamsystem.permission.PermissionKey.USERS_RESET_PASSWOR
  * <p>
  * Whoever controls a user's email controls their password resets. So a new email address needs
  * {@code users:reset-password} on top of {@code users:update} for another user, and your current password for yourself;
- * and any pending reset OTP (sent to the old address) is deleted. A root's email must be unused by every user of every
+ * and any pending reset OTP (sent to the old address) is deleted. A new address is unverified (its pending
+ * verification code is deleted too). A root's email must be unused by every user of every
  * tenant, anyone else's by the users of their tenant and by every root.
  */
 @Service
@@ -39,6 +41,7 @@ public class UserProfileService {
     private final UserValidator userValidator;
     private final AuthorizationService authorizationService;
     private final ResetOtpIssuer resetOtpIssuer;
+    private final EmailVerificationService emailVerificationService;
     private final CurrentUserProvider currentUserProvider;
     private final PasswordEncoder passwordEncoder;
     private final FailedPasswordCounter failedPasswordCounter;
@@ -106,6 +109,8 @@ public class UserProfileService {
     private User apply(User user, UserUpdateDto changes) {
         if (isNewEmail(user, changes.email())) {
             resetOtpIssuer.discardPending(user);
+            emailVerificationService.discardPending(user);
+            user.setEmailVerified(false);
         }
         if (changes.email() != null) {
             user.setEmail(changes.email());

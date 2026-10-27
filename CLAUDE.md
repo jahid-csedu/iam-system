@@ -222,6 +222,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `passwordreset/`: self-service reset (OTP by email, user found by username or email in the client's tenant; the user then
   sets a password of their choice). `ResetOtpIssuer` is the one place that makes and emails OTPs (bcrypt hash only, used
   by both resets), counted by `OtpRequestLimiter`; `config/OtpExpirationProperties`
+- `emailverification/`: `EmailVerificationService` (a logged-in user's own address: `requestCode` emails a code after
+  commit, `confirm` checks it; `discardPending` on an email change), `EmailVerificationController`
+  (`/api/users/email-verification`, `/confirm`), `EmailVerificationCode` (bcrypt hash, one per user),
+  `config/EmailVerificationProperties` (`iam.email-verification.code-minutes`, 30)
 - `otp/`: what every one-time code shares. `OneTimeCodes` (six `SecureRandom` digits, `MAX_FAILED_ATTEMPTS` = 5),
   `OtpRequestLimiter` (at most 3 codes per user and `OtpPurpose` per hour, `otp_requests`); wrong codes are
   `InvalidOtpException` (400)
@@ -319,6 +323,12 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   (nothing changes when the OTP can't be sent: 400 no email, 429 limit, 503 mail failure); never your own, never root's.
   Passwords are set only by their owner (`UserPasswordUpdater`): own change with the old password, or reset with an OTP.
 - OTPs are only ever sent by email: never in responses, logs or audit details. No password is ever emailed.
+- Email verification: `users.email_verified`. New users (signup, `POST /api/users`) and every changed address start
+  unverified (`UserProfileService.apply` also deletes the pending code); the platform root from config starts verified.
+  Verified only by the user typing a code (`POST /api/users/email-verification` + `/confirm`, any logged-in user, own
+  account in the home tenant); codes like reset OTPs (`OneTimeCodes`, 5 guesses, `OtpPurpose.EMAIL_VERIFICATION` limit
+  3/hour, 30 minutes). No automatic emails (no page to link to yet, step 14); login never needs it. `UserDto` and
+  `MeDto` show `emailVerified`.
 - The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`, `sessionId`,
   `homeTenantId`), never the `User` entity. `tenantId` is the tenant the request works in (the tenant boundary used by the
   services); `homeTenantId` is the user's own tenant. They differ only when a platform user sends `X-Tenant-Id`
@@ -636,3 +646,8 @@ Design debt
   `password_reset_requests` → `otp_requests` with a `purpose`. New `otp/` package: `OneTimeCodes` (code generation and
   the 5-guess limit), `OtpRequestLimiter` (was `ResetRequestLimiter`, now per purpose), `OtpPurpose`;
   `InvalidPasswordResetOTPException` → `InvalidOtpException`. Next: step 13c-1b (email verification).
+- 2026-10-27: Step 13c-1b (email verification). Flyway `V22__email_verification.sql`: `users.email_verified` (existing
+  rows verified), `email_verification_codes`. `emailverification/` feature (request and confirm, audited
+  `EMAIL_VERIFICATION_REQUEST` / `EMAIL_VERIFICATION`), `EmailPurpose.EMAIL_VERIFICATION` templates, `emailVerified` in
+  `UserDto` and `MeDto`; new addresses (creation, signup, email changes) are unverified, the configured platform root is
+  verified. Next: step 13c-2 (resets only to verified addresses, `email_verified` claim).

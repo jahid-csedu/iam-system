@@ -72,7 +72,10 @@ public class PlatformBootstrap implements ApplicationRunner {
             return;
         }
         UserCreationDto request = new UserCreationDto(root.username(), root.password(), root.fullName(), root.email(), null);
-        User platformRoot = userRepository.save(userFactory.newRootUser(request, platform));
+        User platformRoot = userFactory.newRootUser(request, platform);
+        // The operator configured this address, so it counts as verified.
+        platformRoot.setEmailVerified(true);
+        platformRoot = userRepository.save(platformRoot);
         log.info("Created the platform root user {} ('{}')", platformRoot.getId(), platformRoot.getUsername());
     }
 }

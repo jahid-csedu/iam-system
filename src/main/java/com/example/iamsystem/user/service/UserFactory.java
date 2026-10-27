@@ -46,6 +46,7 @@ public class UserFactory {
         user.setTenant(tenant);
         user.setUserType(userType);
         user.setActive(true);
+        user.setEmailVerified(false);
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setPasswordExpiryDate(calculateExpiryDate(passwordExpiration.days()));
         return user;

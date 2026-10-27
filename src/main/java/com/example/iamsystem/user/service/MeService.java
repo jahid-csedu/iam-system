@@ -45,7 +45,8 @@ public class MeService {
                         .orElseThrow(() -> new DataNotFoundException(TENANT_NOT_FOUND)))
                 : homeTenant;
         List<String> permissions = authorizationService.permissionsOf(actor).stream().map(PermissionKey::key).sorted().toList();
-        return new MeDto(user.getId(), user.getUsername(), user.getFullName(), user.getEmail(), user.getUserType(),
+        return new MeDto(user.getId(), user.getUsername(), user.getFullName(), user.getEmail(), user.isEmailVerified(),
+                user.getUserType(),
                 user.isRootUser(), homeTenant, workingTenant, permissions);
     }
 }

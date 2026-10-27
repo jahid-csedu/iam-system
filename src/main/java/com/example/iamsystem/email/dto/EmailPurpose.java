@@ -9,7 +9,12 @@ public enum EmailPurpose {
     /**
      * Values: {@code otp} (the six digits), {@code validMinutes}.
      */
-    PASSWORD_RESET_OTP("Your password reset code", "password-reset-otp");
+    PASSWORD_RESET_OTP("Your password reset code", "password-reset-otp"),
+
+    /**
+     * Values: {@code code} (the six digits), {@code validMinutes}.
+     */
+    EMAIL_VERIFICATION("Verify your email address", "email-verification");
 
     private final String subject;
     private final String template;

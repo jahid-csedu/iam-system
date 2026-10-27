@@ -4,6 +4,7 @@ import com.example.iamsystem.authorization.AuthorizationService;
 import com.example.iamsystem.common.exception.InvalidPasswordException;
 import com.example.iamsystem.common.exception.NoAccessException;
 import com.example.iamsystem.common.exception.UserAlreadyExistsException;
+import com.example.iamsystem.emailverification.service.EmailVerificationService;
 import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
 import com.example.iamsystem.security.service.FailedPasswordCounter;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
@@ -31,6 +32,7 @@ import static com.example.iamsystem.user.service.UserTestData.actor;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static com.example.iamsystem.user.service.UserTestData.user;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -55,6 +57,8 @@ class UserProfileServiceTest {
     @Mock
     private ResetOtpIssuer resetOtpIssuer;
     @Mock
+    private EmailVerificationService emailVerificationService;
+    @Mock
     private CurrentUserProvider currentUserProvider;
     @Mock
     private FailedPasswordCounter failedPasswordCounter;
@@ -67,7 +71,7 @@ class UserProfileServiceTest {
     @BeforeEach
     void setUp() {
         service = new UserProfileService(userRepository, accessPolicy, userValidator, authorizationService, resetOtpIssuer,
-                currentUserProvider, passwordEncoder, failedPasswordCounter, Mappers.getMapper(UserMapper.class));
+                emailVerificationService, currentUserProvider, passwordEncoder, failedPasswordCounter, Mappers.getMapper(UserMapper.class));
         manager = actor(user(1, "manager"));
         bob = user(2, "bob");
         bob.setFullName("Bob");
@@ -76,7 +80,7 @@ class UserProfileServiceTest {
     }
 
     @Test
-    @DisplayName("A new email needs users:reset-password and a free address, and discards the pending reset OTP")
+    @DisplayName("A new email needs users:reset-password and a free address, is unverified, and discards the pending codes")
     void updateUser_newEmail_isCheckedAndDiscardsThePendingOtp() {
         when(userRepository.save(bob)).thenReturn(bob);
 
@@ -86,7 +90,9 @@ class UserProfileServiceTest {
         verify(authorizationService).checkPermission(manager, USERS_RESET_PASSWORD);
         verify(userValidator).validateEmailAvailable("robert@example.com", TENANT.getId());
         verify(resetOtpIssuer).discardPending(bob);
+        verify(emailVerificationService).discardPending(bob);
         assertEquals("robert@example.com", updated.getEmail());
+        assertFalse(updated.isEmailVerified());
         assertEquals("Bob", updated.getFullName());
     }
 
@@ -144,7 +150,9 @@ class UserProfileServiceTest {
         verify(failedPasswordCounter).recordSuccess(alice);
         verify(userValidator).validateEmailAvailable("new@example.com", TENANT.getId());
         verify(resetOtpIssuer).discardPending(alice);
+        verify(emailVerificationService).discardPending(alice);
         verify(userRepository).save(alice);
+        assertFalse(alice.isEmailVerified());
         assertEquals("new@example.com", alice.getEmail());
         assertEquals("Alice", alice.getFullName());
     }
