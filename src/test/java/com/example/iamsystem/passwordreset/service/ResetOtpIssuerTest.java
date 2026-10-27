@@ -3,6 +3,9 @@ package com.example.iamsystem.passwordreset.service;
 import com.example.iamsystem.email.dto.EmailPurpose;
 import com.example.iamsystem.email.dto.OutgoingEmail;
 import com.example.iamsystem.email.service.EmailService;
+import com.example.iamsystem.otp.entity.OtpPurpose;
+import com.example.iamsystem.otp.service.OneTimeCodes;
+import com.example.iamsystem.otp.service.OtpRequestLimiter;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
@@ -27,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -44,7 +48,7 @@ class ResetOtpIssuerTest {
     @Mock
     private EmailService emailService;
     @Mock
-    private ResetRequestLimiter requestLimiter;
+    private OtpRequestLimiter requestLimiter;
 
     private final PasswordEncoder passwordEncoder = spy(new BCryptPasswordEncoder(4));
     private ResetOtpIssuer issuer;
@@ -52,8 +56,9 @@ class ResetOtpIssuerTest {
 
     @BeforeEach
     void setUp() {
-        issuer = new ResetOtpIssuer(otpRepository, emailService, new OtpExpirationProperties(5), requestLimiter, passwordEncoder);
-        lenient().when(requestLimiter.tryRecord(any(User.class))).thenReturn(true);
+        issuer = new ResetOtpIssuer(otpRepository, emailService, new OtpExpirationProperties(5), requestLimiter, new OneTimeCodes(),
+                passwordEncoder);
+        lenient().when(requestLimiter.tryRecord(any(User.class), eq(OtpPurpose.PASSWORD_RESET))).thenReturn(true);
         user = new User();
         user.setId(1L);
         user.setUsername("alice");
@@ -93,7 +98,7 @@ class ResetOtpIssuerTest {
     @Test
     @DisplayName("Over the request limit, no OTP is made and nothing is sent")
     void issue_overTheLimit_sendsNothing() {
-        when(requestLimiter.tryRecord(user)).thenReturn(false);
+        when(requestLimiter.tryRecord(user, OtpPurpose.PASSWORD_RESET)).thenReturn(false);
 
         assertEquals(OtpRequestOutcome.TOO_MANY_REQUESTS, issuer.issueAfterCommit(user));
         verifyNoInteractions(otpRepository, emailService);
@@ -126,7 +131,7 @@ class ResetOtpIssuerTest {
         user.setEmail(null);
         issuer.issueAfterCommit(user);
         user.setEmail("alice@example.com");
-        when(requestLimiter.tryRecord(user)).thenReturn(false);
+        when(requestLimiter.tryRecord(user, OtpPurpose.PASSWORD_RESET)).thenReturn(false);
         issuer.issueAfterCommit(user);
         issuer.spendIssuingTime();
 

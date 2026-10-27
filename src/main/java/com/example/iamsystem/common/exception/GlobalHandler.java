@@ -180,9 +180,9 @@ public class GlobalHandler {
         return buildExceptionResponse(exception, SERVICE_UNAVAILABLE);
     }
 
-    @ExceptionHandler(InvalidPasswordResetOTPException.class)
+    @ExceptionHandler(InvalidOtpException.class)
     @ResponseStatus(BAD_REQUEST)
-    public ResponseEntity<ExceptionResponse> invalidPasswordResetOTPExceptionHandler(InvalidPasswordResetOTPException exception) {
+    public ResponseEntity<ExceptionResponse> handleInvalidOtpException(InvalidOtpException exception) {
         return buildExceptionResponse(exception, BAD_REQUEST);
     }
 

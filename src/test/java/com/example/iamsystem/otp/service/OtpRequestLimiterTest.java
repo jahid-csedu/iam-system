@@ -1,7 +1,8 @@
-package com.example.iamsystem.passwordreset.service;
+package com.example.iamsystem.otp.service;
 
-import com.example.iamsystem.passwordreset.entity.PasswordResetRequest;
-import com.example.iamsystem.passwordreset.repository.PasswordResetRequestRepository;
+import com.example.iamsystem.otp.entity.OtpPurpose;
+import com.example.iamsystem.otp.entity.OtpRequest;
+import com.example.iamsystem.otp.repository.OtpRequestRepository;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,15 +27,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class ResetRequestLimiterTest {
+class OtpRequestLimiterTest {
+
+    private static final OtpPurpose PURPOSE = OtpPurpose.PASSWORD_RESET;
 
     @Mock
-    private PasswordResetRequestRepository requestRepository;
+    private OtpRequestRepository requestRepository;
     @Mock
     private UserRepository userRepository;
 
     @InjectMocks
-    private ResetRequestLimiter limiter;
+    private OtpRequestLimiter limiter;
 
     private User user;
 
@@ -45,26 +48,27 @@ class ResetRequestLimiterTest {
     }
 
     @Test
-    @DisplayName("Under the limit, the request is recorded and allowed, with the user's row locked first")
+    @DisplayName("Under the purpose's limit, the request is recorded and allowed, with the user's row locked first")
     void underTheLimit_recordsTheRequest() {
-        when(requestRepository.countByUserAndRequestedAtAfter(eq(user), any(Instant.class)))
-                .thenReturn((long) ResetRequestLimiter.MAX_REQUESTS_PER_WINDOW - 1);
+        when(requestRepository.countByUserAndPurposeAndRequestedAtAfter(eq(user), eq(PURPOSE), any(Instant.class)))
+                .thenReturn((long) OtpRequestLimiter.MAX_REQUESTS_PER_WINDOW - 1);
 
-        assertTrue(limiter.tryRecord(user));
+        assertTrue(limiter.tryRecord(user, PURPOSE));
 
         verify(userRepository).lockById(1L);
-        ArgumentCaptor<PasswordResetRequest> saved = ArgumentCaptor.forClass(PasswordResetRequest.class);
+        ArgumentCaptor<OtpRequest> saved = ArgumentCaptor.forClass(OtpRequest.class);
         verify(requestRepository).save(saved.capture());
         assertSame(user, saved.getValue().getUser());
+        assertSame(PURPOSE, saved.getValue().getPurpose());
     }
 
     @Test
-    @DisplayName("At the limit, the request is refused and not recorded")
+    @DisplayName("At the purpose's limit, the request is refused and not recorded")
     void atTheLimit_refusesTheRequest() {
-        when(requestRepository.countByUserAndRequestedAtAfter(eq(user), any(Instant.class)))
-                .thenReturn((long) ResetRequestLimiter.MAX_REQUESTS_PER_WINDOW);
+        when(requestRepository.countByUserAndPurposeAndRequestedAtAfter(eq(user), eq(PURPOSE), any(Instant.class)))
+                .thenReturn((long) OtpRequestLimiter.MAX_REQUESTS_PER_WINDOW);
 
-        assertFalse(limiter.tryRecord(user));
+        assertFalse(limiter.tryRecord(user, PURPOSE));
 
         verify(requestRepository, never()).save(any());
     }
@@ -74,11 +78,11 @@ class ResetRequestLimiterTest {
     void oldRequests_areDeleted() {
         Instant before = Instant.now();
 
-        limiter.tryRecord(user);
+        limiter.tryRecord(user, PURPOSE);
 
         ArgumentCaptor<Instant> windowStart = ArgumentCaptor.forClass(Instant.class);
         verify(requestRepository).deleteOlderThan(eq(user), windowStart.capture());
-        verify(requestRepository).countByUserAndRequestedAtAfter(user, windowStart.getValue());
+        verify(requestRepository).countByUserAndPurposeAndRequestedAtAfter(user, PURPOSE, windowStart.getValue());
         assertFalse(windowStart.getValue().isBefore(before.minus(Duration.ofHours(1))));
         assertFalse(windowStart.getValue().isAfter(Instant.now().minus(Duration.ofHours(1))));
     }

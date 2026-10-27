@@ -2,7 +2,8 @@ package com.example.iamsystem.passwordreset.service;
 
 import com.example.iamsystem.client.entity.Client;
 import com.example.iamsystem.client.service.ClientResolver;
-import com.example.iamsystem.common.exception.InvalidPasswordResetOTPException;
+import com.example.iamsystem.common.exception.InvalidOtpException;
+import com.example.iamsystem.otp.service.OneTimeCodes;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
 import com.example.iamsystem.session.service.SessionService;
@@ -146,13 +147,13 @@ class PasswordResetServiceTest {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
         when(otpRepository.findForUpdateByUser(user)).thenReturn(Optional.empty());
 
-        String unknownUser = assertThrows(InvalidPasswordResetOTPException.class,
+        String unknownUser = assertThrows(InvalidOtpException.class,
                 () -> service.resetPassword(CLIENT_ID, "ghost", "123456", "NewPassword1!")).getMessage();
-        String noOtp = assertThrows(InvalidPasswordResetOTPException.class,
+        String noOtp = assertThrows(InvalidOtpException.class,
                 () -> service.resetPassword(CLIENT_ID, "alice", "123456", "NewPassword1!")).getMessage();
         resetOtp.setExpiryDate(Instant.now().minusSeconds(1));
         when(otpRepository.findForUpdateByUser(user)).thenReturn(Optional.of(resetOtp));
-        String expired = assertThrows(InvalidPasswordResetOTPException.class,
+        String expired = assertThrows(InvalidOtpException.class,
                 () -> service.resetPassword(CLIENT_ID, "alice", "123456", "NewPassword1!")).getMessage();
 
         assertEquals("Invalid or expired OTP", unknownUser);
@@ -168,7 +169,7 @@ class PasswordResetServiceTest {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
         when(otpRepository.findForUpdateByUser(user)).thenReturn(Optional.of(resetOtp));
 
-        InvalidPasswordResetOTPException exception = assertThrows(InvalidPasswordResetOTPException.class,
+        InvalidOtpException exception = assertThrows(InvalidOtpException.class,
                 () -> service.resetPassword(CLIENT_ID, "alice", "654321", "NewPassword1!"));
 
         assertEquals("Invalid or expired OTP", exception.getMessage());
@@ -180,11 +181,11 @@ class PasswordResetServiceTest {
     @Test
     @DisplayName("The last allowed wrong guess deletes the OTP")
     void resetPassword_lastWrongGuess_deletesTheOtp() {
-        resetOtp.setFailedAttempts(PasswordResetService.MAX_FAILED_ATTEMPTS - 1);
+        resetOtp.setFailedAttempts(OneTimeCodes.MAX_FAILED_ATTEMPTS - 1);
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
         when(otpRepository.findForUpdateByUser(user)).thenReturn(Optional.of(resetOtp));
 
-        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword(CLIENT_ID, "alice", "654321", "NewPassword1!"));
+        assertThrows(InvalidOtpException.class, () -> service.resetPassword(CLIENT_ID, "alice", "654321", "NewPassword1!"));
 
         verify(otpRepository).delete(resetOtp);
         verifyNoInteractions(passwordUpdater, sessionService);
@@ -196,7 +197,7 @@ class PasswordResetServiceTest {
         when(userRepository.findByUsernameAndTenantId("bob", TENANT_ID)).thenReturn(Optional.empty());
         when(userRepository.findByEmailAndTenantId("bob", TENANT_ID)).thenReturn(Optional.empty());
 
-        assertThrows(InvalidPasswordResetOTPException.class, () -> service.resetPassword(CLIENT_ID, "bob", "123456", "NewPassword1!"));
+        assertThrows(InvalidOtpException.class, () -> service.resetPassword(CLIENT_ID, "bob", "123456", "NewPassword1!"));
         verifyNoInteractions(otpRepository, passwordUpdater);
     }
 }

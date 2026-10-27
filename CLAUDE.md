@@ -221,7 +221,10 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `ClientResolver` (public `client_id` → client and tenant), `ClientIdGenerator`
 - `passwordreset/`: self-service reset (OTP by email, user found by username or email in the client's tenant; the user then
   sets a password of their choice). `ResetOtpIssuer` is the one place that makes and emails OTPs (bcrypt hash only, used
-  by both resets), `ResetRequestLimiter` caps them at 3 per user per hour; `config/OtpExpirationProperties`
+  by both resets), counted by `OtpRequestLimiter`; `config/OtpExpirationProperties`
+- `otp/`: what every one-time code shares. `OneTimeCodes` (six `SecureRandom` digits, `MAX_FAILED_ATTEMPTS` = 5),
+  `OtpRequestLimiter` (at most 3 codes per user and `OtpPurpose` per hour, `otp_requests`); wrong codes are
+  `InvalidOtpException` (400)
 - `email/`: `EmailService` is the only user of `JavaMailSender`: features hand it an `OutgoingEmail` (`EmailPurpose` +
   recipient + template values, masked in `toString`); it renders `resources/email/<template>.html` (sharing
   `layout.html`) and `.txt` with Thymeleaf (`config/EmailTemplateConfig`, core engine only, no web views) and sends both
@@ -629,3 +632,7 @@ Design debt
   bcrypt hash is made first on every path and `spendIssuingTime` makes one for an unknown user, so the response time no
   longer tells accounts apart (known issue reduced to the small database difference). Next: step 13c (email
   verification design).
+- 2026-10-27: Step 13c-1a (shared one-time codes, no behaviour change). Flyway `V21__otp_requests.sql`:
+  `password_reset_requests` → `otp_requests` with a `purpose`. New `otp/` package: `OneTimeCodes` (code generation and
+  the 5-guess limit), `OtpRequestLimiter` (was `ResetRequestLimiter`, now per purpose), `OtpPurpose`;
+  `InvalidPasswordResetOTPException` → `InvalidOtpException`. Next: step 13c-1b (email verification).

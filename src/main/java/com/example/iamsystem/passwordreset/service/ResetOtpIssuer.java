@@ -3,6 +3,9 @@ package com.example.iamsystem.passwordreset.service;
 import com.example.iamsystem.email.dto.EmailPurpose;
 import com.example.iamsystem.email.dto.OutgoingEmail;
 import com.example.iamsystem.email.service.EmailService;
+import com.example.iamsystem.otp.entity.OtpPurpose;
+import com.example.iamsystem.otp.service.OneTimeCodes;
+import com.example.iamsystem.otp.service.OtpRequestLimiter;
 import com.example.iamsystem.passwordreset.config.OtpExpirationProperties;
 import com.example.iamsystem.passwordreset.entity.PasswordResetOTP;
 import com.example.iamsystem.passwordreset.repository.PasswordResetOTPRepository;
@@ -15,7 +18,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -23,8 +25,8 @@ import java.util.function.Function;
 
 /**
  * The one place that makes (and discards) password-reset OTPs, for the user's own forgot-password request and for a reset by another
- * user: a random six-digit OTP, stored only as a bcrypt hash (six digits are too few for a fast hash), replacing any
- * earlier one, and emailed to the user. Every OTP counts towards the user's hourly limit ({@link ResetRequestLimiter}).
+ * user: a random six-digit OTP ({@link OneTimeCodes}), stored only as a bcrypt hash, replacing any
+ * earlier one, and emailed to the user. Every OTP counts towards the user's hourly limit ({@link OtpRequestLimiter}).
  * <p>
  * Nothing here is an error; the outcome says what happened and the caller decides what the client sees. Runs inside the
  * caller's transaction, which must not have changed the user's row yet (the limit locks it in a transaction of its own).
@@ -38,16 +40,14 @@ import java.util.function.Function;
 @Slf4j
 public class ResetOtpIssuer {
 
-    private static final int OTP_BOUND = 1_000_000;
-    private static final String OTP_FORMAT = "%06d";
     private static final String OTP_VALUE = "otp";
     private static final String VALID_MINUTES_VALUE = "validMinutes";
 
-    private final SecureRandom random = new SecureRandom();
     private final PasswordResetOTPRepository otpRepository;
     private final EmailService emailService;
     private final OtpExpirationProperties otpExpiration;
-    private final ResetRequestLimiter requestLimiter;
+    private final OtpRequestLimiter requestLimiter;
+    private final OneTimeCodes oneTimeCodes;
     private final PasswordEncoder passwordEncoder;
 
     /**
@@ -80,17 +80,17 @@ public class ResetOtpIssuer {
      * Spends the time of making an OTP without making one, for a request that names no user.
      */
     public void spendIssuingTime() {
-        passwordEncoder.encode(newOtp());
+        passwordEncoder.encode(oneTimeCodes.newCode());
     }
 
     private OtpRequestOutcome issue(User user, Function<OutgoingEmail, OtpRequestOutcome> delivery) {
-        String otp = newOtp();
+        String otp = oneTimeCodes.newCode();
         String otpHash = passwordEncoder.encode(otp);
         if (user.getEmail() == null) {
             log.warn("No password-reset OTP for user {}, who has no email address", user.getId());
             return OtpRequestOutcome.NO_EMAIL;
         }
-        if (!requestLimiter.tryRecord(user)) {
+        if (!requestLimiter.tryRecord(user, OtpPurpose.PASSWORD_RESET)) {
             log.warn("No password-reset OTP for user {}: too many in the last hour", user.getId());
             return OtpRequestOutcome.TOO_MANY_REQUESTS;
         }
@@ -117,10 +117,6 @@ public class ResetOtpIssuer {
             log.error("Could not email a password-reset OTP", e);
             return OtpRequestOutcome.MAIL_FAILED;
         }
-    }
-
-    private String newOtp() {
-        return String.format(OTP_FORMAT, random.nextInt(OTP_BOUND));
     }
 
     /**

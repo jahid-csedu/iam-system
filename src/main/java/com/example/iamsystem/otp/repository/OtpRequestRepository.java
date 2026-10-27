@@ -1,6 +1,7 @@
-package com.example.iamsystem.passwordreset.repository;
+package com.example.iamsystem.otp.repository;
 
-import com.example.iamsystem.passwordreset.entity.PasswordResetRequest;
+import com.example.iamsystem.otp.entity.OtpPurpose;
+import com.example.iamsystem.otp.entity.OtpRequest;
 import com.example.iamsystem.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -11,11 +12,11 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 
 @Repository
-public interface PasswordResetRequestRepository extends JpaRepository<PasswordResetRequest, Long> {
+public interface OtpRequestRepository extends JpaRepository<OtpRequest, Long> {
 
-    long countByUserAndRequestedAtAfter(User user, Instant since);
+    long countByUserAndPurposeAndRequestedAtAfter(User user, OtpPurpose purpose, Instant since);
 
     @Modifying
-    @Query("DELETE FROM PasswordResetRequest r WHERE r.user = :user AND r.requestedAt <= :before")
+    @Query("DELETE FROM OtpRequest r WHERE r.user = :user AND r.requestedAt <= :before")
     void deleteOlderThan(@Param("user") User user, @Param("before") Instant before);
 }

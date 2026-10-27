@@ -84,7 +84,8 @@ This file lets any new session pick up the work without the conversation that pr
 | 12a | Deactivate / activate users (`V19`: `users:deactivate`, `users:activate` in ADMIN and USER_MANAGER; `UserStatusService`; never yourself or the root; sessions kept; `UserDto.active`) | `2fffe8b` |
 | 12b | Unlock users (`V20`: `users:unlock`; `FailedPasswordCounter.unlock`; `UserDto.lockedUntil`); step 12 complete | `3b4e8c4` |
 | 13a | Email service: `EmailService` (only `JavaMailSender` user), `OutgoingEmail` + `EmailPurpose`, Thymeleaf HTML + text templates, `IAM_MAIL_FROM` | `4b596cf` |
-| 13b | Asynchronous email: `EmailService.sendAfterCommit` + `EmailQueue` (after commit, own pool); forgot-password queued (`QUEUED`), admin reset sent at once (503 kept); same bcrypt work for unknown users | step 13b commit |
+| 13b | Asynchronous email: `EmailService.sendAfterCommit` + `EmailQueue` (after commit, own pool); forgot-password queued (`QUEUED`), admin reset sent at once (503 kept); same bcrypt work for unknown users | `212dfc2` |
+| 13c-1a | Shared one-time codes (`V21`: `otp_requests` with a purpose; `otp/`: `OneTimeCodes`, `OtpRequestLimiter`, `InvalidOtpException`); no behaviour change | step 13c-1a commit |
 
 ---
 
@@ -312,7 +313,15 @@ Decided 2026-10-27 (all recommended options): Thymeleaf, HTML + plain text with 
 its `503` (it disables the password, so it must know the email went out); no outbox (it would hold OTPs in plain text),
 no retries; the unknown-user, no-email and over-limit paths do the same bcrypt work as a real request; the request
 audit says `QUEUED` instead of `SENT`, and a later failure is only logged by the sender. Commits: 13a email service and
-templates (done), 13b asynchronous sending (done), 13c email verification (designed when 13b is done).
+templates (done), 13b asynchronous sending (done), 13c email verification.
+13c design (decided 2026-10-27, all recommended options): `users.email_verified`; verified from the start only for the
+platform root from config (and rows existing before the migration); signup, `POST /api/users` and every email change
+make it unverified (and delete a pending verification code). A logged-in user asks for a code at their own address
+(`POST /api/users/email-verification`) and confirms it (`POST /api/users/email-verification/confirm`); codes like reset
+OTPs (bcrypt, 5 guesses, 3 per hour, 30 minutes). No automatic verification emails (no link to go to yet; step 14).
+Login is never blocked. 13c-2: forgot-password only to a verified address; the admin reset also to an unverified one
+(the admin vouches); a completed reset verifies the address; `email_verified` claim with `EMAIL`. Commits: 13c-1a shared
+one-time codes, 13c-1b verification, 13c-2 the reset rules and claim.
 
 Today each feature builds a `SimpleMailMessage` and sends it inside the request and its transaction
 (`ResetOtpIssuer`). A slow SMTP server slows the response, holds database locks longer, and
