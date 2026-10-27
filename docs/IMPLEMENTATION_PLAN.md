@@ -5,7 +5,8 @@ This file lets any new session pick up the work without the conversation that pr
 - **`CLAUDE.md`** (repo root) is the source of truth for the working rules, the **agreed** target design and the current state.
   Read it first.
 - **This file** holds the step-by-step technical plan for getting from the current code to the target design.
-  Everything below the "Done" section is a **proposal**. Each step starts by confirming its open decisions with the owner.
+  **The plan is complete (2026-10-27):** every step is done or moved to `IAM_ROADMAP.md`, and the migrations are merged
+  into one baseline. It stays as the record of how the code got here; new work starts from the roadmap.
   The plan takes no new steps (owner, 2026-10-26): anything new goes into `IAM_ROADMAP.md`.
 
 ---
@@ -15,7 +16,7 @@ This file lets any new session pick up the work without the conversation that pr
 1. Read `CLAUDE.md` in full: working agreement, code standards, commit rules, target design, known issues, progress log.
 2. Run `git log --oneline -15` and compare it with the progress log in `CLAUDE.md` to see which step was finished last.
 3. Run `./gradlew clean test` (Docker must be running) to confirm a green baseline before changing anything.
-4. Find the next step in section 4 of this file. Present its plan to the owner: touched classes, cleanup per class, migration, and the
+4. The plan is complete: take the next item from `IAM_ROADMAP.md` (the owner picks it). Present its plan to the owner: touched classes, cleanup per class, migration, and the
    open decisions as questions. **Wait for the go-ahead.**
 5. Implement → `./gradlew clean test` → smoke-test in Docker (`docker compose up --build app db`, app on port 8080)
    → update `CLAUDE.md`, this file and `docs/USER_MANUAL.md` (if usage changed) → show the
@@ -89,11 +90,12 @@ This file lets any new session pick up the work without the conversation that pr
 | 13c-1b | Email verification (`V22`: `users.email_verified`, `email_verification_codes`; `POST /api/users/email-verification` + `/confirm`; `emailVerified` in `UserDto` and `/api/me`) | `24cdd5c` |
 | 13c-2 | Forgot-password only to verified addresses; the admin reset also to unverified ones; a completed reset verifies; `email_verified` claim; step 13 complete | `b2ab63a` |
 | Errors a | `IamException` with a status per class and one handler; one `AlreadyExistsException`; no `IllegalArgumentException` → 400 catch-all (`@Min` paging checks instead) | `1c46b27` |
-| Errors b | RFC 9457 `ProblemDetail` answers (`GlobalHandler` extends `ResponseEntityExceptionHandler`; `errors` for invalid fields and parameters; the 401 entry point through the handler); "already exists" 409; `ExceptionResponse` removed | errors-b commit |
+| Errors b | RFC 9457 `ProblemDetail` answers (`GlobalHandler` extends `ResponseEntityExceptionHandler`; `errors` for invalid fields and parameters; the 401 entry point through the handler); "already exists" 409; `ExceptionResponse` removed | `5b428e2` |
+| Baseline | V1-V22 merged into one `V1__baseline.sql` (identical schema; two permission descriptions corrected); existing databases must be recreated; plan complete | baseline commit |
 
 ---
 
-## 4. Remaining steps
+## 4. Steps (all done or moved to the roadmap; kept for reference)
 
 Order matters: each step relies on the seams the earlier ones created. Before each step, list the touched classes and their
 cleanup (working-agreement rule).
@@ -287,7 +289,7 @@ refresh, and its sessions are refused by the filter and introspection.
 | `mail.debug=true` (done: security fix 1, `MailConfig` removed); DB credentials in `application.properties`; no JWT key configured only warns | Done: profiles (no credentials in `application.properties`); every setting, JWT key and platform root included, required in every profile |
 | Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Done (2026-10-27): commit a base `IamException`, commit b RFC 9457 `ProblemDetail` (`type` `about:blank`, "already exists" 409); stable error codes are roadmap item 2 |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
-| Merge all migrations into one baseline from the live schema | After the last step of this plan |
+| Merge all migrations into one baseline from the live schema | Done (2026-10-27): one `V1__baseline.sql` |
 | Deleting a permission assigned to a role fails (FK) | Done in step 7a (permissions are read-only) |
 | Forgot-password hardening: OTP attempt limit (done: security fix 5; 3 OTPs per user per hour: fix 5b), hashed OTP (done: security fix 6, bcrypt), uniform response (no account enumeration; done: security fix 4; the timing difference evened out in step 13b); emailed plaintext password (done: security fix 7, users choose their password with an OTP; nothing emails a password) | Done |
 | Deleting a user with a pending reset OTP fails (FK) | Done: security fix 2 (`V15`, ON DELETE CASCADE) |

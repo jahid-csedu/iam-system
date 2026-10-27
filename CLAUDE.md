@@ -185,8 +185,10 @@ Java 25 · Spring Boot 4.1 (Jackson 3 = `tools.jackson.*`) · Spring Security (s
 ## Database schema rules
 - Flyway owns the schema: `src/main/resources/db/migration/V<n>__<description>.sql`.
 - Never edit an applied migration. Every schema change is a new `V<n+1>__...` file.
-- When the current development plan is finished, all migrations are merged into a single `V1__baseline.sql` taken from the
-  live schema; versioned migrations start from there. Each step is verified on a fresh database (`docker compose down -v`).
+- `V1__baseline.sql` is the schema at the end of the implementation plan: V1-V22 merged on 2026-10-27, checked to give
+  exactly the schema the old chain gave. New migrations start at `V2`. A database created before the merge doesn't start
+  any more (Flyway finds applied migrations it no longer knows); recreate it (`docker compose down -v`). Each step is
+  verified on a fresh database.
 - The permission catalog and the role templates are reference data inserted by migrations (the only rows migrations insert).
   A migration that adds a TENANT key also adds it to the `ADMIN` template (a test fails otherwise) and decides which
   other templates get it. PLATFORM keys go into no template.
@@ -261,7 +263,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `JwtAuthenticationEntryPoint` through the `HandlerExceptionResolver`; anything else is a logged 500 without its
   message; `ErrorMessage`), `config/` (OpenAPI; `EnvironmentProfileCheck`,
   registered in `META-INF/spring.factories`; the mail sender is Spring Boot's, from `spring.mail.*`, used only by `email/`), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
-- `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
+- `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = the merged schema and reference data of 2026-10-27)
 
 ## Current behaviours to remember
 - Root user (`is_root_user`) holds every TENANT key in `AuthorizationService`; what it can reach is still limited to its tenant.
@@ -677,3 +679,8 @@ Design debt
   and parameters (400); `JwtAuthenticationEntryPoint` answers through the handler (`AuthenticationRequiredException`), so
   every 401 has the same shape; `ExceptionResponse` removed; "already exists" is 409. New roadmap item 2 (stable error
   codes, frontend gap G-4); items 2-16 became 3-17. Error step complete.
+- 2026-10-27: Migration baseline merge (owner). V1-V22 replaced by one `V1__baseline.sql`; on a scratch MySQL its schema
+  is identical to the old chain's (`mysqldump --no-data` diff). Reference data is the same except two permission
+  descriptions corrected (`users:update` covers profiles and direct permissions; `users:reset-password` emails a code,
+  never a password). Existing databases must be recreated. The implementation plan is complete; further work comes
+  from `IAM_ROADMAP.md`.

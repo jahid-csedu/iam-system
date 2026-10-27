@@ -126,7 +126,8 @@ Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `IAM_MAIL_FROM` i
 OTPs are only ever sent by email, and no password is ever emailed. Emails have an HTML and a plain-text version, made
 from the templates in `src/main/resources/email/`. Forgot-password emails go out after the request has finished, on a
 small queue of their own (`iam.mail.queue.threads`, default 2, and `iam.mail.queue.capacity`, default 100 waiting
-emails); a failed one is logged, not retried. The reset by another user sends at once, so it can answer `503`. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
+emails); a failed one is logged, not retried. The reset by another user sends at once, so it can answer `503`. Each development step starts from a fresh database: `docker compose down -v` removes the old one. A database
+created before 2026-10-27 must be recreated that way: the migrations were merged into one baseline, so Flyway refuses it.
 
 **Token signing key.** Tokens are signed with an RSA private key that only the IAM holds (a PKCS#8 RSA key of at least
 2048 bits). Create one and keep it out of the repository (`*.pem` is git-ignored):
