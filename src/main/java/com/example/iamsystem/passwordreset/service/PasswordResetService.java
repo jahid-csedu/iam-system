@@ -46,9 +46,10 @@ public class PasswordResetService {
     private final SessionService sessionService;
 
     /**
-     * Emails the user an OTP ({@link ResetOtpIssuer}). An unknown user, a user without an email address, a user over the
-     * request limit and a failed email are not errors: the outcome is audited and logged, and the caller answers every
-     * request the same way, so nobody can find out which accounts exist.
+     * Emails the user an OTP ({@link ResetOtpIssuer}) after the request commits, so the answer never waits for the mail
+     * server. An unknown user, a user without an email address and a user over the request limit are not errors: the
+     * outcome is audited and logged, and the caller answers every request the same way and in about the same time, so
+     * nobody can find out which accounts exist.
      */
     @Auditable(
             value = AuditEventType.PASSWORD_RESET_OTP_REQUEST,
@@ -62,9 +63,10 @@ public class PasswordResetService {
         Optional<User> user = findUser(identifier, tenantId);
         if (user.isEmpty()) {
             log.warn("Password reset requested for an unknown user in tenant {}", tenantId);
+            otpIssuer.spendIssuingTime();
             return OtpRequestOutcome.UNKNOWN_USER;
         }
-        return otpIssuer.issue(user.get());
+        return otpIssuer.issueAfterCommit(user.get());
     }
 
     /**

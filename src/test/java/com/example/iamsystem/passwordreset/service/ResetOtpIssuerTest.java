@@ -26,8 +26,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -42,7 +46,7 @@ class ResetOtpIssuerTest {
     @Mock
     private ResetRequestLimiter requestLimiter;
 
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+    private final PasswordEncoder passwordEncoder = spy(new BCryptPasswordEncoder(4));
     private ResetOtpIssuer issuer;
     private User user;
 
@@ -57,9 +61,9 @@ class ResetOtpIssuerTest {
     }
 
     @Test
-    @DisplayName("A six-digit OTP valid for the configured minutes is saved only as a hash and emailed to the user")
-    void issue_savesTheHashAndEmailsTheOtp() {
-        assertEquals(OtpRequestOutcome.SENT, issuer.issue(user));
+    @DisplayName("A six-digit OTP valid for the configured minutes is saved only as a hash and emailed to the user at once")
+    void issueNow_savesTheHashAndEmailsTheOtp() {
+        assertEquals(OtpRequestOutcome.SENT, issuer.issueNow(user));
 
         ArgumentCaptor<PasswordResetOTP> saved = ArgumentCaptor.forClass(PasswordResetOTP.class);
         verify(otpRepository).save(saved.capture());
@@ -82,7 +86,7 @@ class ResetOtpIssuerTest {
     void issue_userWithoutEmail_sendsNothing() {
         user.setEmail(null);
 
-        assertEquals(OtpRequestOutcome.NO_EMAIL, issuer.issue(user));
+        assertEquals(OtpRequestOutcome.NO_EMAIL, issuer.issueAfterCommit(user));
         verifyNoInteractions(otpRepository, emailService, requestLimiter);
     }
 
@@ -91,16 +95,42 @@ class ResetOtpIssuerTest {
     void issue_overTheLimit_sendsNothing() {
         when(requestLimiter.tryRecord(user)).thenReturn(false);
 
-        assertEquals(OtpRequestOutcome.TOO_MANY_REQUESTS, issuer.issue(user));
+        assertEquals(OtpRequestOutcome.TOO_MANY_REQUESTS, issuer.issueAfterCommit(user));
         verifyNoInteractions(otpRepository, emailService);
     }
 
     @Test
-    @DisplayName("A failed email is no error: the outcome says so")
-    void issue_mailFailure_isReported() {
+    @DisplayName("A failed email sent at once is no error: the outcome says so")
+    void issueNow_mailFailure_isReported() {
         doThrow(new MailSendException("SMTP down")).when(emailService).send(any(OutgoingEmail.class));
 
-        assertEquals(OtpRequestOutcome.MAIL_FAILED, issuer.issue(user));
+        assertEquals(OtpRequestOutcome.MAIL_FAILED, issuer.issueNow(user));
+    }
+
+    @Test
+    @DisplayName("The user's own request queues the email for after the commit instead of sending it")
+    void issueAfterCommit_queuesTheEmail() {
+        assertEquals(OtpRequestOutcome.QUEUED, issuer.issueAfterCommit(user));
+
+        ArgumentCaptor<OutgoingEmail> mail = ArgumentCaptor.forClass(OutgoingEmail.class);
+        verify(emailService).sendAfterCommit(mail.capture());
+        verify(emailService, never()).send(any(OutgoingEmail.class));
+        assertEquals("alice@example.com", mail.getValue().to());
+        verify(otpRepository).save(any(PasswordResetOTP.class));
+    }
+
+    @Test
+    @DisplayName("Every path makes one bcrypt hash, also a request about nobody, so the time taken tells nothing")
+    void everyPath_spendsOneHash() {
+        issuer.issueAfterCommit(user);
+        user.setEmail(null);
+        issuer.issueAfterCommit(user);
+        user.setEmail("alice@example.com");
+        when(requestLimiter.tryRecord(user)).thenReturn(false);
+        issuer.issueAfterCommit(user);
+        issuer.spendIssuingTime();
+
+        verify(passwordEncoder, times(4)).encode(anyString());
     }
 
     @Test
@@ -117,7 +147,7 @@ class ResetOtpIssuerTest {
         PasswordResetOTP existing = new PasswordResetOTP();
         when(otpRepository.findByUser(user)).thenReturn(Optional.of(existing));
 
-        issuer.issue(user);
+        issuer.issueAfterCommit(user);
 
         verify(otpRepository).delete(existing);
         verify(otpRepository).save(any(PasswordResetOTP.class));

@@ -109,13 +109,13 @@ class UserPasswordServiceTest {
     void resetPassword_ofAnotherUser_emailsAnOtpAndDisablesThePassword() {
         when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(member);
-        when(otpIssuer.issue(member)).thenReturn(OtpRequestOutcome.SENT);
+        when(otpIssuer.issueNow(member)).thenReturn(OtpRequestOutcome.SENT);
 
         service.resetPassword(2L);
 
         verify(accessPolicy).checkCanResetPassword(actor(root), member);
         InOrder order = inOrder(otpIssuer, passwordUpdater, sessionService);
-        order.verify(otpIssuer).issue(member);
+        order.verify(otpIssuer).issueNow(member);
         order.verify(passwordUpdater).disablePassword(member);
         order.verify(sessionService).revokeAllOf(2L);
     }
@@ -126,11 +126,11 @@ class UserPasswordServiceTest {
         when(currentUserProvider.requireCurrentActor()).thenReturn(actor(root));
         when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(member);
 
-        when(otpIssuer.issue(member)).thenReturn(OtpRequestOutcome.NO_EMAIL);
+        when(otpIssuer.issueNow(member)).thenReturn(OtpRequestOutcome.NO_EMAIL);
         assertThrows(UserInputNotValidException.class, () -> service.resetPassword(2L));
-        when(otpIssuer.issue(member)).thenReturn(OtpRequestOutcome.TOO_MANY_REQUESTS);
+        when(otpIssuer.issueNow(member)).thenReturn(OtpRequestOutcome.TOO_MANY_REQUESTS);
         assertThrows(TooManyRequestsException.class, () -> service.resetPassword(2L));
-        when(otpIssuer.issue(member)).thenReturn(OtpRequestOutcome.MAIL_FAILED);
+        when(otpIssuer.issueNow(member)).thenReturn(OtpRequestOutcome.MAIL_FAILED);
         assertThrows(EmailNotSentException.class, () -> service.resetPassword(2L));
 
         verifyNoInteractions(passwordUpdater, sessionService);

@@ -32,6 +32,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -82,12 +83,12 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    @DisplayName("Requesting a reset by username in the client's tenant emails the user an OTP")
+    @DisplayName("Requesting a reset by username in the client's tenant queues an OTP email for after the commit")
     void createPasswordResetOtp_byUsername_issuesAnOtp() {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
-        when(otpIssuer.issue(user)).thenReturn(OtpRequestOutcome.SENT);
+        when(otpIssuer.issueAfterCommit(user)).thenReturn(OtpRequestOutcome.QUEUED);
 
-        assertEquals(OtpRequestOutcome.SENT, service.createPasswordResetOtp(CLIENT_ID, "alice"));
+        assertEquals(OtpRequestOutcome.QUEUED, service.createPasswordResetOtp(CLIENT_ID, "alice"));
     }
 
     @Test
@@ -98,24 +99,25 @@ class PasswordResetServiceTest {
 
         service.createPasswordResetOtp(CLIENT_ID, "alice@example.com");
 
-        verify(otpIssuer).issue(user);
+        verify(otpIssuer).issueAfterCommit(user);
     }
 
     @Test
-    @DisplayName("Requesting a reset for an unknown username or email is no error, and sends nothing")
+    @DisplayName("Requesting a reset for an unknown username or email is no error, sends nothing and takes as long")
     void createPasswordResetOtp_unknownIdentifier_sendsNothing() {
         when(userRepository.findByUsernameAndTenantId("ghost", TENANT_ID)).thenReturn(Optional.empty());
         when(userRepository.findByEmailAndTenantId("ghost", TENANT_ID)).thenReturn(Optional.empty());
 
         assertEquals(OtpRequestOutcome.UNKNOWN_USER, service.createPasswordResetOtp(CLIENT_ID, "ghost"));
-        verifyNoInteractions(otpIssuer);
+        verify(otpIssuer).spendIssuingTime();
+        verifyNoMoreInteractions(otpIssuer);
     }
 
     @Test
     @DisplayName("Whatever happened to the OTP, the outcome is passed on, never thrown")
     void createPasswordResetOtp_passesTheOutcomeOn() {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
-        when(otpIssuer.issue(user)).thenReturn(OtpRequestOutcome.TOO_MANY_REQUESTS);
+        when(otpIssuer.issueAfterCommit(user)).thenReturn(OtpRequestOutcome.TOO_MANY_REQUESTS);
 
         assertEquals(OtpRequestOutcome.TOO_MANY_REQUESTS, service.createPasswordResetOtp(CLIENT_ID, "alice"));
     }

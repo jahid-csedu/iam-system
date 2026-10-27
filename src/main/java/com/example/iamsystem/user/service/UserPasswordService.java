@@ -72,7 +72,7 @@ public class UserPasswordService {
         AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User target = userRepository.getRequiredByIdAndTenantId(userId, actor.tenantId());
         accessPolicy.checkCanResetPassword(actor, target);
-        switch (otpIssuer.issue(target)) {
+        switch (otpIssuer.issueNow(target)) {
             case SENT -> {
                 passwordUpdater.disablePassword(target);
                 sessionService.revokeAllOf(target.getId());
@@ -80,7 +80,7 @@ public class UserPasswordService {
             case NO_EMAIL -> throw new UserInputNotValidException(USER_HAS_NO_EMAIL);
             case TOO_MANY_REQUESTS -> throw new TooManyRequestsException(TOO_MANY_RESET_OTPS);
             case MAIL_FAILED -> throw new EmailNotSentException(RESET_EMAIL_NOT_SENT);
-            case UNKNOWN_USER -> throw new IllegalStateException("The OTP issuer never reports an unknown user");
+            case UNKNOWN_USER, QUEUED -> throw new IllegalStateException("An OTP sent at once is never unknown or queued");
         }
     }
 }

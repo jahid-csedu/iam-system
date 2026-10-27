@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of the email service (2026-10-27).** This manual is updated in every step that changes how the system is
+> **Matches the code as of asynchronous email (2026-10-27).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -124,7 +124,9 @@ The variables are read only then: changing them later changes nothing, and once 
 
 Mail settings (`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `IAM_MAIL_FROM` in `.env`) are needed for password resets:
 OTPs are only ever sent by email, and no password is ever emailed. Emails have an HTML and a plain-text version, made
-from the templates in `src/main/resources/email/`. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
+from the templates in `src/main/resources/email/`. Forgot-password emails go out after the request has finished, on a
+small queue of their own (`iam.mail.queue.threads`, default 2, and `iam.mail.queue.capacity`, default 100 waiting
+emails); a failed one is logged, not retried. The reset by another user sends at once, so it can answer `503`. Each development step starts from a fresh database: `docker compose down -v` removes the old one.
 
 **Token signing key.** Tokens are signed with an RSA private key that only the IAM holds (a PKCS#8 RSA key of at least
 2048 bits). Create one and keep it out of the repository (`*.pem` is git-ignored):
@@ -282,7 +284,7 @@ and gets `403` on every management endpoint.
 | Change another user's profile | `PATCH /api/users/{id}` `{ "fullName": "...", "email": "..." }` → `200` and the user. Fields left out stay unchanged; `"fullName": ""` removes the name; an email can be changed, not removed. A new email must be free in the tenant and not belong to any tenant's root user (`400` "Email not available"), and a pending reset OTP of the user is deleted (it went to the old address). Never your own profile (`403`; yours comes with `/api/me`), never the root user's (`403`) | `users:update`; a new email also needs `users:reset-password` (whoever controls the email controls password resets) |
 | Change own password | `PATCH /api/users/password` `{ "oldPassword": "...", "newPassword": "..." }` | Any logged-in user, for themselves only |
 | Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`: that user gets a reset OTP by email, their current password stops working at once and all their sessions end; they set a new password with the OTP (`POST /api/password/reset` through any client of the tenant). If the OTP can't be sent nothing changes: `400` (no email address), `429` (3 OTPs in the last hour), `503` (mail failure) | `users:reset-password`; never your own password, never the root user's |
-| Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → `200` and the OTP is emailed. The answer is the same when no such user exists, the user has no email address or the email fails, so it never tells whether an account exists. A user gets at most 3 OTPs per hour; further requests get the same answer but send nothing | Public |
+| Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → `200`, and the OTP is emailed right after the request (the answer never waits for the mail server). The answer is the same, and takes about as long, when no such user exists or the user has no email address; a failed email is only logged. So it never tells whether an account exists. A user gets at most 3 OTPs per hour; further requests get the same answer but send nothing | Public |
 | Forgot password: reset with the OTP | `POST /api/password/reset` `{ "client_id": "...", "identifier": "<username or email>", "otp": "123456", "newPassword": "..." }` → `200`: the password is now the one you chose (password policy applies, `400` otherwise and the OTP stays usable), a login lockout ends, and every session of the user ends. Any problem (unknown user, no pending OTP, expired or wrong OTP) is `400` "Invalid or expired OTP"; the fifth wrong guess deletes the OTP, so request a new one | Public |
 | Refresh tokens | `POST /api/auth/token/refresh` `{ "client_id": "...", "refresh_token": "..." }` (the client the token was issued through) → a new access token **and a new refresh token**; the old refresh token is used up | Public (needs a valid refresh token) |
 | Log out | `POST /api/auth/logout` (no body) → `204`; ends the session of the Bearer token: its access token gets `401` here and its refresh token stops working | Any logged-in user |

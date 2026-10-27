@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 
@@ -41,13 +42,15 @@ class EmailServiceTest {
 
     @Mock
     private JavaMailSender mailSender;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private EmailService service;
 
     @BeforeEach
     void setUp() {
         service = new EmailService(mailSender, new EmailTemplateConfig().emailTemplateEngine(),
-                new EmailProperties("IAM System <no-reply@acme.com>"));
+                new EmailProperties("IAM System <no-reply@acme.com>"), eventPublisher);
         when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
     }
 

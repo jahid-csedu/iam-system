@@ -83,7 +83,8 @@ This file lets any new session pick up the work without the conversation that pr
 | Profiles 2 | Every profile, `local` included, requires every setting: JWT key (PEM inline or `private-key-location`; a temporary key only in the test suite), platform root until it exists, DB, issuer, mail, CORS | `85a3a38` |
 | 12a | Deactivate / activate users (`V19`: `users:deactivate`, `users:activate` in ADMIN and USER_MANAGER; `UserStatusService`; never yourself or the root; sessions kept; `UserDto.active`) | `2fffe8b` |
 | 12b | Unlock users (`V20`: `users:unlock`; `FailedPasswordCounter.unlock`; `UserDto.lockedUntil`); step 12 complete | `3b4e8c4` |
-| 13a | Email service: `EmailService` (only `JavaMailSender` user), `OutgoingEmail` + `EmailPurpose`, Thymeleaf HTML + text templates, `IAM_MAIL_FROM` | step 13a commit |
+| 13a | Email service: `EmailService` (only `JavaMailSender` user), `OutgoingEmail` + `EmailPurpose`, Thymeleaf HTML + text templates, `IAM_MAIL_FROM` | `4b596cf` |
+| 13b | Asynchronous email: `EmailService.sendAfterCommit` + `EmailQueue` (after commit, own pool); forgot-password queued (`QUEUED`), admin reset sent at once (503 kept); same bcrypt work for unknown users | step 13b commit |
 
 ---
 
@@ -283,7 +284,7 @@ refresh, and its sessions are refused by the filter and introspection.
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |
 | Deleting a permission assigned to a role fails (FK) | Done in step 7a (permissions are read-only) |
-| Forgot-password hardening: OTP attempt limit (done: security fix 5; 3 OTPs per user per hour: fix 5b), hashed OTP (done: security fix 6, bcrypt), uniform response (no account enumeration; done: security fix 4, except the timing difference); emailed plaintext password (done: security fix 7, users choose their password with an OTP; nothing emails a password) | Done |
+| Forgot-password hardening: OTP attempt limit (done: security fix 5; 3 OTPs per user per hour: fix 5b), hashed OTP (done: security fix 6, bcrypt), uniform response (no account enumeration; done: security fix 4; the timing difference evened out in step 13b); emailed plaintext password (done: security fix 7, users choose their password with an OTP; nothing emails a password) | Done |
 | Deleting a user with a pending reset OTP fails (FK) | Done: security fix 2 (`V15`, ON DELETE CASCADE) |
 | A root user can delete itself, leaving its tenant without a root | Done: security fix 3 (nobody deletes a root user) |
 | `README.md` out of date | After step 5, and kept current afterwards |
@@ -311,7 +312,7 @@ Decided 2026-10-27 (all recommended options): Thymeleaf, HTML + plain text with 
 its `503` (it disables the password, so it must know the email went out); no outbox (it would hold OTPs in plain text),
 no retries; the unknown-user, no-email and over-limit paths do the same bcrypt work as a real request; the request
 audit says `QUEUED` instead of `SENT`, and a later failure is only logged by the sender. Commits: 13a email service and
-templates (done), 13b asynchronous sending, 13c email verification (designed when 13b is done).
+templates (done), 13b asynchronous sending (done), 13c email verification (designed when 13b is done).
 
 Today each feature builds a `SimpleMailMessage` and sends it inside the request and its transaction
 (`ResetOtpIssuer`). A slow SMTP server slows the response, holds database locks longer, and

@@ -226,6 +226,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   recipient + template values, masked in `toString`); it renders `resources/email/<template>.html` (sharing
   `layout.html`) and `.txt` with Thymeleaf (`config/EmailTemplateConfig`, core engine only, no web views) and sends both
   parts from `iam.mail.from` (`config/EmailProperties`). A new email = a new `EmailPurpose` + its two templates.
+  `send` sends at once; `sendAfterCommit` (the default for new emails) publishes a `QueuedEmail` that `EmailQueue` (a
+  `@TransactionalEventListener`, after commit) sends on its own small thread pool (`config/EmailQueueProperties`; not an
+  `Executor` bean, which would replace Boot's default `@Async` executor); failures are logged, never retried.
 - `role/`: tenant-owned roles. `RoleService` (CRUD), `RolePermissionService` (attach/detach permissions), `RoleAccessPolicy` (no changes to a role you hold),
   `PredefinedRoleService` (copies the `RoleTemplate`s into a new tenant during signup)
 - `permission/`: the read-only catalog. `PermissionKey` enum (key + scope) mirrors the `permissions` rows (a test keeps them in sync);
@@ -334,8 +337,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 
 ## Known issues (found in review 2026-10-24, not fixed yet)
 Security
-- The reset request answers a known user more slowly than an unknown one (the email is sent during the request), so
-  timing still tells them apart; fixed by asynchronous email (plan step 13).
+- The reset request's response time differs a little between a known and an unknown user (a known one's request writes
+  the limit and OTP rows); the slow parts (bcrypt, the email) are evened out or after the response since step 13b.
 
 Broken / drift
 - Audit events for failures are logged at ERROR level.
@@ -620,3 +623,9 @@ Design debt
   Decisions (all recommended options): Thymeleaf HTML + text; admin reset stays synchronous (keeps its 503) while
   forgot-password goes async in 13b; no outbox (it would store OTPs in plain text); no retries; 13b also evens out the
   bcrypt work of unknown users; email verification is 13c. Next: step 13b (asynchronous sending after commit).
+- 2026-10-27: Step 13b (asynchronous email). `EmailService.sendAfterCommit` + `EmailQueue` (after commit, own thread
+  pool, `iam.mail.queue.*`); outside a transaction it refuses (the email would never go out). `ResetOtpIssuer`:
+  `issueAfterCommit` (forgot-password, outcome `QUEUED`) and `issueNow` (admin reset, keeps `MAIL_FAILED` → 503); the
+  bcrypt hash is made first on every path and `spendIssuingTime` makes one for an unknown user, so the response time no
+  longer tells accounts apart (known issue reduced to the small database difference). Next: step 13c (email
+  verification design).

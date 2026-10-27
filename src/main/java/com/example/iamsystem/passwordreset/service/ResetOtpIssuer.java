@@ -19,6 +19,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * The one place that makes (and discards) password-reset OTPs, for the user's own forgot-password request and for a reset by another
@@ -27,6 +28,10 @@ import java.util.Map;
  * <p>
  * Nothing here is an error; the outcome says what happened and the caller decides what the client sees. Runs inside the
  * caller's transaction, which must not have changed the user's row yet (the limit locks it in a transaction of its own).
+ * <p>
+ * The bcrypt hash is the slow part of a request (tens of milliseconds), so it is made first on every path, and
+ * {@link #spendIssuingTime()} makes one for a request about nobody: the response time doesn't tell whether an account
+ * exists, has an email address or is over the limit.
  */
 @Component
 @RequiredArgsConstructor
@@ -46,11 +51,41 @@ public class ResetOtpIssuer {
     private final PasswordEncoder passwordEncoder;
 
     /**
+     * For the user's own request: the email goes out after the caller's transaction commits, and the request doesn't wait
+     * for it.
+     *
+     * @return {@code QUEUED}, {@code NO_EMAIL} or {@code TOO_MANY_REQUESTS}; a later mail failure is only logged, and
+     *         the OTP stays unused until it expires or the next one replaces it
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public OtpRequestOutcome issueAfterCommit(User user) {
+        return issue(user, email -> {
+            emailService.sendAfterCommit(email);
+            return OtpRequestOutcome.QUEUED;
+        });
+    }
+
+    /**
+     * For a reset by another user, who changes the account only once the email is out: it is sent at once.
+     *
      * @return {@code SENT}, {@code NO_EMAIL}, {@code TOO_MANY_REQUESTS} or {@code MAIL_FAILED}; an OTP whose email failed
      *         stays unused until it expires or the next one replaces it
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public OtpRequestOutcome issue(User user) {
+    public OtpRequestOutcome issueNow(User user) {
+        return issue(user, this::sendNow);
+    }
+
+    /**
+     * Spends the time of making an OTP without making one, for a request that names no user.
+     */
+    public void spendIssuingTime() {
+        passwordEncoder.encode(newOtp());
+    }
+
+    private OtpRequestOutcome issue(User user, Function<OutgoingEmail, OtpRequestOutcome> delivery) {
+        String otp = newOtp();
+        String otpHash = passwordEncoder.encode(otp);
         if (user.getEmail() == null) {
             log.warn("No password-reset OTP for user {}, who has no email address", user.getId());
             return OtpRequestOutcome.NO_EMAIL;
@@ -64,21 +99,28 @@ public class ResetOtpIssuer {
             otpRepository.delete(existingOtp);
             otpRepository.flush();
         });
-        String otp = String.format(OTP_FORMAT, random.nextInt(OTP_BOUND));
         PasswordResetOTP resetOtp = new PasswordResetOTP();
         resetOtp.setUser(user);
-        resetOtp.setOtpHash(passwordEncoder.encode(otp));
+        resetOtp.setOtpHash(otpHash);
         resetOtp.setExpiryDate(Instant.now().plus(Duration.ofMinutes(otpExpiration.minutes())));
         otpRepository.save(resetOtp);
 
+        return delivery.apply(new OutgoingEmail(EmailPurpose.PASSWORD_RESET_OTP, user.getEmail(),
+                Map.of(OTP_VALUE, otp, VALID_MINUTES_VALUE, otpExpiration.minutes())));
+    }
+
+    private OtpRequestOutcome sendNow(OutgoingEmail email) {
         try {
-            emailService.send(new OutgoingEmail(EmailPurpose.PASSWORD_RESET_OTP, user.getEmail(),
-                    Map.of(OTP_VALUE, otp, VALID_MINUTES_VALUE, otpExpiration.minutes())));
+            emailService.send(email);
             return OtpRequestOutcome.SENT;
         } catch (MailException e) {
-            log.error("Could not email the password-reset OTP to user {}", user.getId(), e);
+            log.error("Could not email a password-reset OTP", e);
             return OtpRequestOutcome.MAIL_FAILED;
         }
+    }
+
+    private String newOtp() {
+        return String.format(OTP_FORMAT, random.nextInt(OTP_BOUND));
     }
 
     /**

@@ -15,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.mail.MailSendException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -120,7 +119,7 @@ class PasswordResetControllerTest {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "root@acme.com")).andExpect(status().isOk());
 
         ArgumentCaptor<OutgoingEmail> mail = ArgumentCaptor.forClass(OutgoingEmail.class);
-        verify(emailService).send(mail.capture());
+        verify(emailService).sendAfterCommit(mail.capture());
         assertEquals("root@acme.com", mail.getValue().to());
     }
 
@@ -152,13 +151,14 @@ class PasswordResetControllerTest {
     }
 
     @Test
-    @DisplayName("A failed email gets the same answer too")
-    void resetRequest_mailFailure_looksTheSame() throws Exception {
-        doThrow(new MailSendException("SMTP down")).when(emailService).send(any(OutgoingEmail.class));
-
+    @DisplayName("The request only queues the email: it never waits for the mail server, whose failures it can't see")
+    void resetRequest_onlyQueuesTheEmail() throws Exception {
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(RESET_REQUEST_ACCEPTED));
+
+        verify(emailService).sendAfterCommit(any(OutgoingEmail.class));
+        verify(emailService, never()).send(any(OutgoingEmail.class));
     }
 
     @Test
@@ -199,7 +199,7 @@ class PasswordResetControllerTest {
         for (int request = 0; request < 3; request++) {
             postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root")).andExpect(status().isOk());
         }
-        verify(emailService, times(3)).send(any(OutgoingEmail.class));
+        verify(emailService, times(3)).sendAfterCommit(any(OutgoingEmail.class));
         clearInvocations(emailService);
 
         postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "root@acme.com"))
@@ -247,7 +247,7 @@ class PasswordResetControllerTest {
      */
     private String lastEmailedOtp() {
         ArgumentCaptor<OutgoingEmail> mail = ArgumentCaptor.forClass(OutgoingEmail.class);
-        verify(emailService, atLeastOnce()).send(mail.capture());
+        verify(emailService, atLeastOnce()).sendAfterCommit(mail.capture());
         List<OutgoingEmail> sent = mail.getAllValues();
         return (String) sent.getLast().values().get("otp");
     }
