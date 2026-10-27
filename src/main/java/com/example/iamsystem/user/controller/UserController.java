@@ -13,6 +13,7 @@ import com.example.iamsystem.user.service.UserPermissionService;
 import com.example.iamsystem.user.service.UserProfileService;
 import com.example.iamsystem.user.service.UserRoleService;
 import com.example.iamsystem.user.service.UserService;
+import com.example.iamsystem.user.service.UserStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -31,7 +32,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import static com.example.iamsystem.permission.PermissionKey.USERS_ACTIVATE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_CREATE;
+import static com.example.iamsystem.permission.PermissionKey.USERS_DEACTIVATE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_DELETE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_READ;
 import static com.example.iamsystem.permission.PermissionKey.USERS_RESET_PASSWORD;
@@ -51,6 +54,7 @@ public class UserController {
     private final UserPermissionService userPermissionService;
     private final UserService userService;
     private final UserProfileService userProfileService;
+    private final UserStatusService userStatusService;
 
     @PostMapping
     @RequirePermission(USERS_CREATE)
@@ -140,6 +144,20 @@ public class UserController {
     @Operation(summary = "Change another user's full name and/or email; fields left out stay unchanged. A new email also needs users:reset-password. Never yourself (use /api/me), never the root user (Requires: users:update)")
     public ResponseEntity<UserDto> updateUser(@PathVariable Long id, @RequestBody @Valid UserUpdateDto request) {
         return ResponseEntity.ok(userProfileService.updateUser(id, request));
+    }
+
+    @PutMapping("/{id}/deactivate")
+    @RequirePermission(USERS_DEACTIVATE)
+    @Operation(summary = "Deactivate another user: no logins, and their tokens stop working until activated; sessions are kept. Never yourself, never the root user (Requires: users:deactivate)")
+    public ResponseEntity<UserDto> deactivateUser(@PathVariable Long id) {
+        return ResponseEntity.ok(userStatusService.deactivateUser(id));
+    }
+
+    @PutMapping("/{id}/activate")
+    @RequirePermission(USERS_ACTIVATE)
+    @Operation(summary = "Reactivate a deactivated user; their unexpired sessions work again (Requires: users:activate)")
+    public ResponseEntity<UserDto> activateUser(@PathVariable Long id) {
+        return ResponseEntity.ok(userStatusService.activateUser(id));
     }
 
     @DeleteMapping("/{id}")

@@ -10,12 +10,14 @@ import org.springframework.stereotype.Component;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.MANAGEMENT_USERS_ONLY;
 import static com.example.iamsystem.common.exception.ErrorMessage.NO_PERMISSION;
+import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ACCESS_CHANGE;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ACCOUNT_NOT_DELETABLE;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_PASSWORD_RESET;
-import static com.example.iamsystem.common.exception.ErrorMessage.OWN_ACCESS_CHANGE;
 import static com.example.iamsystem.common.exception.ErrorMessage.OWN_PROFILE_UPDATE;
+import static com.example.iamsystem.common.exception.ErrorMessage.OWN_STATUS_CHANGE;
 import static com.example.iamsystem.common.exception.ErrorMessage.REGULAR_USER_ACCESS;
 import static com.example.iamsystem.common.exception.ErrorMessage.ROOT_PROFILE_UPDATE;
+import static com.example.iamsystem.common.exception.ErrorMessage.ROOT_STATUS_CHANGE;
 import static com.example.iamsystem.common.exception.ErrorMessage.ROOT_USER_NOT_DELETABLE;
 
 /**
@@ -94,6 +96,20 @@ public class UserAccessPolicy {
         if (actor.isUser(target.getId())) {
             log.warn("User '{}' tried to delete their own account", actor.username());
             throw new NoAccessException(OWN_ACCOUNT_NOT_DELETABLE);
+        }
+    }
+
+    /**
+     * Deactivating and activating is always for someone else, and never for the root user: a tenant's root stays usable,
+     * so the tenant can't be locked out of its own management.
+     */
+    public void checkCanChangeStatus(AuthenticatedActor actor, User target) {
+        if (actor.isUser(target.getId())) {
+            throw new NoAccessException(OWN_STATUS_CHANGE);
+        }
+        if (target.isRootUser()) {
+            log.warn("User '{}' tried to change the status of the root user '{}'", actor.username(), target.getUsername());
+            throw new NoAccessException(ROOT_STATUS_CHANGE);
         }
     }
 

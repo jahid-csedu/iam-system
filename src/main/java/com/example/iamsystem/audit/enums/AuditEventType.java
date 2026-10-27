@@ -20,6 +20,8 @@ public enum AuditEventType {
     // User Management
     USER_CREATION,
     USER_UPDATE,
+    USER_DEACTIVATE,
+    USER_ACTIVATE,
     PASSWORD_CHANGE,
     PASSWORD_RESET_BY_USER,
     ROLES_ASSIGNMENT,

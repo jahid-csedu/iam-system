@@ -118,4 +118,21 @@ class UserAccessPolicyTest {
         assertDoesNotThrow(() -> policy.checkCanDelete(actor(manager), member));
         assertDoesNotThrow(() -> policy.checkCanDelete(actor(root), manager));
     }
+
+    @Test
+    @DisplayName("Deactivating or activating another non-root user is allowed")
+    void checkCanChangeStatus_ofAnotherUser_isAllowed() {
+        assertDoesNotThrow(() -> policy.checkCanChangeStatus(actor(manager), member));
+        assertDoesNotThrow(() -> policy.checkCanChangeStatus(actor(root), manager));
+    }
+
+    @Test
+    @DisplayName("Nobody deactivates or activates themselves or the root user")
+    void checkCanChangeStatus_ofSelfOrRoot_isRefused() {
+        NoAccessException own = assertThrows(NoAccessException.class, () -> policy.checkCanChangeStatus(actor(manager), manager));
+        assertEquals("You can't deactivate or activate your own account", own.getMessage());
+        NoAccessException ofRoot = assertThrows(NoAccessException.class, () -> policy.checkCanChangeStatus(actor(manager), root));
+        assertEquals("The root user can't be deactivated or activated", ofRoot.getMessage());
+        assertThrows(NoAccessException.class, () -> policy.checkCanChangeStatus(actor(root), root));
+    }
 }

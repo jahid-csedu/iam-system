@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of the environment profiles (2026-10-26).** This manual is updated in every step that changes how the system is
+> **Matches the code as of user deactivation (2026-10-27).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -38,6 +38,8 @@ How to use the system as a developer through Swagger UI or Postman.
 | `users:update` | Assign and remove the roles and direct permissions of other management users |
 | `users:delete` | Delete users |
 | `users:reset-password` | Reset another user's password (that user gets a reset OTP by email and chooses a new password) |
+| `users:deactivate` | Deactivate other users: they can't log in, and their tokens stop working |
+| `users:activate` | Reactivate deactivated users |
 | `roles:read` | List roles, and find them by id or name |
 | `roles:create` | Create roles |
 | `roles:update` | Rename roles, change their description, add and remove their permissions |
@@ -65,12 +67,14 @@ on the tenants their grants cover (a grant on all tenants covers every tenant). 
 ### Predefined roles
 
 Every new tenant gets its own copies of these roles at signup. They are ordinary roles of the tenant: assign them, change
-them, delete them, or create more. Later changes to the predefined set never affect existing tenants.
+them, delete them, or create more. Later changes to the predefined set never affect existing tenants: a permission added
+to the catalog later reaches an existing tenant's roles only when its root (or a user with `roles:update`) adds it, while
+the root holds it at once.
 
 | Role | Permissions |
 |---|---|
 | `ADMIN` | every key in the catalog |
-| `USER_MANAGER` | `users:read`, `users:create`, `users:update`, `users:delete` |
+| `USER_MANAGER` | `users:read`, `users:create`, `users:update`, `users:delete`, `users:deactivate`, `users:activate` |
 | `VIEWER` | `users:read`, `roles:read`, `clients:read`, `permissions:read` |
 
 ---
@@ -285,6 +289,7 @@ and gets `403` on every management endpoint.
 | List users | `GET /api/users?page=0&size=20` → `{ "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }`, ordered by id; `size` is capped at 100 | `users:read` |
 | Direct permissions | `PUT` / `DELETE /api/users/permissions` `{ "username", "permissionIds" }` (management users only, never yourself) | `users:update` |
 | Find a user | `GET /api/users/{id}`, `/api/users/by-username?username=`, `/api/users/by-email?email=` | `users:read` |
+| Deactivate / activate a user | `PUT /api/users/{id}/deactivate` → `200` and the user with `"active": false`: at once they can't log in or refresh (`403`), and the access tokens of their sessions get `401` "Your account is deactivated" (introspection `active: false`); sessions are kept. `PUT /api/users/{id}/activate` → `"active": true`, and unexpired sessions work again. Repeating either changes nothing. Never yourself, never the root user (`403`) | `users:deactivate` / `users:activate` |
 | Delete a user | `DELETE /api/users/{id}` (users they created stay, without a creator) | `users:delete` (never a root user, not even by itself, and never your own account: `403`) |
 | Roles | `GET /api/roles`, `GET /api/roles/{id}`, `GET /api/roles/name/{name}` | `roles:read` |
 | Change roles | `POST /api/roles`, `PUT /api/roles/{id}` `{ "name", "description" }`, `DELETE /api/roles/{id}` (also removes it from its users) | `roles:create` / `roles:update` / `roles:delete`, never on a role you hold |
@@ -412,7 +417,7 @@ The IAM manages only its own permissions; other applications decide their own au
 | `200` / `201` / `204` | OK / created / done without a body |
 | `400` | Already exists (tenant, user, role or client name in your tenant, an email taken in your tenant or by any root user), deleting or suspending the management console, suspending the platform tenant, a regular user or an application client in the platform tenant, refreshing through a client without refresh tokens, an unknown token claim, roles or permissions for a regular user, bad password policy, wrong old password, a missing or wrong current password when changing your own email, invalid or expired OTP, negative page or page size below 1, missing or malformed request body |
 | `401` | Not logged in: missing, malformed, expired or revoked access token ("A valid access token is required"), an access token of a locked or deactivated account or of a suspended tenant or client (the message says which: "Your account is locked until <time>", "Your account is deactivated", "Tenant is suspended", "Client is suspended"; at login these are `403`), wrong username/password, an unknown `client_id`, or a refresh token that is unknown, expired, already used, logged out or of another client |
-| `403` | A browser request from an origin not listed in `IAM_CORS_ALLOWEDORIGINS`; a regular user calling `GET` or `PATCH /api/me`; changing your own profile or the root user's with `PATCH /api/users/{id}`, or another user's email without `users:reset-password`; logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; resetting your own or the root user's password; a regular user logging in through the management console; login, refresh or forgot-password for a suspended tenant ("Tenant is suspended") or through a suspended client ("Client is suspended"); or account locked, deactivated or expired |
+| `403` | A browser request from an origin not listed in `IAM_CORS_ALLOWEDORIGINS`; a regular user calling `GET` or `PATCH /api/me`; changing your own profile or the root user's with `PATCH /api/users/{id}`, or another user's email without `users:reset-password`; logged in but missing the required permission (including `users:create-management` for a management user); changing your own roles or permissions, or a role you hold; deactivating or activating yourself or the root user; resetting your own or the root user's password; a regular user logging in through the management console; login, refresh or forgot-password for a suspended tenant ("Tenant is suspended") or through a suspended client ("Client is suspended"); or account locked, deactivated or expired |
 | `404` | Not found, including an unknown tenant in `X-Tenant-Id`, users and roles of other tenants, and unknown permissions (forgot-password answers `200` for an unknown username/email too) |
 | `405` | The HTTP method isn't supported (for example creating a permission) |
 | `422` | Request body failed validation (the `errors` list shows which field), including token lifetimes out of range |

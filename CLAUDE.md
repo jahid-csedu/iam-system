@@ -211,7 +211,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `PlatformTenantService` (`/api/platform/tenants`, PLATFORM keys only)
 - `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
-  (direct permissions), `UserService` (paged list, find, delete), `UserProfileService` (name and email: another user's,
+  (direct permissions), `UserService` (paged list, find, delete), `UserStatusService` (deactivate, activate), `UserProfileService` (name and email: another user's,
   or your own through `PATCH /api/me`), `MeService` (`GET /api/me`, `MeController`);
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
   `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles/permissions, only
@@ -283,6 +283,11 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   transaction that commits on `InvalidTokenException` (401), so that revocation sticks.
 - Session revocation: logout (that session), own password change (all but the current one), any password reset (all),
   user/client deletion (DB cascade; deleting a user also deletes their pending reset OTPs). Deactivation and lock don't revoke; the filter and refresh refuse such users.
+- `PUT /api/users/{id}/deactivate|activate` (`users:deactivate` / `users:activate`, `UserStatusService`): idempotent,
+  audited (`USER_DEACTIVATE` / `USER_ACTIVATE`), never yourself or the root (`UserAccessPolicy.checkCanChangeStatus`, 403);
+  sessions are kept, so activation restores unexpired ones. `UserDto.active` shows the state.
+- New catalog keys reach existing tenants' roles only when an admin adds them (template changes never reach existing
+  tenants; a copied role keeps no link to its template). The root holds every TENANT key at once.
 - `POST /api/tenants/signup` (public) creates a tenant + its root user + predefined roles + management console (its `client_id` is in the response). `POST /api/users` (`users:create`) creates a user in the
   caller's tenant. Anonymous calls to protected endpoints get 401; missing permissions get 403.
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
@@ -592,3 +597,8 @@ Design debt
   size (S/M/L) and the seam it builds on (moved from the plan's section 5). Plan step 16 became roadmap item 3;
   maker-checker (item 9) and the OAuth2/OIDC provider (item 5) joined from CLAUDE.md; SSO and identity federation
   merged (item 12). New rule: the plan takes no new steps, new ideas go to the roadmap.
+- 2026-10-27: Step 12a (deactivate / activate users). Flyway `V19__user_status.sql`: `users:deactivate`, `users:activate`
+  (ADMIN and USER_MANAGER templates). `PUT /api/users/{id}/deactivate|activate` (`UserStatusService`, idempotent, audited);
+  never yourself or the root; `UserDto.active`. Decisions: own keys, not `users:update` (offboarding is more than an
+  edit); sessions kept (as in 9b); existing tenants' roles don't get new keys automatically (option A, as in 7b).
+  Next: step 12b (unlock).

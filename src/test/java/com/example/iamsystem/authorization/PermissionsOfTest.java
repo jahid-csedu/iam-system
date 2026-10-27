@@ -35,7 +35,9 @@ import java.util.stream.Collectors;
 import static com.example.iamsystem.permission.PermissionKey.CLIENTS_READ;
 import static com.example.iamsystem.permission.PermissionKey.PERMISSIONS_READ;
 import static com.example.iamsystem.permission.PermissionKey.ROLES_READ;
+import static com.example.iamsystem.permission.PermissionKey.USERS_ACTIVATE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_CREATE;
+import static com.example.iamsystem.permission.PermissionKey.USERS_DEACTIVATE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_DELETE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_READ;
 import static com.example.iamsystem.permission.PermissionKey.USERS_UPDATE;
@@ -96,7 +98,7 @@ class PermissionsOfTest {
         grantDirectly(alice, "tenants:read");
 
         AuthenticatedActor aliceActor = actor(alice, acmeId);
-        assertEquals(EnumSet.of(USERS_READ, USERS_CREATE, USERS_UPDATE, USERS_DELETE, CLIENTS_READ),
+        assertEquals(EnumSet.of(USERS_READ, USERS_CREATE, USERS_UPDATE, USERS_DELETE, USERS_DEACTIVATE, USERS_ACTIVATE, CLIENTS_READ),
                 authorizationService.permissionsOf(aliceActor));
         assertMatchesTheSingleChecks(aliceActor);
         assertMatchesTheSingleChecks(actor(userRepository.findByUsernameAndTenantId("acme-root", acmeId).orElseThrow(), acmeId));
