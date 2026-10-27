@@ -211,7 +211,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   `PlatformTenantService` (`/api/platform/tenants`, PLATFORM keys only)
 - `tenant/`: `Tenant` + `TenantStatus` + `TenantType` (`STANDARD`/`PLATFORM`), `TenantSignupService` (tenant + root user + predefined roles in one transaction), `TenantController`
 - `user/`: one service per responsibility: `UserCreationService`, `UserPasswordService`, `UserRoleService`, `UserPermissionService`
-  (direct permissions), `UserService` (paged list, find, delete), `UserStatusService` (deactivate, activate), `UserProfileService` (name and email: another user's,
+  (direct permissions), `UserService` (paged list, find, delete), `UserStatusService` (deactivate, activate, unlock), `UserProfileService` (name and email: another user's,
   or your own through `PATCH /api/me`), `MeService` (`GET /api/me`, `MeController`);
   `UserFactory` builds every new user (validation, password encoding, expiry) for signup and creation.
   `UserAccessPolicy` decides what an actor may do to another user of the same tenant (no own roles/permissions, only
@@ -283,8 +283,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   transaction that commits on `InvalidTokenException` (401), so that revocation sticks.
 - Session revocation: logout (that session), own password change (all but the current one), any password reset (all),
   user/client deletion (DB cascade; deleting a user also deletes their pending reset OTPs). Deactivation and lock don't revoke; the filter and refresh refuse such users.
-- `PUT /api/users/{id}/deactivate|activate` (`users:deactivate` / `users:activate`, `UserStatusService`): idempotent,
-  audited (`USER_DEACTIVATE` / `USER_ACTIVATE`), never yourself or the root (`UserAccessPolicy.checkCanChangeStatus`, 403);
+- `PUT /api/users/{id}/deactivate|activate|unlock` (`users:deactivate` / `users:activate` / `users:unlock`,
+  `UserStatusService`): idempotent, audited (`USER_DEACTIVATE` / `USER_ACTIVATE` / `USER_UNLOCK`), never yourself or the
+  root (`UserAccessPolicy.checkCanChangeStatus`, 403);
   sessions are kept, so activation restores unexpired ones. `UserDto.active` shows the state.
 - New catalog keys reach existing tenants' roles only when an admin adds them (template changes never reach existing
   tenants; a copied role keeps no link to its template). The root holds every TENANT key at once.
@@ -296,7 +297,8 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   account either (403 "You can't delete your own account"); self-service deletion is roadmap item 3.
 - Lockout: `FailedPasswordCounter` counts every wrong password (login, old password of a password change, current
   password of an email change) in one atomic update in its own transaction; 5 lock the account for 15 minutes (the filter
-  then refuses its tokens); a correct one clears the count. A missing password is no guess.
+  then refuses its tokens); a correct one clears the count. A missing password is no guess. `PUT /api/users/{id}/unlock`
+  (`users:unlock`, `FailedPasswordCounter.unlock`) ends a lock at once; `UserDto.lockedUntil` shows a running lock.
 - `PATCH /api/users/{id}` (`users:update`) changes another user's `fullName` and `email` (left out = unchanged, `""` removes
   the name, an email can't be removed). A new email also needs `users:reset-password` (it receives the password resets),
   must be free in the tenant and not any root's (`UserValidator.validateEmailAvailable`; a root's email must be unused
@@ -602,3 +604,8 @@ Design debt
   never yourself or the root; `UserDto.active`. Decisions: own keys, not `users:update` (offboarding is more than an
   edit); sessions kept (as in 9b); existing tenants' roles don't get new keys automatically (option A, as in 7b).
   Next: step 12b (unlock).
+- 2026-10-27: Step 12b (unlock). Flyway `V20__user_unlock.sql`: `users:unlock` (ADMIN and USER_MANAGER templates).
+  `PUT /api/users/{id}/unlock` (`UserStatusService.unlockUser`, audited `USER_UNLOCK`) clears the lock and the count
+  through `FailedPasswordCounter.unlock` (shares the clearing with `recordSuccess`); never yourself or the root (a locked
+  root waits). `UserDto.lockedUntil` = end of a running lock, else left out. Step 12 complete.
+  Next: step 13 (asynchronous templated email).

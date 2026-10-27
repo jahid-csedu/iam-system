@@ -81,7 +81,8 @@ This file lets any new session pick up the work without the conversation that pr
 | Own delete | `DELETE /api/users/{id}` refuses your own account (403); self-service account deletion is roadmap item 3 | `8a1947e` |
 | Profiles 1 | `local` / `dev` / `stage` / `prod` profile files; `EnvironmentProfileCheck` (exactly one profile; required settings outside `local`) | `ba2e721` |
 | Profiles 2 | Every profile, `local` included, requires every setting: JWT key (PEM inline or `private-key-location`; a temporary key only in the test suite), platform root until it exists, DB, issuer, mail, CORS | `85a3a38` |
-| 12a | Deactivate / activate users (`V19`: `users:deactivate`, `users:activate` in ADMIN and USER_MANAGER; `UserStatusService`; never yourself or the root; sessions kept; `UserDto.active`) | step 12a commit |
+| 12a | Deactivate / activate users (`V19`: `users:deactivate`, `users:activate` in ADMIN and USER_MANAGER; `UserStatusService`; never yourself or the root; sessions kept; `UserDto.active`) | `2fffe8b` |
+| 12b | Unlock users (`V20`: `users:unlock`; `FailedPasswordCounter.unlock`; `UserDto.lockedUntil`); step 12 complete | step 12b commit |
 
 ---
 
@@ -288,10 +289,10 @@ refresh, and its sessions are refused by the filter and introspection.
 
 ---
 
-### Step 12: Unlock, deactivate and activate users (planned, owner asked 2026-10-25)
+### Step 12: Unlock, deactivate and activate users (DONE, kept for reference)
 Decided 2026-10-27: own keys (`users:deactivate`, `users:activate`, `users:unlock`) in ADMIN and USER_MANAGER; existing
 tenants' roles get them only when an admin adds them; deactivation keeps sessions (as in 9b); `UserDto` shows `active`
-and `lockedUntil`. Two commits: 12a deactivate / activate (done), 12b unlock.
+and `lockedUntil`. Two commits: 12a deactivate / activate, 12b unlock.
 
 Today a locked user (5 wrong passwords) waits 15 minutes, and nobody can deactivate or reactivate a user: `active` is set at
 creation and no API changes it.

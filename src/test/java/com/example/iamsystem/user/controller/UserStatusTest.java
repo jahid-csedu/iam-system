@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * {@code PUT /api/users/{id}/deactivate|activate} with real logins, tokens and filter against MySQL. Mail is mocked.
+ * {@code PUT /api/users/{id}/deactivate|activate|unlock} with real logins, tokens and filter against MySQL. Mail is mocked.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -97,7 +97,7 @@ class UserStatusTest {
     }
 
     @Test
-    @DisplayName("USER_MANAGER may deactivate and activate users, VIEWER may not")
+    @DisplayName("USER_MANAGER may deactivate, activate and unlock users, VIEWER may not")
     void permissions_comeFromTheRoles() throws Exception {
         long bobId = createUser("bob", null);
         String manager = managementUserWithRole("manager", "USER_MANAGER");
@@ -107,21 +107,45 @@ class UserStatusTest {
         send(put("/api/users/{id}/deactivate", bobId), manager).andExpect(status().isOk());
         send(put("/api/users/{id}/activate", bobId), viewer).andExpect(status().isForbidden());
         send(put("/api/users/{id}/activate", bobId), manager).andExpect(status().isOk());
+        send(put("/api/users/{id}/unlock", bobId), viewer).andExpect(status().isForbidden());
+        send(put("/api/users/{id}/unlock", bobId), manager).andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("Nobody deactivates themselves or the root user, and users of other tenants are not found")
+    @DisplayName("Unlocking ends a lockout at once: login and the user's token work again, and the user shows no lock")
+    void unlock_endsTheLockout() throws Exception {
+        String viewer = managementUserWithRole("viewer", "VIEWER");
+        long viewerId = userId("viewer");
+        for (int i = 0; i < 5; i++) {
+            send(post("/api/auth/authenticate"), null, new UserLoginDto(acmeConsole, "viewer", "Wrong-pass1!"));
+        }
+        login(acmeConsole, "viewer").andExpect(status().isForbidden());
+        send(get("/api/users/{id}", viewerId), acmeRoot).andExpect(jsonPath("$.lockedUntil").isNotEmpty());
+
+        send(put("/api/users/{id}/unlock", viewerId), acmeRoot)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lockedUntil").doesNotExist());
+        send(get("/api/users"), viewer).andExpect(status().isOk());
+        login(acmeConsole, "viewer").andExpect(status().isOk());
+        send(put("/api/users/{id}/unlock", viewerId), acmeRoot).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Nobody deactivates or unlocks themselves or the root user, and users of other tenants are not found")
     void protectedTargets_areRefused() throws Exception {
         String admin = managementUserWithRole("admin", "ADMIN");
         long globexRootId = signup("Globex", "globex-root", "root@globex.com").get("rootUser").get("id").asLong();
 
         send(put("/api/users/{id}/deactivate", userId("admin")), admin)
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("You can't deactivate or activate your own account"));
+                .andExpect(jsonPath("$.message").value("You can't deactivate, activate or unlock your own account"));
         send(put("/api/users/{id}/deactivate", userId("acme-root")), admin)
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("The root user can't be deactivated or activated"));
+                .andExpect(jsonPath("$.message").value("The root user can't be deactivated, activated or unlocked"));
+        send(put("/api/users/{id}/unlock", userId("admin")), admin).andExpect(status().isForbidden());
+        send(put("/api/users/{id}/unlock", userId("acme-root")), admin).andExpect(status().isForbidden());
         send(put("/api/users/{id}/deactivate", globexRootId), acmeRoot).andExpect(status().isNotFound());
+        send(put("/api/users/{id}/unlock", globexRootId), acmeRoot).andExpect(status().isNotFound());
     }
 
     private long userId(String username) throws Exception {

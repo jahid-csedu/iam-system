@@ -81,6 +81,34 @@ class FailedPasswordCounterTest {
     }
 
     @Test
+    @DisplayName("Unlocking ends a running lock and forgets the count, in the database and on the entity")
+    void unlock_endsARunningLock() {
+        User user = new User();
+        user.setId(7L);
+        user.setFailedLoginAttempts(5);
+        user.setUserLocked(true);
+        user.setAccountLockedUntil(Instant.now().plusSeconds(600));
+
+        counter.unlock(user);
+
+        verify(userRepository).clearFailedLogins(7L);
+        assertEquals(0, user.getFailedLoginAttempts());
+        assertFalse(user.isUserLocked());
+        assertNull(user.getAccountLockedUntil());
+    }
+
+    @Test
+    @DisplayName("Unlocking an unlocked account with nothing counted writes nothing")
+    void unlock_withNothingToClear_writesNothing() {
+        User user = new User();
+        user.setId(7L);
+
+        counter.unlock(user);
+
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
     @DisplayName("A success with nothing counted writes nothing")
     void recordSuccess_withNothingCounted_writesNothing() {
         User user = new User();

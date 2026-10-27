@@ -10,6 +10,7 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -30,6 +31,7 @@ public interface UserMapper {
     @Mapping(target = "roleIds", source = "roles", qualifiedByName = "roleIds")
     @Mapping(target = "permissionIds", source = "permissions", qualifiedByName = "permissionIds")
     @Mapping(target = "createdBy", source = "createdBy.username")
+    @Mapping(target = "lockedUntil", source = "user", qualifiedByName = "lockedUntil")
     UserDto toDto(User user);
 
     List<UserDto> toDtoList(List<User> users);
@@ -39,6 +41,16 @@ public interface UserMapper {
         return roles.stream()
                 .map(Role::getId)
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * When the user's login lockout ends, while it lasts; null when the user isn't locked (an expired lock is cleared by
+     * the next correct password).
+     */
+    @Named("lockedUntil")
+    default Instant lockedUntil(User user) {
+        Instant lockedUntil = user.getAccountLockedUntil();
+        return user.isUserLocked() && lockedUntil != null && lockedUntil.isAfter(Instant.now()) ? lockedUntil : null;
     }
 
     @Named("permissionIds")

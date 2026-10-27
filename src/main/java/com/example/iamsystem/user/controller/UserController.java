@@ -38,6 +38,7 @@ import static com.example.iamsystem.permission.PermissionKey.USERS_DEACTIVATE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_DELETE;
 import static com.example.iamsystem.permission.PermissionKey.USERS_READ;
 import static com.example.iamsystem.permission.PermissionKey.USERS_RESET_PASSWORD;
+import static com.example.iamsystem.permission.PermissionKey.USERS_UNLOCK;
 import static com.example.iamsystem.permission.PermissionKey.USERS_UPDATE;
 
 @RestController
@@ -158,6 +159,13 @@ public class UserController {
     @Operation(summary = "Reactivate a deactivated user; their unexpired sessions work again (Requires: users:activate)")
     public ResponseEntity<UserDto> activateUser(@PathVariable Long id) {
         return ResponseEntity.ok(userStatusService.activateUser(id));
+    }
+
+    @PutMapping("/{id}/unlock")
+    @RequirePermission(USERS_UNLOCK)
+    @Operation(summary = "End another user's login lockout at once (wrong passwords counted so far are forgotten). Never yourself, never the root user (Requires: users:unlock)")
+    public ResponseEntity<UserDto> unlockUser(@PathVariable Long id) {
+        return ResponseEntity.ok(userStatusService.unlockUser(id));
     }
 
     @DeleteMapping("/{id}")

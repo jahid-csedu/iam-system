@@ -46,12 +46,29 @@ public class FailedPasswordCounter {
      */
     @Transactional
     public void recordSuccess(User user) {
-        boolean counted = user.getFailedLoginAttempts() != null && user.getFailedLoginAttempts() > 0;
-        if (counted || user.isUserLocked()) {
-            userRepository.clearFailedLogins(user.getId());
-            user.setFailedLoginAttempts(0);
-            user.setUserLocked(false);
-            user.setAccountLockedUntil(null);
+        clear(user);
+    }
+
+    /**
+     * Another user ends the lockout at once instead of waiting for it to expire: the count and the lock are cleared like
+     * after a correct password, on the given entity too. Unlocking an unlocked account changes nothing.
+     */
+    @Transactional
+    public void unlock(User user) {
+        if (clear(user)) {
+            log.info("Account of user {} unlocked", user.getId());
         }
+    }
+
+    private boolean clear(User user) {
+        boolean counted = user.getFailedLoginAttempts() != null && user.getFailedLoginAttempts() > 0;
+        if (!counted && !user.isUserLocked()) {
+            return false;
+        }
+        userRepository.clearFailedLogins(user.getId());
+        user.setFailedLoginAttempts(0);
+        user.setUserLocked(false);
+        user.setAccountLockedUntil(null);
+        return true;
     }
 }

@@ -2,6 +2,7 @@ package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.common.exception.NoAccessException;
+import com.example.iamsystem.security.service.FailedPasswordCounter;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.user.entity.User;
 import com.example.iamsystem.user.mapper.UserMapper;
@@ -14,11 +15,15 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
+
 import static com.example.iamsystem.user.service.UserTestData.TENANT;
 import static com.example.iamsystem.user.service.UserTestData.actor;
 import static com.example.iamsystem.user.service.UserTestData.rootUser;
 import static com.example.iamsystem.user.service.UserTestData.user;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
@@ -36,6 +41,8 @@ class UserStatusServiceTest {
     private UserAccessPolicy accessPolicy;
     @Mock
     private CurrentUserProvider currentUserProvider;
+    @Mock
+    private FailedPasswordCounter failedPasswordCounter;
 
     private UserStatusService service;
     private User root;
@@ -43,7 +50,8 @@ class UserStatusServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new UserStatusService(userRepository, accessPolicy, currentUserProvider, Mappers.getMapper(UserMapper.class));
+        service = new UserStatusService(userRepository, accessPolicy, currentUserProvider, Mappers.getMapper(UserMapper.class),
+                failedPasswordCounter);
         root = rootUser(1, "root");
         member = user(2, "member");
         member.setActive(true);
@@ -82,6 +90,31 @@ class UserStatusServiceTest {
         assertThrows(NoAccessException.class, () -> service.deactivateUser(1L));
 
         assertTrue(root.isActive());
+    }
+
+    @Test
+    @DisplayName("Unlocking hands the user to the lockout owner, checked by the policy")
+    void unlockUser_clearsTheLockThroughTheCounter() {
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(member);
+
+        service.unlockUser(2L);
+
+        verify(accessPolicy).checkCanChangeStatus(actor(root), member);
+        verify(failedPasswordCounter).unlock(member);
+    }
+
+    @Test
+    @DisplayName("The user shows when a running lock ends, and no time for an expired lock")
+    void lockedUntil_onlyWhileTheLockRuns() {
+        Instant later = Instant.now().plusSeconds(600);
+        member.setUserLocked(true);
+        member.setAccountLockedUntil(later);
+        when(userRepository.getRequiredByIdAndTenantId(2L, TENANT_ID)).thenReturn(member);
+
+        assertEquals(later, service.activateUser(2L).getLockedUntil());
+
+        member.setAccountLockedUntil(Instant.now().minusSeconds(1));
+        assertNull(service.activateUser(2L).getLockedUntil());
     }
 
     @Test

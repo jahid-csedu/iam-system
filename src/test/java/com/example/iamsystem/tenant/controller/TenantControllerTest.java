@@ -166,7 +166,8 @@ class TenantControllerTest {
 
         assertEquals(PREDEFINED_ROLES, roles.keySet());
         assertEquals(allTenantKeys(), roles.get("ADMIN"));
-        assertEquals(Set.of("users:read", "users:create", "users:update", "users:delete", "users:deactivate", "users:activate"),
+        assertEquals(Set.of("users:read", "users:create", "users:update", "users:delete", "users:deactivate", "users:activate",
+                "users:unlock"),
                 roles.get("USER_MANAGER"));
         assertEquals(Set.of("users:read", "roles:read", "clients:read", "permissions:read"), roles.get("VIEWER"));
     }

@@ -100,8 +100,8 @@ public class UserAccessPolicy {
     }
 
     /**
-     * Deactivating and activating is always for someone else, and never for the root user: a tenant's root stays usable,
-     * so the tenant can't be locked out of its own management.
+     * Deactivating, activating and unlocking is always for someone else, and never for the root user: a tenant's root
+     * stays usable, so the tenant can't be locked out of its own management; a locked root waits for its lock to end.
      */
     public void checkCanChangeStatus(AuthenticatedActor actor, User target) {
         if (actor.isUser(target.getId())) {
