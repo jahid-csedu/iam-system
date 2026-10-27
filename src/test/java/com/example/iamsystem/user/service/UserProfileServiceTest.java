@@ -1,9 +1,9 @@
 package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.authorization.AuthorizationService;
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.common.exception.InvalidPasswordException;
 import com.example.iamsystem.common.exception.NoAccessException;
-import com.example.iamsystem.common.exception.UserAlreadyExistsException;
 import com.example.iamsystem.emailverification.service.EmailVerificationService;
 import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
 import com.example.iamsystem.security.service.FailedPasswordCounter;
@@ -131,10 +131,10 @@ class UserProfileServiceTest {
     @Test
     @DisplayName("A taken email is refused and the pending OTP is kept")
     void updateUser_takenEmail_isRefused() {
-        doThrow(new UserAlreadyExistsException("Email not available"))
+        doThrow(new AlreadyExistsException("Email not available"))
                 .when(userValidator).validateEmailAvailable("alice@example.com", TENANT.getId());
 
-        assertThrows(UserAlreadyExistsException.class, () -> service.updateUser(2L, new UserUpdateDto(null, "alice@example.com")));
+        assertThrows(AlreadyExistsException.class, () -> service.updateUser(2L, new UserUpdateDto(null, "alice@example.com")));
         verifyNoInteractions(resetOtpIssuer);
         verify(userRepository, never()).save(any());
     }

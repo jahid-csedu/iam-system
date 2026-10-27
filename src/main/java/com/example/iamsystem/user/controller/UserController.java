@@ -17,6 +17,7 @@ import com.example.iamsystem.user.service.UserStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
@@ -114,8 +115,8 @@ public class UserController {
     @GetMapping
     @RequirePermission(USERS_READ)
     @Operation(summary = "List your tenant's users, one page at a time, ordered by id (Requires: users:read)")
-    public ResponseEntity<PagedModel<UserDto>> getUsers(@RequestParam(defaultValue = "0") int page,
-                                                        @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) int size) {
+    public ResponseEntity<PagedModel<UserDto>> getUsers(@RequestParam(defaultValue = "0") @Min(0) int page,
+                                                        @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) @Min(1) int size) {
         return ResponseEntity.ok(new PagedModel<>(userService.findUsers(page, size)));
     }
 

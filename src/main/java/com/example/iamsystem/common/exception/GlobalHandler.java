@@ -16,32 +16,34 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import static com.example.iamsystem.common.exception.ErrorMessage.ACCOUNT_DISABLED;
+import static com.example.iamsystem.common.exception.ErrorMessage.PASSWORD_EXPIRED;
 import static com.example.iamsystem.common.exception.ErrorMessage.UNREADABLE_REQUEST_BODY;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
-import static org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
-import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 
+/**
+ * Turns every exception that leaves a controller (or the JWT filter) into an error answer. Our own failures are
+ * {@link IamException}s and carry their status; the rest are Spring's (validation, unreadable bodies, login and
+ * authorization failures). Anything else is a bug: logged, and answered 500 without its message.
+ */
 @RestControllerAdvice
 @Slf4j
 @Hidden
 public class GlobalHandler {
-    @ExceptionHandler(AlreadyExistsException.class)
-    @ResponseStatus(BAD_REQUEST)
-    public ResponseEntity<ExceptionResponse> handleAlreadyExistsException(AlreadyExistsException exception) {
-        return buildExceptionResponse(exception, BAD_REQUEST);
+
+    @ExceptionHandler(IamException.class)
+    public ResponseEntity<ExceptionResponse> handleIamException(IamException exception) {
+        return answer(exception.getStatus(), exception.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(UNPROCESSABLE_ENTITY)
-    public ResponseEntity<ExceptionResponse> validationExceptionHandler(MethodArgumentNotValidException exception) {
+    public ResponseEntity<ExceptionResponse> handleInvalidArgument(MethodArgumentNotValidException exception) {
         ExceptionResponse response = new ExceptionResponse(UNPROCESSABLE_ENTITY.value(), "Validation Fails");
         for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
             response.addValidationError(fieldError.getField(), fieldError.getDefaultMessage());
@@ -53,141 +55,64 @@ public class GlobalHandler {
      * A missing or malformed request body.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    @ResponseStatus(BAD_REQUEST)
-    public ResponseEntity<ExceptionResponse> unreadableBodyHandler(HttpMessageNotReadableException exception) {
-        return ResponseEntity.badRequest().body(new ExceptionResponse(BAD_REQUEST.value(), UNREADABLE_REQUEST_BODY));
-    }
-
-    @ExceptionHandler(UserInputNotValidException.class)
-    @ResponseStatus(BAD_REQUEST)
-    public ResponseEntity<ExceptionResponse> invalidUserInputHandler(UserInputNotValidException exception) {
-        return buildExceptionResponse(exception, BAD_REQUEST);
-    }
-
-    @ExceptionHandler(DataNotFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ResponseEntity<ExceptionResponse> dataNotFoundExceptionHandler(DataNotFoundException exception) {
-        return buildExceptionResponse(exception, HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(InvalidClientException.class)
-    @ResponseStatus(UNAUTHORIZED)
-    public ResponseEntity<ExceptionResponse> invalidClientHandler(InvalidClientException exception) {
-        return buildExceptionResponse(exception, UNAUTHORIZED);
-    }
-
-    @ExceptionHandler(NoAccessException.class)
-    @ResponseStatus(HttpStatus.FORBIDDEN)
-    public ResponseEntity<ExceptionResponse> noAccessExceptionHandler(NoAccessException exception) {
-        return buildExceptionResponse(exception, HttpStatus.FORBIDDEN);
-    }
-
-    @ExceptionHandler(InvalidPasswordException.class)
-    @ResponseStatus(BAD_REQUEST)
-    public ResponseEntity<ExceptionResponse> invalidPasswordExceptionHandler(InvalidPasswordException exception) {
-        return buildExceptionResponse(exception, BAD_REQUEST);
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    @ResponseStatus(BAD_REQUEST)
-    public ResponseEntity<ExceptionResponse> illegalArgumentExceptionHandler(IllegalArgumentException exception) {
-        return buildExceptionResponse(exception, BAD_REQUEST);
+    public ResponseEntity<ExceptionResponse> handleUnreadableBody(HttpMessageNotReadableException exception) {
+        return answer(BAD_REQUEST, UNREADABLE_REQUEST_BODY);
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
-    @ResponseStatus(HttpStatus.FORBIDDEN)
-    public ResponseEntity<ExceptionResponse> authorizationDeniedExceptionHandler(AuthorizationDeniedException exception) {
-        return buildExceptionResponse(exception, HttpStatus.FORBIDDEN);
+    public ResponseEntity<ExceptionResponse> handleAuthorizationDenied(AuthorizationDeniedException exception) {
+        return answer(FORBIDDEN, exception.getMessage());
     }
 
     @ExceptionHandler(BadCredentialsException.class)
-    @ResponseStatus(UNAUTHORIZED)
-    public ResponseEntity<ExceptionResponse> handleBadCredentialsException(BadCredentialsException exception) {
+    public ResponseEntity<ExceptionResponse> handleBadCredentials(BadCredentialsException exception) {
         log.warn("Authentication failed: {}", exception.getMessage());
-        return buildExceptionResponse(exception, UNAUTHORIZED);
+        return answer(UNAUTHORIZED, exception.getMessage());
     }
 
     @ExceptionHandler(LockedException.class)
-    @ResponseStatus(FORBIDDEN)
-    public ResponseEntity<ExceptionResponse> handleLockedException(LockedException exception) {
+    public ResponseEntity<ExceptionResponse> handleLocked(LockedException exception) {
         log.warn("Account locked: {}", exception.getMessage());
-        return buildExceptionResponse(exception, FORBIDDEN);
+        return answer(FORBIDDEN, exception.getMessage());
     }
 
     @ExceptionHandler(DisabledException.class)
-    @ResponseStatus(FORBIDDEN)
-    public ResponseEntity<ExceptionResponse> handleDisabledException(DisabledException exception) {
-        return ResponseEntity.status(FORBIDDEN).body(new ExceptionResponse(FORBIDDEN.value(), ACCOUNT_DISABLED));
+    public ResponseEntity<ExceptionResponse> handleDisabled(DisabledException exception) {
+        return answer(FORBIDDEN, ACCOUNT_DISABLED);
     }
 
     @ExceptionHandler(AccountExpiredException.class)
-    @ResponseStatus(FORBIDDEN)
-    public ResponseEntity<ExceptionResponse> handleAccountExpiredException(AccountExpiredException exception) {
+    public ResponseEntity<ExceptionResponse> handleAccountExpired(AccountExpiredException exception) {
         log.warn("Password is expired: {}", exception.getMessage());
-        return buildExceptionResponse(new AccountExpiredException("Password is expired. Please change your password", exception.getCause()), FORBIDDEN);
-    }
-
-    @ExceptionHandler(InternalAuthenticationServiceException.class)
-    @ResponseStatus(INTERNAL_SERVER_ERROR)
-    public ResponseEntity<ExceptionResponse> handleInternalAuthenticationServiceException(InternalAuthenticationServiceException exception) {
-        Throwable cause = exception.getCause();
-        switch (cause) {
-            case LockedException lockedException -> {
-                log.warn("Account locked (wrapped): {}", cause.getMessage());
-                return buildExceptionResponse(lockedException, FORBIDDEN);
-            }
-            case BadCredentialsException badCredentialsException -> {
-                log.warn("Authentication failed (wrapped): {}", cause.getMessage());
-                return buildExceptionResponse(badCredentialsException, UNAUTHORIZED);
-            }
-            default -> {
-                log.error("Internal authentication service error occurred", exception);
-                return buildExceptionResponse(exception, INTERNAL_SERVER_ERROR);
-            }
-        }
-    }
-
-    @ExceptionHandler(InvalidTokenException.class)
-    @ResponseStatus(UNAUTHORIZED)
-    public ResponseEntity<ExceptionResponse> handleInvalidTokenException(InvalidTokenException exception) {
-        return buildExceptionResponse(exception, UNAUTHORIZED);
+        return answer(FORBIDDEN, PASSWORD_EXPIRED);
     }
 
     /**
-     * Spring MVC's own errors (unsupported method or media type, unreadable body, unknown path, ...) keep their status.
+     * The authentication provider wraps some failures; the wrapped lock and bad-credentials failures answer as usual.
+     */
+    @ExceptionHandler(InternalAuthenticationServiceException.class)
+    public ResponseEntity<ExceptionResponse> handleInternalAuthenticationService(InternalAuthenticationServiceException exception) {
+        return switch (exception.getCause()) {
+            case LockedException locked -> handleLocked(locked);
+            case BadCredentialsException badCredentials -> handleBadCredentials(badCredentials);
+            case null, default -> handleUnexpected(exception);
+        };
+    }
+
+    /**
+     * Spring MVC's own errors (unsupported method or media type, unknown path, ...) keep their status.
      */
     @ExceptionHandler(Exception.class)
-    @ResponseStatus(INTERNAL_SERVER_ERROR)
-    public ResponseEntity<ExceptionResponse> exceptionHandler(Exception exception) {
+    public ResponseEntity<ExceptionResponse> handleUnexpected(Exception exception) {
         if (exception instanceof ErrorResponse errorResponse) {
             HttpStatusCode status = errorResponse.getStatusCode();
             return ResponseEntity.status(status).body(new ExceptionResponse(status.value(), exception.getMessage()));
         }
         log.error("Unknown error occurred", exception);
-        ExceptionResponse response = new ExceptionResponse(INTERNAL_SERVER_ERROR.value(), "Unknown error occurred");
-        return ResponseEntity.status(INTERNAL_SERVER_ERROR).body(response);
+        return answer(INTERNAL_SERVER_ERROR, "Unknown error occurred");
     }
 
-    @ExceptionHandler(TooManyRequestsException.class)
-    @ResponseStatus(TOO_MANY_REQUESTS)
-    public ResponseEntity<ExceptionResponse> handleTooManyRequestsException(TooManyRequestsException exception) {
-        return buildExceptionResponse(exception, TOO_MANY_REQUESTS);
-    }
-
-    @ExceptionHandler(EmailNotSentException.class)
-    @ResponseStatus(SERVICE_UNAVAILABLE)
-    public ResponseEntity<ExceptionResponse> handleEmailNotSentException(EmailNotSentException exception) {
-        return buildExceptionResponse(exception, SERVICE_UNAVAILABLE);
-    }
-
-    @ExceptionHandler(InvalidOtpException.class)
-    @ResponseStatus(BAD_REQUEST)
-    public ResponseEntity<ExceptionResponse> handleInvalidOtpException(InvalidOtpException exception) {
-        return buildExceptionResponse(exception, BAD_REQUEST);
-    }
-
-    private ResponseEntity<ExceptionResponse> buildExceptionResponse(Exception e, HttpStatus httpStatus) {
-        ExceptionResponse response = new ExceptionResponse(httpStatus.value(), e.getMessage());
-        return ResponseEntity.status(httpStatus).body(response);
+    private ResponseEntity<ExceptionResponse> answer(HttpStatus status, String message) {
+        return ResponseEntity.status(status).body(new ExceptionResponse(status.value(), message));
     }
 }

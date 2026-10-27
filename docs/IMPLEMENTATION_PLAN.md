@@ -88,6 +88,7 @@ This file lets any new session pick up the work without the conversation that pr
 | 13c-1a | Shared one-time codes (`V21`: `otp_requests` with a purpose; `otp/`: `OneTimeCodes`, `OtpRequestLimiter`, `InvalidOtpException`); no behaviour change | `6033025` |
 | 13c-1b | Email verification (`V22`: `users.email_verified`, `email_verification_codes`; `POST /api/users/email-verification` + `/confirm`; `emailVerified` in `UserDto` and `/api/me`) | `24cdd5c` |
 | 13c-2 | Forgot-password only to verified addresses; the admin reset also to unverified ones; a completed reset verifies; `email_verified` claim; step 13 complete | `b2ab63a` |
+| Errors a | `IamException` with a status per class and one handler; one `AlreadyExistsException`; no `IllegalArgumentException` → 400 catch-all (`@Min` paging checks instead) | errors-a commit |
 
 ---
 
@@ -283,7 +284,7 @@ refresh, and its sessions are refused by the filter and introspection.
 | `/token/validate` ignores revocation | Done in step 9c (replaced by introspection) |
 | Password reset: emails a plaintext password; `java.util.Random` OTP, stored in plain text; no attempt limit; reveals whether an email exists | Own step after 8 (reset must be tenant/client-aware). Proposed: secure random OTP, hashed, max attempts, uniform response, user sets the new password |
 | `mail.debug=true` (done: security fix 1, `MailConfig` removed); DB credentials in `application.properties`; no JWT key configured only warns | Done: profiles (no credentials in `application.properties`); every setting, JWT key and platform root included, required in every profile |
-| Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step: base `IamException` + RFC 9457 `ProblemDetail` |
+| Error responses: many one-off exceptions, 412 for bad tokens, no `ProblemDetail` | Own step (owner chose to do it now, 2026-10-27): commit a base `IamException` (done), commit b RFC 9457 `ProblemDetail` (`type` `about:blank`, "already exists" 409, no error `code` yet) |
 | `RoleMapper.toEntity` drops `permissionIds`; `RoleService` uses `Mappers.getMapper` | Done in step 6 |
 | Merge all migrations into one baseline from the live schema | After the last step of this plan |
 | Deleting a permission assigned to a role fails (FK) | Done in step 7a (permissions are read-only) |

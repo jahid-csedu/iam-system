@@ -7,6 +7,7 @@ import com.example.iamsystem.tenant.dto.TenantSignupResultDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
@@ -42,8 +43,8 @@ public class PlatformTenantController {
 
     @GetMapping
     @Operation(summary = "List the tenants you hold tenants:read on, one page at a time, ordered by id")
-    public ResponseEntity<PagedModel<TenantDto>> getTenants(@RequestParam(defaultValue = "0") int page,
-                                                            @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) int size) {
+    public ResponseEntity<PagedModel<TenantDto>> getTenants(@RequestParam(defaultValue = "0") @Min(0) int page,
+                                                            @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) @Min(1) int size) {
         return ResponseEntity.ok(new PagedModel<>(platformTenantService.findTenants(page, size)));
     }
 

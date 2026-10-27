@@ -1,16 +1,16 @@
 package com.example.iamsystem.role.service;
 
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.common.exception.DataNotFoundException;
 import com.example.iamsystem.common.exception.NoAccessException;
-import com.example.iamsystem.common.exception.RoleAlreadyExistsException;
 import com.example.iamsystem.role.dto.RoleDto;
 import com.example.iamsystem.role.dto.RoleRequestDto;
 import com.example.iamsystem.role.entity.Role;
 import com.example.iamsystem.role.mapper.RoleMapper;
 import com.example.iamsystem.role.repository.RoleRepository;
+import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.tenant.repository.TenantRepository;
-import com.example.iamsystem.security.userdetails.AuthenticatedActor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -84,7 +84,7 @@ class RoleServiceTest {
         when(currentUserProvider.requireCurrentTenantId()).thenReturn(TENANT_ID);
         when(roleRepository.existsByNameAndTenantId("AUDITOR", TENANT_ID)).thenReturn(true);
 
-        assertThrows(RoleAlreadyExistsException.class, () -> service.createRole(request));
+        assertThrows(AlreadyExistsException.class, () -> service.createRole(request));
         verify(roleRepository, never()).save(any());
     }
 
@@ -107,7 +107,7 @@ class RoleServiceTest {
         givenActorAndRole();
         when(roleRepository.existsByNameAndTenantIdAndIdNot("AUDITOR", TENANT_ID, 10L)).thenReturn(true);
 
-        assertThrows(RoleAlreadyExistsException.class, () -> service.updateRole(10L, request));
+        assertThrows(AlreadyExistsException.class, () -> service.updateRole(10L, request));
         assertEquals("VIEWER", role.getName());
         verify(roleRepository, never()).save(any());
     }

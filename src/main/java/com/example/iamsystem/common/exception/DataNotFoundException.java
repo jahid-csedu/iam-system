@@ -1,11 +1,13 @@
 package com.example.iamsystem.common.exception;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
 
-@ResponseStatus(value = HttpStatus.NOT_FOUND)
-public class DataNotFoundException extends RuntimeException{
+/**
+ * The thing asked for doesn't exist in the caller's tenant (404); another tenant's data is never reported as
+ * forbidden.
+ */
+public class DataNotFoundException extends IamException {
     public DataNotFoundException(String message) {
-        super(message);
+        super(HttpStatus.NOT_FOUND, message);
     }
 }

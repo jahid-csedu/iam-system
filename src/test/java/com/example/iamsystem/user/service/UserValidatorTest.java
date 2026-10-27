@@ -1,6 +1,6 @@
 package com.example.iamsystem.user.service;
 
-import com.example.iamsystem.common.exception.UserAlreadyExistsException;
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -37,7 +37,7 @@ class UserValidatorTest {
     void validateAvailable_usernameTakenInTenant_isRejected() {
         when(userRepository.existsByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(true);
 
-        UserAlreadyExistsException exception = assertThrows(UserAlreadyExistsException.class,
+        AlreadyExistsException exception = assertThrows(AlreadyExistsException.class,
                 () -> validator.validateAvailable("alice", "alice@example.com", TENANT_ID));
         assertEquals("Username not available", exception.getMessage());
     }
@@ -47,7 +47,7 @@ class UserValidatorTest {
     void validateAvailable_emailTakenInTenant_isRejected() {
         when(userRepository.existsByEmailAndTenantId("alice@example.com", TENANT_ID)).thenReturn(true);
 
-        UserAlreadyExistsException exception = assertThrows(UserAlreadyExistsException.class,
+        AlreadyExistsException exception = assertThrows(AlreadyExistsException.class,
                 () -> validator.validateAvailable("alice", "alice@example.com", TENANT_ID));
         assertEquals("Email not available", exception.getMessage());
     }
@@ -58,8 +58,8 @@ class UserValidatorTest {
         when(userRepository.existsByUsernameAndIsRootUserTrue("acme-root")).thenReturn(true);
         when(userRepository.existsByEmailAndIsRootUserTrue("root@acme.com")).thenReturn(true);
 
-        assertThrows(UserAlreadyExistsException.class, () -> validator.validateAvailable("acme-root", null, TENANT_ID));
-        assertThrows(UserAlreadyExistsException.class, () -> validator.validateAvailable("alice", "root@acme.com", TENANT_ID));
+        assertThrows(AlreadyExistsException.class, () -> validator.validateAvailable("acme-root", null, TENANT_ID));
+        assertThrows(AlreadyExistsException.class, () -> validator.validateAvailable("alice", "root@acme.com", TENANT_ID));
     }
 
     @Test
@@ -74,8 +74,8 @@ class UserValidatorTest {
         when(userRepository.existsByEmailAndTenantId("bob@example.com", TENANT_ID)).thenReturn(true);
         when(userRepository.existsByEmailAndIsRootUserTrue("root@globex.com")).thenReturn(true);
 
-        assertThrows(UserAlreadyExistsException.class, () -> validator.validateEmailAvailable("bob@example.com", TENANT_ID));
-        assertThrows(UserAlreadyExistsException.class, () -> validator.validateEmailAvailable("root@globex.com", TENANT_ID));
+        assertThrows(AlreadyExistsException.class, () -> validator.validateEmailAvailable("bob@example.com", TENANT_ID));
+        assertThrows(AlreadyExistsException.class, () -> validator.validateEmailAvailable("root@globex.com", TENANT_ID));
         assertDoesNotThrow(() -> validator.validateEmailAvailable("new@example.com", TENANT_ID));
     }
 
@@ -84,7 +84,7 @@ class UserValidatorTest {
     void validateEmailAvailableForRoot_checksAllTenants() {
         when(userRepository.existsByEmail("bob@globex.com")).thenReturn(true);
 
-        assertThrows(UserAlreadyExistsException.class, () -> validator.validateEmailAvailableForRoot("bob@globex.com"));
+        assertThrows(AlreadyExistsException.class, () -> validator.validateEmailAvailableForRoot("bob@globex.com"));
         assertDoesNotThrow(() -> validator.validateEmailAvailableForRoot("new@example.com"));
     }
 
@@ -94,8 +94,8 @@ class UserValidatorTest {
         when(userRepository.existsByUsername("bob")).thenReturn(true);
         when(userRepository.existsByEmail("bob@example.com")).thenReturn(true);
 
-        assertThrows(UserAlreadyExistsException.class, () -> validator.validateAvailableForRoot("bob", "new@example.com"));
-        assertThrows(UserAlreadyExistsException.class, () -> validator.validateAvailableForRoot("new-root", "bob@example.com"));
+        assertThrows(AlreadyExistsException.class, () -> validator.validateAvailableForRoot("bob", "new@example.com"));
+        assertThrows(AlreadyExistsException.class, () -> validator.validateAvailableForRoot("new-root", "bob@example.com"));
         assertDoesNotThrow(() -> validator.validateAvailableForRoot("new-root", "new@example.com"));
     }
 

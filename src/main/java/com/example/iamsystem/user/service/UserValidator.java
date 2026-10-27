@@ -1,6 +1,6 @@
 package com.example.iamsystem.user.service;
 
-import com.example.iamsystem.common.exception.UserAlreadyExistsException;
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +72,6 @@ public class UserValidator {
 
     private static void reject(String message, String value) {
         log.warn("{}: {}", message, value);
-        throw new UserAlreadyExistsException(message);
+        throw new AlreadyExistsException(message);
     }
 }

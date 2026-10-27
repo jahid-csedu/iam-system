@@ -256,7 +256,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `session/`: login sessions. `UserSession` + `RefreshToken` (hash only), `SessionService` (start, refresh-token checks and
   rotation with reuse detection, revoke one / all / all but one), `RefreshTokenGenerator` (random token + SHA-256 hash)
 - `audit/`: `@Auditable` (SpEL) → `AuditAspect` → MDC JSON log (`log_type=audit`)
-- `common/`: `exception/` (all exceptions, `GlobalHandler`, `ErrorMessage`), `config/` (OpenAPI; `EnvironmentProfileCheck`,
+- `common/`: `exception/` (`IamException` = base of our own failures, each subclass with its HTTP status; `GlobalHandler`
+  answers them with one handler, plus Spring's validation, body and login failures; anything else is a logged 500 without
+  its message; `ErrorMessage`), `config/` (OpenAPI; `EnvironmentProfileCheck`,
   registered in `META-INF/spring.factories`; the mail sender is Spring Boot's, from `spring.mail.*`, used only by `email/`), `validation/` (`@ValidEmail`), `util/` (`DateUtil`)
 - `src/main/resources/db/migration/`: Flyway migrations (`V1__baseline.sql` = schema as of the Flyway introduction)
 
@@ -359,7 +361,7 @@ Broken / drift
 - Audit events for failures are logged at ERROR level.
 - Ended sessions and used/expired refresh tokens are never purged (needs a cleanup job; roadmap item 1, session management).
 - Sessions slide forever while refreshed: no absolute session lifetime yet (roadmap item 1).
-- `GlobalHandler` still has one-off handlers per exception (the ProblemDetail step reworks it).
+- Error answers are our own `{ status, message, errors }` body, not RFC 9457 `ProblemDetail` yet (error step, commit b).
 
 Design debt
 
@@ -661,3 +663,9 @@ Design debt
   Next: step 15 (per-client web origins), the last plan step.
 - 2026-10-27: Plan step 15 (per-client web origins) moved to the roadmap as item 6 (owner), before OAuth2/OIDC; roadmap
   items 6-15 became 7-16. The plan has no steps left.
+- 2026-10-27: Error step, commit a (no format change). `IamException` (status per class) replaces 14 one-off handlers
+  with one; the four "already exists" exceptions are one `AlreadyExistsException`; the `IllegalArgumentException` → 400
+  catch-all is gone (a library's internal message reached the caller; such errors are a 500 now), so paging is checked
+  with `@Min` on `page` and `size`. Decisions (all recommended): `ProblemDetail` with `type` `about:blank`, no stable
+  error `code` yet, "already exists" becomes 409, no transitional `message` field. Next: commit b (the `ProblemDetail`
+  format).

@@ -1,8 +1,8 @@
 package com.example.iamsystem.user.service;
 
 import com.example.iamsystem.authorization.AuthorizationService;
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.common.exception.NoAccessException;
-import com.example.iamsystem.common.exception.UserAlreadyExistsException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.tenant.entity.Tenant;
@@ -141,9 +141,9 @@ class UserCreationServiceTest {
     void createUser_whenUserIsInvalid_savesNothing() {
         when(currentUserProvider.requireCurrentActor()).thenReturn(actor(rootUser(1, "root")));
         when(tenantRepository.getReferenceById(TENANT.getId())).thenReturn(TENANT);
-        when(userFactory.newUser(request, TENANT, UserType.REGULAR)).thenThrow(new UserAlreadyExistsException("Username not available"));
+        when(userFactory.newUser(request, TENANT, UserType.REGULAR)).thenThrow(new AlreadyExistsException("Username not available"));
 
-        assertThrows(UserAlreadyExistsException.class, () -> service.createUser(request));
+        assertThrows(AlreadyExistsException.class, () -> service.createUser(request));
         verify(userRepository, never()).save(any());
     }
 }

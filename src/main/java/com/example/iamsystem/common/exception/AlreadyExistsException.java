@@ -1,11 +1,12 @@
 package com.example.iamsystem.common.exception;
 
-/**
- * Something with the same unique identity already exists (answered with 400 Bad Request).
- */
-public abstract class AlreadyExistsException extends RuntimeException {
+import org.springframework.http.HttpStatus;
 
-    protected AlreadyExistsException(String message) {
-        super(message);
+/**
+ * Something with the same unique name or address already exists (400).
+ */
+public class AlreadyExistsException extends IamException {
+    public AlreadyExistsException(String message) {
+        super(HttpStatus.BAD_REQUEST, message);
     }
 }

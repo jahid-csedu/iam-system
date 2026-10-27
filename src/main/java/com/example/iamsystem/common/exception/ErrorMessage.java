@@ -64,6 +64,7 @@ public class ErrorMessage {
     public static final String ROOT_STATUS_CHANGE = "The root user can't be deactivated, activated or unlocked";
     public static final String PASSWORD_POLICY_VIOLATION = "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
     public static final String ACCOUNT_DISABLED = "Account is disabled";
+    public static final String PASSWORD_EXPIRED = "Password is expired. Please change your password";
     public static final String ACCOUNT_LOCKED_UNTIL = "Your account is locked until %s";
     public static final String ACCOUNT_DEACTIVATED = "Your account is deactivated";
     public static final String AUTHENTICATION_REQUIRED = "A valid access token is required";

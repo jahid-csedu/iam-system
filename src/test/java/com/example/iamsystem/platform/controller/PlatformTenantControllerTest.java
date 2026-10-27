@@ -113,6 +113,15 @@ class PlatformTenantControllerTest {
     }
 
     @Test
+    @DisplayName("A negative page or a page size below 1 is a bad request")
+    void invalidPaging_isBadRequest() throws Exception {
+        mockMvc.perform(get("/api/platform/tenants").with(actingAs(platformRoot)).param("page", "-1"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/platform/tenants").with(actingAs(platformRoot)).param("size", "0"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("A tenant's root can't use the platform endpoints")
     void tenantRoot_isForbidden() throws Exception {
         mockMvc.perform(get("/api/platform/tenants").with(actingAs(acmeRoot))).andExpect(status().isForbidden());

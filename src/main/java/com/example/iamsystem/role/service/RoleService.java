@@ -2,7 +2,7 @@ package com.example.iamsystem.role.service;
 
 import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
-import com.example.iamsystem.common.exception.RoleAlreadyExistsException;
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.role.dto.RoleDto;
 import com.example.iamsystem.role.dto.RoleRequestDto;
 import com.example.iamsystem.role.entity.Role;
@@ -41,7 +41,7 @@ public class RoleService {
     public RoleDto createRole(RoleRequestDto request) {
         Long tenantId = currentUserProvider.requireCurrentTenantId();
         if (roleRepository.existsByNameAndTenantId(request.name(), tenantId)) {
-            throw new RoleAlreadyExistsException(ROLE_EXISTS);
+            throw new AlreadyExistsException(ROLE_EXISTS);
         }
         Role role = roleMapper.toEntity(request);
         role.setTenant(tenantRepository.getReferenceById(tenantId));
@@ -60,7 +60,7 @@ public class RoleService {
         Role role = roleRepository.getRequiredByIdAndTenantId(id, tenantId);
         accessPolicy.checkCanModify(actor, role);
         if (roleRepository.existsByNameAndTenantIdAndIdNot(request.name(), tenantId, id)) {
-            throw new RoleAlreadyExistsException(ROLE_EXISTS);
+            throw new AlreadyExistsException(ROLE_EXISTS);
         }
         roleMapper.updateEntity(role, request);
         return roleMapper.toDto(roleRepository.save(role));

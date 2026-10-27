@@ -11,7 +11,7 @@ import com.example.iamsystem.client.entity.ClientType;
 import com.example.iamsystem.client.entity.TokenClaim;
 import com.example.iamsystem.client.mapper.ClientMapper;
 import com.example.iamsystem.client.repository.ClientRepository;
-import com.example.iamsystem.common.exception.ClientAlreadyExistsException;
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.security.userdetails.CurrentUserProvider;
 import com.example.iamsystem.tenant.entity.Tenant;
@@ -73,7 +73,7 @@ public class ClientService {
             throw new UserInputNotValidException(PLATFORM_CONSOLE_ONLY);
         }
         if (clientRepository.existsByNameAndTenantId(request.name(), tenantId)) {
-            throw new ClientAlreadyExistsException(CLIENT_EXISTS);
+            throw new AlreadyExistsException(CLIENT_EXISTS);
         }
         Client client = newClient(tenant, request.name(), ClientType.APPLICATION);
         return clientMapper.toDto(clientRepository.save(client));
@@ -88,7 +88,7 @@ public class ClientService {
         Long tenantId = currentUserProvider.requireCurrentTenantId();
         Client client = clientRepository.getRequiredByIdAndTenantId(id, tenantId);
         if (clientRepository.existsByNameAndTenantIdAndIdNot(request.name(), tenantId, id)) {
-            throw new ClientAlreadyExistsException(CLIENT_EXISTS);
+            throw new AlreadyExistsException(CLIENT_EXISTS);
         }
         client.setName(request.name());
         return clientMapper.toDto(clientRepository.save(client));

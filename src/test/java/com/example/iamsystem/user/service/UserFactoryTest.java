@@ -1,6 +1,6 @@
 package com.example.iamsystem.user.service;
 
-import com.example.iamsystem.common.exception.UserAlreadyExistsException;
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
 import com.example.iamsystem.user.config.PasswordExpirationProperties;
 import com.example.iamsystem.user.dto.UserCreationDto;
@@ -74,10 +74,10 @@ class UserFactoryTest {
     @Test
     @DisplayName("A username or email that isn't available in the tenant is rejected")
     void newUser_whenNotAvailableInTheTenant_isRejected() {
-        doThrow(new UserAlreadyExistsException("Username not available"))
+        doThrow(new AlreadyExistsException("Username not available"))
                 .when(userValidator).validateAvailable("alice", "alice@example.com", TENANT.getId());
 
-        assertThrows(UserAlreadyExistsException.class, () -> factory.newUser(request, TENANT, UserType.MANAGEMENT));
+        assertThrows(AlreadyExistsException.class, () -> factory.newUser(request, TENANT, UserType.MANAGEMENT));
         verifyNoInteractions(passwordEncoder);
     }
 
@@ -97,10 +97,10 @@ class UserFactoryTest {
     @Test
     @DisplayName("A root user with a username or email used anywhere is rejected")
     void newRootUser_whenNotAvailableAnywhere_isRejected() {
-        doThrow(new UserAlreadyExistsException("Email not available"))
+        doThrow(new AlreadyExistsException("Email not available"))
                 .when(userValidator).validateAvailableForRoot("alice", "alice@example.com");
 
-        assertThrows(UserAlreadyExistsException.class, () -> factory.newRootUser(request, TENANT));
+        assertThrows(AlreadyExistsException.class, () -> factory.newRootUser(request, TENANT));
         verifyNoInteractions(passwordEncoder);
     }
 

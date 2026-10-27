@@ -4,7 +4,7 @@ import com.example.iamsystem.client.dto.ClientDto;
 import com.example.iamsystem.client.entity.ClientStatus;
 import com.example.iamsystem.client.entity.ClientType;
 import com.example.iamsystem.client.service.ClientService;
-import com.example.iamsystem.common.exception.TenantAlreadyExistsException;
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.role.service.PredefinedRoleService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.tenant.dto.TenantSignupResultDto;
@@ -100,7 +100,7 @@ class TenantSignupServiceTest {
     void signup_whenTenantNameTaken_createsNothing() {
         when(tenantRepository.existsByName("Acme")).thenReturn(true);
 
-        assertThrows(TenantAlreadyExistsException.class, () -> service.signup(request));
+        assertThrows(AlreadyExistsException.class, () -> service.signup(request));
         verify(tenantRepository, never()).save(any());
         verifyNoInteractions(userFactory, userRepository, predefinedRoleService, clientService);
     }

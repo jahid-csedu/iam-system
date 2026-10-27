@@ -4,7 +4,7 @@ import com.example.iamsystem.audit.annotation.Auditable;
 import com.example.iamsystem.audit.enums.AuditEventType;
 import com.example.iamsystem.client.dto.ClientDto;
 import com.example.iamsystem.client.service.ClientService;
-import com.example.iamsystem.common.exception.TenantAlreadyExistsException;
+import com.example.iamsystem.common.exception.AlreadyExistsException;
 import com.example.iamsystem.role.service.PredefinedRoleService;
 import com.example.iamsystem.tenant.dto.TenantSignupDto;
 import com.example.iamsystem.tenant.dto.TenantSignupResultDto;
@@ -46,7 +46,7 @@ public class TenantSignupService {
     @Transactional
     public TenantSignupResultDto signup(TenantSignupDto request) {
         if (tenantRepository.existsByName(request.tenantName())) {
-            throw new TenantAlreadyExistsException(TENANT_EXISTS);
+            throw new AlreadyExistsException(TENANT_EXISTS);
         }
         Tenant tenant = tenantRepository.save(new Tenant(request.tenantName(), TenantStatus.ACTIVE));
         predefinedRoleService.createPredefinedRoles(tenant);

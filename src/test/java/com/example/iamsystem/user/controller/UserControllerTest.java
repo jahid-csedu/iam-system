@@ -295,14 +295,18 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("A negative page is a bad request")
+    @DisplayName("A negative page or a page size below 1 is a bad request")
     @Sql("/sql/insert_user_role.sql")
-    void getAllUsers_withNegativePage_isBadRequest() throws Exception {
+    void getAllUsers_withInvalidPaging_isBadRequest() throws Exception {
         User currentUser = findByUsername(userRepository, "root").orElseThrow();
 
         mockMvc.perform(get("/api/users")
                         .with(actingAs(currentUser))
                         .param("page", "-1"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/users")
+                        .with(actingAs(currentUser))
+                        .param("size", "0"))
                 .andExpect(status().isBadRequest());
     }
 
