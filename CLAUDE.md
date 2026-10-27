@@ -124,7 +124,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   Another user with the right permission can do it for them. Example: A (with permission) can change B's roles, but never A's own.
 - A user with the permission to grant permissions or roles can grant ones they don't hold themselves (but never to themselves).
 - Role and permission changes apply immediately (no approval step). Future option: maker-checker approval,
-  switched on per tenant by the root user (roadmap item 9).
+  switched on per tenant by the root user (roadmap item 10).
 - The root user has every tenant-management permission implicitly (not through a role), so root's access can't be edited by anyone.
 
 ### Tokens
@@ -134,7 +134,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   - which user claims go into the JWT body (user id, username, email, …).
 - First rollout: tokens carry only basic user information. The IAM doesn't manage other applications' roles or permissions.
 - Other applications verify tokens through IAM endpoints: asymmetric signing + JWKS endpoint for local verification
-  (done in step 9a: RS256, one platform key set; per-tenant keys are roadmap item 10), plus an introspection endpoint that
+  (done in step 9a: RS256, one platform key set; per-tenant keys are roadmap item 11), plus an introspection endpoint that
   reflects revocation and tenant suspension (done in step 9c: `POST /api/auth/introspect`, public until clients get secrets).
 - Logout and revocation: store refresh tokens (hashed) in the database. This replaces the `@Version`-based revocation.
   Done (step 9b): a session per login (`sid` in access tokens), single-use rotating opaque refresh tokens with reuse
@@ -154,7 +154,7 @@ Platform (global)       super users: manage tenants (e.g. suspend a whole tenant
   management console is never suspended.
 
 ### Future (not now)
-- OAuth2/OIDC compatibility (roadmap item 5). The `client_id` choice keeps this path open.
+- OAuth2/OIDC compatibility (roadmap item 6). The `client_id` choice keeps this path open.
 - First priority is organizing the code structure toward this design.
 
 ### Open questions
@@ -308,7 +308,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
 - `GET /api/users` is paged (`page`, `size` ≤ 100, ordered by id; Spring Data `PagedModel` JSON). Roles are a plain list.
 - Deleting a user keeps the users they created (`created_by` → NULL); deleting a role removes it from its users.
 - Nobody deletes a root user, not even the root itself (403), so every tenant keeps its root. Nobody deletes their own
-  account either (403 "You can't delete your own account"); self-service deletion is roadmap item 3.
+  account either (403 "You can't delete your own account"); self-service deletion is roadmap item 4.
 - Lockout: `FailedPasswordCounter` counts every wrong password (login, old password of a password change, current
   password of an email change) in one atomic update in its own transaction; 5 lock the account for 15 minutes (the filter
   then refuses its tokens); a correct one clears the count. A missing password is no guess. `PUT /api/users/{id}/unlock`
@@ -327,7 +327,7 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   unverified (`UserProfileService.apply` also deletes the pending code); the platform root from config starts verified.
   Verified only by the user typing a code (`POST /api/users/email-verification` + `/confirm`, any logged-in user, own
   account in the home tenant); codes like reset OTPs (`OneTimeCodes`, 5 guesses, `OtpPurpose.EMAIL_VERIFICATION` limit
-  3/hour, 30 minutes). No automatic emails (no page to link to yet, step 14); login never needs it. `UserDto` and
+  3/hour, 30 minutes). No automatic emails (no page to link to yet, roadmap item 2); login never needs it. `UserDto` and
   `MeDto` show `emailVerified`. Forgot-password sends only to a verified address (`ResetOtpIssuer.issueAfterCommit`,
   outcome `EMAIL_NOT_VERIFIED`, same 200); the admin reset (`issueNow`) also to an unverified one; a completed reset
   verifies the address. Tokens with the `EMAIL` claim also carry `email_verified`.
@@ -655,5 +655,7 @@ Design debt
   verified. Next: step 13c-2 (resets only to verified addresses, `email_verified` claim).
 - 2026-10-27: Step 13c-2. Forgot-password emails only verified addresses (`EMAIL_NOT_VERIFIED` outcome, same answer and
   bcrypt work); the admin reset still reaches unverified ones (the admin vouches); a completed reset verifies the
-  address; `email_verified` claim with `EMAIL` (`TokenIssuer`). Step 13 complete. Next: step 14 (reset link in
-  admin-initiated reset emails) or 15 (per-client web origins); owner decides.
+  address; `email_verified` claim with `EMAIL` (`TokenIssuer`). Step 13 complete.
+- 2026-10-27: Plan step 14 (links in reset and verification emails) moved to the roadmap as item 2 (owner), before
+  self-registration, which needs it; roadmap items 2-14 became 3-15 (older progress-log entries keep their numbers).
+  Next: step 15 (per-client web origins), the last plan step.
