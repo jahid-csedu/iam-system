@@ -27,6 +27,10 @@ public class TokenIssuer {
     static final String ACCESS_TOKEN_TYPE = "at+jwt";
     static final String CLIENT_ID = "client_id";
     static final String SESSION_ID = "sid";
+    /**
+     * Sent with the {@code email} claim, as in OpenID Connect: whether the user has proved they receive mail there.
+     */
+    static final String EMAIL_VERIFIED = "email_verified";
     private static final String TENANT_ISSUER_PATH = "/tenants/";
 
     private final SigningKeys signingKeys;
@@ -54,6 +58,9 @@ public class TokenIssuer {
                 token.claim(claim.claimName(), value);
             }
         });
+        if (client.getTokenClaims().contains(TokenClaim.EMAIL) && user.getEmail() != null) {
+            token.claim(EMAIL_VERIFIED, user.isEmailVerified());
+        }
         return new IssuedAccessToken(token.signWith(key.privateKey(), Jwts.SIG.RS256).compact(), expiresIn);
     }
 

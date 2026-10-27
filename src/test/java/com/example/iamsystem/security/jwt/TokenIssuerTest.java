@@ -111,6 +111,22 @@ class TokenIssuerTest {
         assertEquals("MANAGEMENT", claims.get("user_type"));
         assertEquals(100, claims.get("tenant_id", Integer.class));
         assertFalse(claims.containsKey("email"));
+        assertFalse(claims.containsKey("email_verified"));
+    }
+
+    @Test
+    @DisplayName("The email claim comes with email_verified, as in OpenID Connect")
+    void accessToken_emailComesWithEmailVerified() {
+        session.getUser().setEmail("alice@example.com");
+        client.getTokenClaims().add(TokenClaim.EMAIL);
+
+        Claims unverified = verifier.parseAccessToken(issuer.issueAccessToken(session).token());
+        session.getUser().setEmailVerified(true);
+        Claims verified = verifier.parseAccessToken(issuer.issueAccessToken(session).token());
+
+        assertEquals("alice@example.com", unverified.get("email"));
+        assertEquals(false, unverified.get("email_verified"));
+        assertEquals(true, verified.get("email_verified"));
     }
 
     @Test
@@ -121,5 +137,6 @@ class TokenIssuerTest {
         Claims claims = verifier.parseAccessToken(issuer.issueAccessToken(session).token());
 
         assertFalse(claims.containsKey("email"));
+        assertFalse(claims.containsKey("email_verified"));
     }
 }

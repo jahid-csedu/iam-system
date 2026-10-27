@@ -27,6 +27,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -124,7 +125,7 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    @DisplayName("A valid OTP, given with the username or the email, sets the chosen password and ends every session")
+    @DisplayName("A valid OTP, given with the username or the email, sets the chosen password and ends every session, and the address counts as verified")
     void resetPassword_validOtp_setsTheNewPassword() {
         when(userRepository.findByUsernameAndTenantId("alice", TENANT_ID)).thenReturn(Optional.of(user));
         when(userRepository.findByUsernameAndTenantId("alice@example.com", TENANT_ID)).thenReturn(Optional.empty());
@@ -137,6 +138,7 @@ class PasswordResetServiceTest {
         verify(passwordUpdater, times(2)).updatePassword(user, "NewPassword1!");
         verify(sessionService, times(2)).revokeAllOf(1L);
         verify(otpRepository, times(2)).delete(resetOtp);
+        assertTrue(user.isEmailVerified());
     }
 
     @Test

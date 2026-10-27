@@ -328,7 +328,9 @@ constants and helpers belong to the feature that owns them. Tests mirror the mai
   Verified only by the user typing a code (`POST /api/users/email-verification` + `/confirm`, any logged-in user, own
   account in the home tenant); codes like reset OTPs (`OneTimeCodes`, 5 guesses, `OtpPurpose.EMAIL_VERIFICATION` limit
   3/hour, 30 minutes). No automatic emails (no page to link to yet, step 14); login never needs it. `UserDto` and
-  `MeDto` show `emailVerified`.
+  `MeDto` show `emailVerified`. Forgot-password sends only to a verified address (`ResetOtpIssuer.issueAfterCommit`,
+  outcome `EMAIL_NOT_VERIFIED`, same 200); the admin reset (`issueNow`) also to an unverified one; a completed reset
+  verifies the address. Tokens with the `EMAIL` claim also carry `email_verified`.
 - The security principal is `AuthenticatedActor` (`userId`, `username`, `tenantId`, `rootUser`, `sessionId`,
   `homeTenantId`), never the `User` entity. `tenantId` is the tenant the request works in (the tenant boundary used by the
   services); `homeTenantId` is the user's own tenant. They differ only when a platform user sends `X-Tenant-Id`
@@ -651,3 +653,7 @@ Design debt
   `EMAIL_VERIFICATION_REQUEST` / `EMAIL_VERIFICATION`), `EmailPurpose.EMAIL_VERIFICATION` templates, `emailVerified` in
   `UserDto` and `MeDto`; new addresses (creation, signup, email changes) are unverified, the configured platform root is
   verified. Next: step 13c-2 (resets only to verified addresses, `email_verified` claim).
+- 2026-10-27: Step 13c-2. Forgot-password emails only verified addresses (`EMAIL_NOT_VERIFIED` outcome, same answer and
+  bcrypt work); the admin reset still reaches unverified ones (the admin vouches); a completed reset verifies the
+  address; `email_verified` claim with `EMAIL` (`TokenIssuer`). Step 13 complete. Next: step 14 (reset link in
+  admin-initiated reset emails) or 15 (per-client web origins); owner decides.

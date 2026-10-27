@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * The one place that makes (and discards) password-reset OTPs, for the user's own forgot-password request and for a reset by another
@@ -51,29 +50,28 @@ public class ResetOtpIssuer {
     private final PasswordEncoder passwordEncoder;
 
     /**
-     * For the user's own request: the email goes out after the caller's transaction commits, and the request doesn't wait
-     * for it.
+     * For the user's own request: only to a verified address (whoever asks needn't own the account, so an unverified
+     * address could be someone else's), and the email goes out after the caller's transaction commits, so the request
+     * doesn't wait for it.
      *
-     * @return {@code QUEUED}, {@code NO_EMAIL} or {@code TOO_MANY_REQUESTS}; a later mail failure is only logged, and
-     *         the OTP stays unused until it expires or the next one replaces it
+     * @return {@code QUEUED}, {@code NO_EMAIL}, {@code EMAIL_NOT_VERIFIED} or {@code TOO_MANY_REQUESTS}; a later mail
+     *         failure is only logged, and the OTP stays unused until it expires or the next one replaces it
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public OtpRequestOutcome issueAfterCommit(User user) {
-        return issue(user, email -> {
-            emailService.sendAfterCommit(email);
-            return OtpRequestOutcome.QUEUED;
-        });
+        return issue(user, Delivery.AFTER_COMMIT);
     }
 
     /**
-     * For a reset by another user, who changes the account only once the email is out: it is sent at once.
+     * For a reset by another user, who vouches for the address (so it may be unverified) and changes the account only
+     * once the email is out: it is sent at once.
      *
      * @return {@code SENT}, {@code NO_EMAIL}, {@code TOO_MANY_REQUESTS} or {@code MAIL_FAILED}; an OTP whose email failed
      *         stays unused until it expires or the next one replaces it
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public OtpRequestOutcome issueNow(User user) {
-        return issue(user, this::sendNow);
+        return issue(user, Delivery.NOW);
     }
 
     /**
@@ -83,12 +81,16 @@ public class ResetOtpIssuer {
         passwordEncoder.encode(oneTimeCodes.newCode());
     }
 
-    private OtpRequestOutcome issue(User user, Function<OutgoingEmail, OtpRequestOutcome> delivery) {
+    private OtpRequestOutcome issue(User user, Delivery delivery) {
         String otp = oneTimeCodes.newCode();
         String otpHash = passwordEncoder.encode(otp);
         if (user.getEmail() == null) {
             log.warn("No password-reset OTP for user {}, who has no email address", user.getId());
             return OtpRequestOutcome.NO_EMAIL;
+        }
+        if (delivery == Delivery.AFTER_COMMIT && !user.isEmailVerified()) {
+            log.warn("No password-reset OTP for user {}, whose email address isn't verified", user.getId());
+            return OtpRequestOutcome.EMAIL_NOT_VERIFIED;
         }
         if (!requestLimiter.tryRecord(user, OtpPurpose.PASSWORD_RESET)) {
             log.warn("No password-reset OTP for user {}: too many in the last hour", user.getId());
@@ -105,8 +107,13 @@ public class ResetOtpIssuer {
         resetOtp.setExpiryDate(Instant.now().plus(Duration.ofMinutes(otpExpiration.minutes())));
         otpRepository.save(resetOtp);
 
-        return delivery.apply(new OutgoingEmail(EmailPurpose.PASSWORD_RESET_OTP, user.getEmail(),
-                Map.of(OTP_VALUE, otp, VALID_MINUTES_VALUE, otpExpiration.minutes())));
+        OutgoingEmail email = new OutgoingEmail(EmailPurpose.PASSWORD_RESET_OTP, user.getEmail(),
+                Map.of(OTP_VALUE, otp, VALID_MINUTES_VALUE, otpExpiration.minutes()));
+        if (delivery == Delivery.NOW) {
+            return sendNow(email);
+        }
+        emailService.sendAfterCommit(email);
+        return OtpRequestOutcome.QUEUED;
     }
 
     private OtpRequestOutcome sendNow(OutgoingEmail email) {
@@ -125,5 +132,16 @@ public class ResetOtpIssuer {
     @Transactional(propagation = Propagation.MANDATORY)
     public void discardPending(User user) {
         otpRepository.deleteByUser(user);
+    }
+
+    private enum Delivery {
+        /**
+         * At once, inside the request (a reset by another user).
+         */
+        NOW,
+        /**
+         * After the request commits (the user's own request), and only to a verified address.
+         */
+        AFTER_COMMIT
     }
 }

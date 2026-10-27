@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -56,6 +57,8 @@ class UserProfileUpdateTest {
     private RoleRepository roleRepository;
     @Autowired
     private PasswordResetOTPRepository otpRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
     @MockitoBean
     private EmailService emailService;
 
@@ -92,6 +95,7 @@ class UserProfileUpdateTest {
     @Test
     @DisplayName("A new email deletes the pending reset OTP; a name change keeps it")
     void newEmail_deletesThePendingOtp() throws Exception {
+        jdbcTemplate.update("UPDATE users SET email_verified = true WHERE id = ?", bobId);
         send(post("/api/password/reset-request"), null, new PasswordResetRequestDto(shop, "bob")).andExpect(status().isOk());
         assertEquals(1, otpRepository.count());
 

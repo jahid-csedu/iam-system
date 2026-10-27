@@ -44,7 +44,8 @@ public class PasswordResetService {
 
     /**
      * Emails the user an OTP ({@link ResetOtpIssuer}) after the request commits, so the answer never waits for the mail
-     * server. An unknown user, a user without an email address and a user over the request limit are not errors: the
+     * server; only to a verified address. An unknown user, a user without a (verified) email address and a user over the
+     * request limit are not errors: the
      * outcome is audited and logged, and the caller answers every request the same way and in about the same time, so
      * nobody can find out which accounts exist.
      */
@@ -68,7 +69,7 @@ public class PasswordResetService {
 
     /**
      * With a valid OTP the user's password becomes {@code newPassword} (password policy applies), any login lockout ends,
-     * and every session of the user ends. The OTP is compared only with the pending OTP of the user named by the
+     * every session of the user ends, and the email address is verified (the OTP was sent there). The OTP is compared only with the pending OTP of the user named by the
      * identifier in the client's tenant. An unknown user, no pending OTP, an expired OTP and a wrong guess all get the same
      * error. Wrong guesses are counted (the transaction commits on {@link InvalidOtpException}, so the count
      * sticks), and the {@value OneTimeCodes#MAX_FAILED_ATTEMPTS}th one deletes the OTP. A new password that violates the policy rolls
@@ -95,6 +96,8 @@ public class PasswordResetService {
         }
         User user = resetOtp.getUser();
         passwordUpdater.updatePassword(user, newPassword);
+        // The user just proved they receive mail at this address.
+        user.setEmailVerified(true);
         sessionService.revokeAllOf(user.getId());
         otpRepository.delete(resetOtp);
     }

@@ -15,6 +15,10 @@ public enum OtpRequestOutcome {
     QUEUED,
     UNKNOWN_USER,
     NO_EMAIL,
+    /**
+     * The user's own request names an address that isn't verified; nothing is sent.
+     */
+    EMAIL_NOT_VERIFIED,
     TOO_MANY_REQUESTS,
     MAIL_FAILED
 }

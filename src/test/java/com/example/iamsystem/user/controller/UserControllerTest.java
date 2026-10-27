@@ -484,11 +484,13 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("Root resets another user's password: the old one stops working and the emailed OTP sets a new one")
+    @DisplayName("Root resets another user's password, also to an unverified address: the old one stops working, the emailed OTP sets a new one and verifies the address")
     @Sql("/sql/insert_user_role.sql")
     void resetPassword_byRoot_emailsAnOtpAndDisablesTheOldPassword() throws Exception {
         User root = findByUsername(userRepository, "root").orElseThrow();
         User member = findByUsername(userRepository, "user").orElseThrow();
+        member.setEmailVerified(false);
+        userRepository.save(member);
 
         mockMvc.perform(post("/api/users/{id}/password-reset", member.getId()).with(actingAs(root)))
                 .andExpect(status().isNoContent())
@@ -506,6 +508,7 @@ class UserControllerTest {
                                 new PasswordResetDto(FIXTURE_CONSOLE_CLIENT_ID, "user", otp, "Chosen-Password1!"))))
                 .andExpect(status().isOk());
         login("user", "Chosen-Password1!").andExpect(status().isOk());
+        assertTrue(findByUsername(userRepository, "user").orElseThrow().isEmailVerified());
     }
 
     @Test

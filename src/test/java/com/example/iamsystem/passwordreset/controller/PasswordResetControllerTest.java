@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -57,6 +58,8 @@ class PasswordResetControllerTest {
     @Autowired
     private JsonMapper jsonMapper;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
     @MockitoBean
     private EmailService emailService;
 
@@ -70,6 +73,18 @@ class PasswordResetControllerTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         clientId = jsonMapper.readTree(response).get("managementConsole").get("client_id").asString();
+        jdbcTemplate.update("UPDATE users SET email_verified = true WHERE username = 'acme-root'");
+    }
+
+    @Test
+    @DisplayName("An unverified address gets nothing, with the same answer")
+    void resetRequest_unverifiedAddress_sendsNothing() throws Exception {
+        jdbcTemplate.update("UPDATE users SET email_verified = false WHERE username = 'acme-root'");
+
+        postJson("/api/password/reset-request", new PasswordResetRequestDto(clientId, "acme-root"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(RESET_REQUEST_ACCEPTED));
+        verifyNoInteractions(emailService);
     }
 
     @Test

@@ -2,7 +2,7 @@
 
 How to use the system as a developer through Swagger UI or Postman.
 
-> **Matches the code as of email verification (2026-10-27).** This manual is updated in every step that changes how the system is
+> **Matches the code as of email verification and verified-only resets (2026-10-27).** This manual is updated in every step that changes how the system is
 > used. When something here is temporary, it says which step changes it (see `docs/IMPLEMENTATION_PLAN.md`).
 
 ---
@@ -284,8 +284,8 @@ and gets `403` on every management endpoint.
 | Change another user's profile | `PATCH /api/users/{id}` `{ "fullName": "...", "email": "..." }` → `200` and the user. Fields left out stay unchanged; `"fullName": ""` removes the name; an email can be changed, not removed. A new email must be free in the tenant and not belong to any tenant's root user (`400` "Email not available"), and a pending reset OTP of the user is deleted (it went to the old address). Never your own profile (`403`; yours comes with `/api/me`), never the root user's (`403`) | `users:update`; a new email also needs `users:reset-password` (whoever controls the email controls password resets) |
 | Change own password | `PATCH /api/users/password` `{ "oldPassword": "...", "newPassword": "..." }` | Any logged-in user, for themselves only |
 | Verify your email address | `POST /api/users/email-verification` (no body) → `204`: a 6-digit code goes to your address right after the request (valid 30 minutes, replaces an earlier one; `400` when already verified, `429` after 3 codes in an hour). Then `POST /api/users/email-verification/confirm` `{ "code": "123456" }` → `204` and `emailVerified` becomes `true`; a missing, expired or wrong code is `400` "Invalid or expired code", and the fifth wrong guess deletes the code | Any logged-in user, for themselves only (also regular users, through their application) |
-| Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`: that user gets a reset OTP by email, their current password stops working at once and all their sessions end; they set a new password with the OTP (`POST /api/password/reset` through any client of the tenant). If the OTP can't be sent nothing changes: `400` (no email address), `429` (3 OTPs in the last hour), `503` (mail failure) | `users:reset-password`; never your own password, never the root user's |
-| Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → `200`, and the OTP is emailed right after the request (the answer never waits for the mail server). The answer is the same, and takes about as long, when no such user exists or the user has no email address; a failed email is only logged. So it never tells whether an account exists. A user gets at most 3 OTPs per hour; further requests get the same answer but send nothing | Public |
+| Reset another user's password | `POST /api/users/{id}/password-reset` (no body) → `204`: that user gets a reset OTP by email, their current password stops working at once and all their sessions end; they set a new password with the OTP (`POST /api/password/reset` through any client of the tenant). It reaches an unverified address too (you vouch for it), and the completed reset verifies the address. If the OTP can't be sent nothing changes: `400` (no email address), `429` (3 OTPs in the last hour), `503` (mail failure) | `users:reset-password`; never your own password, never the root user's |
+| Forgot password: request an OTP | `POST /api/password/reset-request` `{ "client_id": "...", "identifier": "<username or email>" }` → `200`, and the OTP is emailed right after the request (the answer never waits for the mail server). Only a verified address gets an OTP. The answer is the same, and takes about as long, when no such user exists or the user has no or an unverified email address; a failed email is only logged. So it never tells whether an account exists. A user gets at most 3 OTPs per hour; further requests get the same answer but send nothing | Public |
 | Forgot password: reset with the OTP | `POST /api/password/reset` `{ "client_id": "...", "identifier": "<username or email>", "otp": "123456", "newPassword": "..." }` → `200`: the password is now the one you chose (password policy applies, `400` otherwise and the OTP stays usable), a login lockout ends, and every session of the user ends. Any problem (unknown user, no pending OTP, expired or wrong OTP) is `400` "Invalid or expired OTP"; the fifth wrong guess deletes the OTP, so request a new one | Public |
 | Refresh tokens | `POST /api/auth/token/refresh` `{ "client_id": "...", "refresh_token": "..." }` (the client the token was issued through) → a new access token **and a new refresh token**; the old refresh token is used up | Public (needs a valid refresh token) |
 | Log out | `POST /api/auth/logout` (no body) → `204`; ends the session of the Bearer token: its access token gets `401` here and its refresh token stops working | Any logged-in user |
@@ -322,7 +322,8 @@ Change them with `PUT /api/clients/{id}/token-settings` and the same body:
 
 Every access token also carries `iss`, `sub` (the user id), `aud` and `client_id` (the client), `sid` (the login session),
 `jti`, `iat` and `exp`. Refresh tokens are random opaque strings, not JWTs.
-A selected claim the user has no value for (for example no email) is left out.
+A selected claim the user has no value for (for example no email) is left out. With `EMAIL`, tokens also carry
+`email_verified` (`true`/`false`), as in OpenID Connect.
 
 ### Platform administration (super users)
 
@@ -409,8 +410,9 @@ The IAM manages only its own permissions; other applications decide their own au
 - **Email verification:** `emailVerified` (in users and `GET /api/me`) says the user has typed a code sent to their
   address. New users (signup, `POST /api/users`) start unverified, and so does every changed address (a pending code to
   the old one stops working); the platform root from the configuration starts verified. Nobody is asked to verify by
-  email on their own: an app asks its user to, and logins work either way. From the next step, forgot-password emails
-  only verified addresses.
+  email on their own: an app asks its user to, and logins work either way. Forgot-password emails only verified
+  addresses (the person asking needn't own the account); a reset by another user also reaches an unverified one, and any
+  completed reset verifies the address.
 - **Password resets** (forgot-password and reset by another user) email the user an **OTP**, never a password; the user then
   chooses a new password with it. An OTP is valid for 5 minutes, replaces any earlier OTP of the user, allows 5 wrong
   guesses, and a user gets at most 3 per hour.

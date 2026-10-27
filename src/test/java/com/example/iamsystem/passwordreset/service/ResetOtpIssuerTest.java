@@ -63,6 +63,7 @@ class ResetOtpIssuerTest {
         user.setId(1L);
         user.setUsername("alice");
         user.setEmail("alice@example.com");
+        user.setEmailVerified(true);
     }
 
     @Test
@@ -125,9 +126,24 @@ class ResetOtpIssuerTest {
     }
 
     @Test
+    @DisplayName("The user's own request sends nothing to an unverified address; a reset by another user does")
+    void unverifiedAddress_getsOnlyTheAdminReset() {
+        user.setEmailVerified(false);
+
+        assertEquals(OtpRequestOutcome.EMAIL_NOT_VERIFIED, issuer.issueAfterCommit(user));
+        verifyNoInteractions(otpRepository, emailService, requestLimiter);
+
+        assertEquals(OtpRequestOutcome.SENT, issuer.issueNow(user));
+        verify(emailService).send(any(OutgoingEmail.class));
+    }
+
+    @Test
     @DisplayName("Every path makes one bcrypt hash, also a request about nobody, so the time taken tells nothing")
     void everyPath_spendsOneHash() {
         issuer.issueAfterCommit(user);
+        user.setEmailVerified(false);
+        issuer.issueAfterCommit(user);
+        user.setEmailVerified(true);
         user.setEmail(null);
         issuer.issueAfterCommit(user);
         user.setEmail("alice@example.com");
@@ -135,7 +151,7 @@ class ResetOtpIssuerTest {
         issuer.issueAfterCommit(user);
         issuer.spendIssuingTime();
 
-        verify(passwordEncoder, times(4)).encode(anyString());
+        verify(passwordEncoder, times(5)).encode(anyString());
     }
 
     @Test

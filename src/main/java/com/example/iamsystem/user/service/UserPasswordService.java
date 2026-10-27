@@ -6,6 +6,7 @@ import com.example.iamsystem.common.exception.EmailNotSentException;
 import com.example.iamsystem.common.exception.InvalidPasswordException;
 import com.example.iamsystem.common.exception.TooManyRequestsException;
 import com.example.iamsystem.common.exception.UserInputNotValidException;
+import com.example.iamsystem.passwordreset.service.OtpRequestOutcome;
 import com.example.iamsystem.passwordreset.service.ResetOtpIssuer;
 import com.example.iamsystem.security.service.FailedPasswordCounter;
 import com.example.iamsystem.security.userdetails.AuthenticatedActor;
@@ -72,7 +73,8 @@ public class UserPasswordService {
         AuthenticatedActor actor = currentUserProvider.requireCurrentActor();
         User target = userRepository.getRequiredByIdAndTenantId(userId, actor.tenantId());
         accessPolicy.checkCanResetPassword(actor, target);
-        switch (otpIssuer.issueNow(target)) {
+        OtpRequestOutcome outcome = otpIssuer.issueNow(target);
+        switch (outcome) {
             case SENT -> {
                 passwordUpdater.disablePassword(target);
                 sessionService.revokeAllOf(target.getId());
@@ -80,7 +82,8 @@ public class UserPasswordService {
             case NO_EMAIL -> throw new UserInputNotValidException(USER_HAS_NO_EMAIL);
             case TOO_MANY_REQUESTS -> throw new TooManyRequestsException(TOO_MANY_RESET_OTPS);
             case MAIL_FAILED -> throw new EmailNotSentException(RESET_EMAIL_NOT_SENT);
-            case UNKNOWN_USER, QUEUED -> throw new IllegalStateException("An OTP sent at once is never unknown or queued");
+            case UNKNOWN_USER, QUEUED, EMAIL_NOT_VERIFIED ->
+                    throw new IllegalStateException("An OTP sent at once never reports " + outcome);
         }
     }
 }
